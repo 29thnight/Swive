@@ -50,8 +50,11 @@ protected:
 
 struct LiteralExpr : Expr {
     Value value;
+    std::optional<std::string> string_value;
     LiteralExpr() : Expr(ExprKind::Literal) {}
     explicit LiteralExpr(Value v) : Expr(ExprKind::Literal), value(v) {}
+    explicit LiteralExpr(std::string s)
+        : Expr(ExprKind::Literal), value(Value::null()), string_value(std::move(s)) {}
 };
 
 struct IdentifierExpr : Expr {

@@ -2,6 +2,7 @@
 
 #include "ss_core.hpp"
 #include "ss_value.hpp"
+#include "ss_chunk.hpp"
 #include <vector>
 #include <unordered_map>
 #include <string>
@@ -32,6 +33,8 @@ namespace swiftscript {
         // Execution state
         std::vector<Value> stack_;
         std::vector<CallFrame> call_frames_;
+        const Chunk* chunk_{ nullptr };
+        size_t ip_{ 0 };
 
         // Global scope
         std::unordered_map<std::string, Value> globals_;
@@ -77,6 +80,8 @@ namespace swiftscript {
         void run_cleanup();
         void collect_if_needed();
         void record_rc_operation();
+        Value interpret(const std::string& source);
+        Value execute(const Chunk& chunk);
 
         // Statistics
         const MemoryStats& get_stats() const { return stats_; }
@@ -86,6 +91,15 @@ namespace swiftscript {
         const VMConfig& config() const { return config_; }
 
         friend class RC;
+
+    private:
+        Value run();
+        uint8_t read_byte();
+        uint16_t read_short();
+        Value read_constant();
+        const std::string& read_string();
+        bool is_truthy(const Value& value) const;
+        Value get_property(const Value& object, const std::string& name);
     };
 
     // Call Frame for function calls

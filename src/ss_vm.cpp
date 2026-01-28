@@ -1,4 +1,7 @@
 #include "ss_vm.hpp"
+#include "ss_compiler.hpp"
+#include "ss_lexer.hpp"
+#include "ss_parser.hpp"
 #include <iostream>
 #include <iomanip>
 
@@ -173,6 +176,343 @@ namespace swiftscript {
         std::cout << "Total Releases:   " << std::setw(10) << stats_.release_count << "\n";
         std::cout << "Memory Leaked:    " << std::setw(10) << leaked << " bytes\n";
         std::cout << "=================================\n";
+    }
+
+    Value VM::interpret(const std::string& source) {
+        Lexer lexer(source);
+        auto tokens = lexer.tokenize_all();
+        Parser parser(std::move(tokens));
+        auto program = parser.parse();
+        Compiler compiler;
+        Chunk chunk = compiler.compile(program);
+        return execute(chunk);
+    }
+
+    Value VM::execute(const Chunk& chunk) {
+        chunk_ = &chunk;
+        ip_ = 0;
+        while (!stack_.empty()) {
+            pop();
+        }
+        call_frames_.clear();
+        return run();
+    }
+
+    Value VM::run() {
+        for (;;) {
+            OpCode op = static_cast<OpCode>(read_byte());
+            switch (op) {
+                case OpCode::OP_CONSTANT: {
+                    push(read_constant());
+                    break;
+                }
+                case OpCode::OP_STRING: {
+                    const std::string& str = read_string();
+                    auto* obj = allocate_object<StringObject>(str);
+                    push(Value::from_object(obj));
+                    break;
+                }
+                case OpCode::OP_NIL:
+                    push(Value::null());
+                    break;
+                case OpCode::OP_TRUE:
+                    push(Value::from_bool(true));
+                    break;
+                case OpCode::OP_FALSE:
+                    push(Value::from_bool(false));
+                    break;
+                case OpCode::OP_POP:
+                    pop();
+                    break;
+                case OpCode::OP_ADD: {
+                    Value b = pop();
+                    Value a = pop();
+                    if (a.is_int() && b.is_int()) {
+                        push(Value::from_int(a.as_int() + b.as_int()));
+                    } else {
+                        auto fa = a.try_as<Float>();
+                        auto fb = b.try_as<Float>();
+                        if (!fa || !fb) {
+                            throw std::runtime_error("Operands must be numbers for addition.");
+                        }
+                        push(Value::from_float(*fa + *fb));
+                    }
+                    break;
+                }
+                case OpCode::OP_SUBTRACT: {
+                    Value b = pop();
+                    Value a = pop();
+                    auto fa = a.try_as<Float>();
+                    auto fb = b.try_as<Float>();
+                    if (!fa || !fb) {
+                        throw std::runtime_error("Operands must be numbers for subtraction.");
+                    }
+                    if (a.is_int() && b.is_int()) {
+                        push(Value::from_int(a.as_int() - b.as_int()));
+                    } else {
+                        push(Value::from_float(*fa - *fb));
+                    }
+                    break;
+                }
+                case OpCode::OP_MULTIPLY: {
+                    Value b = pop();
+                    Value a = pop();
+                    auto fa = a.try_as<Float>();
+                    auto fb = b.try_as<Float>();
+                    if (!fa || !fb) {
+                        throw std::runtime_error("Operands must be numbers for multiplication.");
+                    }
+                    if (a.is_int() && b.is_int()) {
+                        push(Value::from_int(a.as_int() * b.as_int()));
+                    } else {
+                        push(Value::from_float(*fa * *fb));
+                    }
+                    break;
+                }
+                case OpCode::OP_DIVIDE: {
+                    Value b = pop();
+                    Value a = pop();
+                    auto fa = a.try_as<Float>();
+                    auto fb = b.try_as<Float>();
+                    if (!fa || !fb) {
+                        throw std::runtime_error("Operands must be numbers for division.");
+                    }
+                    push(Value::from_float(*fa / *fb));
+                    break;
+                }
+                case OpCode::OP_MODULO: {
+                    Value b = pop();
+                    Value a = pop();
+                    if (!a.is_int() || !b.is_int()) {
+                        throw std::runtime_error("Operands must be integers for modulo.");
+                    }
+                    push(Value::from_int(a.as_int() % b.as_int()));
+                    break;
+                }
+                case OpCode::OP_NEGATE: {
+                    Value a = pop();
+                    if (a.is_int()) {
+                        push(Value::from_int(-a.as_int()));
+                    } else if (a.is_float()) {
+                        push(Value::from_float(-a.as_float()));
+                    } else {
+                        throw std::runtime_error("Operand must be number for negation.");
+                    }
+                    break;
+                }
+                case OpCode::OP_BITWISE_NOT: {
+                    Value a = pop();
+                    if (!a.is_int()) {
+                        throw std::runtime_error("Operand must be integer for bitwise not.");
+                    }
+                    push(Value::from_int(~a.as_int()));
+                    break;
+                }
+                case OpCode::OP_EQUAL: {
+                    Value b = pop();
+                    Value a = pop();
+                    push(Value::from_bool(a.equals(b)));
+                    break;
+                }
+                case OpCode::OP_NOT_EQUAL: {
+                    Value b = pop();
+                    Value a = pop();
+                    push(Value::from_bool(!a.equals(b)));
+                    break;
+                }
+                case OpCode::OP_LESS:
+                case OpCode::OP_GREATER:
+                case OpCode::OP_LESS_EQUAL:
+                case OpCode::OP_GREATER_EQUAL: {
+                    Value b = pop();
+                    Value a = pop();
+                    auto fa = a.try_as<Float>();
+                    auto fb = b.try_as<Float>();
+                    if (!fa || !fb) {
+                        throw std::runtime_error("Operands must be numbers for comparison.");
+                    }
+                    bool result = false;
+                    switch (op) {
+                        case OpCode::OP_LESS:
+                            result = *fa < *fb;
+                            break;
+                        case OpCode::OP_GREATER:
+                            result = *fa > *fb;
+                            break;
+                        case OpCode::OP_LESS_EQUAL:
+                            result = *fa <= *fb;
+                            break;
+                        case OpCode::OP_GREATER_EQUAL:
+                            result = *fa >= *fb;
+                            break;
+                        default:
+                            break;
+                    }
+                    push(Value::from_bool(result));
+                    break;
+                }
+                case OpCode::OP_NOT: {
+                    Value a = pop();
+                    push(Value::from_bool(!is_truthy(a)));
+                    break;
+                }
+                case OpCode::OP_AND: {
+                    Value b = pop();
+                    Value a = pop();
+                    push(Value::from_bool(is_truthy(a) && is_truthy(b)));
+                    break;
+                }
+                case OpCode::OP_OR: {
+                    Value b = pop();
+                    Value a = pop();
+                    push(Value::from_bool(is_truthy(a) || is_truthy(b)));
+                    break;
+                }
+                case OpCode::OP_GET_GLOBAL: {
+                    const std::string& name = read_string();
+                    push(get_global(name));
+                    break;
+                }
+                case OpCode::OP_SET_GLOBAL: {
+                    const std::string& name = read_string();
+                    set_global(name, peek(0));
+                    break;
+                }
+                case OpCode::OP_GET_LOCAL: {
+                    uint16_t slot = read_short();
+                    if (slot >= stack_.size()) {
+                        throw std::runtime_error("Local slot out of range.");
+                    }
+                    push(stack_[slot]);
+                    break;
+                }
+                case OpCode::OP_SET_LOCAL: {
+                    uint16_t slot = read_short();
+                    if (slot >= stack_.size()) {
+                        throw std::runtime_error("Local slot out of range.");
+                    }
+                    stack_[slot] = peek(0);
+                    break;
+                }
+                case OpCode::OP_JUMP: {
+                    uint16_t offset = read_short();
+                    ip_ += offset;
+                    break;
+                }
+                case OpCode::OP_JUMP_IF_FALSE: {
+                    uint16_t offset = read_short();
+                    if (!is_truthy(peek(0))) {
+                        ip_ += offset;
+                    }
+                    break;
+                }
+                case OpCode::OP_LOOP: {
+                    uint16_t offset = read_short();
+                    ip_ -= offset;
+                    break;
+                }
+                case OpCode::OP_CALL:
+                    throw std::runtime_error("Call not implemented.");
+                case OpCode::OP_RETURN:
+                    return pop();
+                case OpCode::OP_UNWRAP: {
+                    Value v = peek(0);
+                    if (v.is_null()) {
+                        throw std::runtime_error("Force unwrap of nil value.");
+                    }
+                    break;
+                }
+                case OpCode::OP_JUMP_IF_NIL: {
+                    uint16_t offset = read_short();
+                    if (peek(0).is_null()) {
+                        pop();
+                        ip_ += offset;
+                    }
+                    break;
+                }
+                case OpCode::OP_NIL_COALESCE: {
+                    Value fallback = pop();
+                    Value optional = pop();
+                    push(optional.is_null() ? fallback : optional);
+                    break;
+                }
+                case OpCode::OP_OPTIONAL_CHAIN: {
+                    const std::string& name = read_string();
+                    Value obj = pop();
+                    if (obj.is_null()) {
+                        push(Value::null());
+                    } else {
+                        push(get_property(obj, name));
+                    }
+                    break;
+                }
+                case OpCode::OP_GET_PROPERTY: {
+                    const std::string& name = read_string();
+                    Value obj = pop();
+                    push(get_property(obj, name));
+                    break;
+                }
+                case OpCode::OP_SET_PROPERTY:
+                    throw std::runtime_error("Property set not implemented.");
+                case OpCode::OP_PRINT: {
+                    Value val = pop();
+                    std::cout << val.to_string() << "\n";
+                    break;
+                }
+                case OpCode::OP_HALT:
+                    return stack_.empty() ? Value::null() : pop();
+                default:
+                    throw std::runtime_error("Unknown opcode.");
+            }
+        }
+    }
+
+    uint8_t VM::read_byte() {
+        return chunk_->code[ip_++];
+    }
+
+    uint16_t VM::read_short() {
+        uint16_t high = read_byte();
+        uint16_t low = read_byte();
+        return static_cast<uint16_t>((high << 8) | low);
+    }
+
+    Value VM::read_constant() {
+        uint16_t idx = read_short();
+        if (idx >= chunk_->constants.size()) {
+            throw std::runtime_error("Constant index out of range.");
+        }
+        return chunk_->constants[idx];
+    }
+
+    const std::string& VM::read_string() {
+        uint16_t idx = read_short();
+        if (idx >= chunk_->strings.size()) {
+            throw std::runtime_error("String constant index out of range.");
+        }
+        return chunk_->strings[idx];
+    }
+
+    bool VM::is_truthy(const Value& value) const {
+        if (value.is_null()) return false;
+        if (value.is_bool()) return value.as_bool();
+        return true;
+    }
+
+    Value VM::get_property(const Value& object, const std::string& name) {
+        if (!object.is_object()) {
+            throw std::runtime_error("Attempted property access on non-object.");
+        }
+        Object* obj = object.as_object();
+        if (!obj || obj->type != ObjectType::Map) {
+            throw std::runtime_error("Property access supported only on Map objects.");
+        }
+        auto* map = static_cast<MapObject*>(obj);
+        auto it = map->entries.find(name);
+        if (it == map->entries.end()) {
+            return Value::null();
+        }
+        return it->second;
     }
 
 } // namespace swiftscript

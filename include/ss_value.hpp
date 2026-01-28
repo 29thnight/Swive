@@ -4,6 +4,7 @@
 #include <variant>
 #include <optional>
 #include <string_view>
+#include <string>
 #include <unordered_map>
 
 namespace swiftscript {
@@ -29,7 +30,7 @@ public:
 private:
     Type type_{Type::Null};
     RefType ref_type_{RefType::Strong};
-    uint8_t padding_[6];  // Alignment padding
+    uint8_t padding_[6]{};  // Alignment padding
     
     union {
         Bool bool_val;

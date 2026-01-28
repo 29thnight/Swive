@@ -33,6 +33,9 @@ private:
     StmtPtr if_statement();
     StmtPtr guard_statement();
     StmtPtr while_statement();
+    StmtPtr for_in_statement();
+    StmtPtr break_statement();
+    StmtPtr continue_statement();
     StmtPtr return_statement();
     StmtPtr print_statement();
     std::unique_ptr<BlockStmt> block();
@@ -41,6 +44,7 @@ private:
     // ---- Expression parsers (precedence climbing) ----
     ExprPtr expression();
     ExprPtr assignment();
+    ExprPtr ternary();
     ExprPtr nil_coalesce();
     ExprPtr or_expr();
     ExprPtr and_expr();

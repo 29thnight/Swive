@@ -106,6 +106,7 @@ enum class TokenType {
     // Range operators
     Range,          // ..
     RangeInclusive, // ...
+    RangeExclusive, // ..<
 };
 
 // Token structure

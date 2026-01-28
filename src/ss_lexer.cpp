@@ -182,7 +182,14 @@ Token Lexer::next_token() {
 
         case '.':
             if (match('.')) {
-                return make_token(match('.') ? TokenType::RangeInclusive : TokenType::Range);
+                // Check for ... (inclusive) or ..< (exclusive)
+                if (match('.')) {
+                    return make_token(TokenType::RangeInclusive);
+                } else if (match('<')) {
+                    return make_token(TokenType::RangeExclusive);
+                } else {
+                    return make_token(TokenType::Range);
+                }
             }
             return make_token(TokenType::Dot);
 

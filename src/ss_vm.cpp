@@ -7,6 +7,15 @@
 
 namespace swiftscript {
 
+    // Fast I/O initialization
+    static struct FastIO {
+        FastIO() {
+            std::ios_base::sync_with_stdio(false);
+            std::cin.tie(nullptr);
+            std::cout.tie(nullptr);
+        }
+    } fast_io_init;
+
     VM::VM(VMConfig config)
         : config_(config) {
         stack_.reserve(config_.initial_stack_size);
@@ -507,9 +516,114 @@ namespace swiftscript {
                 }
                 case OpCode::OP_SET_PROPERTY:
                     throw std::runtime_error("Property set not implemented.");
+                case OpCode::OP_RANGE_INCLUSIVE:
+                case OpCode::OP_RANGE_EXCLUSIVE:
+                    // Range opcodes are no-ops: start and end values are already on the stack
+                    // The for-in loop implementation uses these values directly
+                    break;
+                case OpCode::OP_ARRAY: {
+                    uint16_t count = read_short();
+                    auto* arr = allocate_object<ListObject>();
+                    arr->elements.reserve(count);
+                    // Pop elements in reverse order (last pushed first)
+                    std::vector<Value> temp(count);
+                    for (int i = count - 1; i >= 0; --i) {
+                        temp[i] = pop();
+                    }
+                    for (const auto& v : temp) {
+                        arr->elements.push_back(v);
+                    }
+                    push(Value::from_object(arr));
+                    break;
+                }
+                case OpCode::OP_DICT: {
+                    uint16_t count = read_short();
+                    auto* dict = allocate_object<MapObject>();
+                    // Pop key-value pairs in reverse order
+                    std::vector<std::pair<Value, Value>> temp(count);
+                    for (int i = count - 1; i >= 0; --i) {
+                        Value value = pop();
+                        Value key = pop();
+                        temp[i] = {key, value};
+                    }
+                    for (const auto& [k, v] : temp) {
+                        if (!k.is_object() || k.as_object()->type != ObjectType::String) {
+                            throw std::runtime_error("Dictionary key must be a string.");
+                        }
+                        auto* str_key = static_cast<StringObject*>(k.as_object());
+                        dict->entries[str_key->data] = v;
+                    }
+                    push(Value::from_object(dict));
+                    break;
+                }
+                case OpCode::OP_GET_SUBSCRIPT: {
+                    Value index = pop();
+                    Value object = pop();
+                    if (!object.is_object()) {
+                        throw std::runtime_error("Subscript access on non-object.");
+                    }
+                    Object* obj = object.as_object();
+                    if (obj->type == ObjectType::List) {
+                        auto* arr = static_cast<ListObject*>(obj);
+                        if (!index.is_int()) {
+                            throw std::runtime_error("Array index must be an integer.");
+                        }
+                        int64_t idx = index.as_int();
+                        if (idx < 0 || static_cast<size_t>(idx) >= arr->elements.size()) {
+                            throw std::runtime_error("Array index out of bounds.");
+                        }
+                        push(arr->elements[static_cast<size_t>(idx)]);
+                    } else if (obj->type == ObjectType::Map) {
+                        auto* dict = static_cast<MapObject*>(obj);
+                        if (!index.is_object() || index.as_object()->type != ObjectType::String) {
+                            throw std::runtime_error("Dictionary key must be a string.");
+                        }
+                        auto* str_key = static_cast<StringObject*>(index.as_object());
+                        auto it = dict->entries.find(str_key->data);
+                        if (it == dict->entries.end()) {
+                            push(Value::null());
+                        } else {
+                            push(it->second);
+                        }
+                    } else {
+                        throw std::runtime_error("Subscript access only supported on arrays and dictionaries.");
+                    }
+                    break;
+                }
+                case OpCode::OP_SET_SUBSCRIPT: {
+                    Value value = pop();
+                    Value index = pop();
+                    Value object = pop();
+                    if (!object.is_object()) {
+                        throw std::runtime_error("Subscript assignment on non-object.");
+                    }
+                    Object* obj = object.as_object();
+                    if (obj->type == ObjectType::List) {
+                        auto* arr = static_cast<ListObject*>(obj);
+                        if (!index.is_int()) {
+                            throw std::runtime_error("Array index must be an integer.");
+                        }
+                        int64_t idx = index.as_int();
+                        if (idx < 0 || static_cast<size_t>(idx) >= arr->elements.size()) {
+                            throw std::runtime_error("Array index out of bounds.");
+                        }
+                        arr->elements[static_cast<size_t>(idx)] = value;
+                    } else if (obj->type == ObjectType::Map) {
+                        auto* dict = static_cast<MapObject*>(obj);
+                        if (!index.is_object() || index.as_object()->type != ObjectType::String) {
+                            throw std::runtime_error("Dictionary key must be a string.");
+                        }
+                        auto* str_key = static_cast<StringObject*>(index.as_object());
+                        dict->entries[str_key->data] = value;
+                    } else {
+                        throw std::runtime_error("Subscript assignment only supported on arrays and dictionaries.");
+                    }
+                    push(value);
+                    break;
+                }
                 case OpCode::OP_PRINT: {
                     Value val = pop();
-                    std::cout << val.to_string() << "\n";
+                    std::cout << val.to_string() << '\n';
                     break;
                 }
                 case OpCode::OP_HALT:

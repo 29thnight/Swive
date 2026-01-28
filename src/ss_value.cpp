@@ -75,7 +75,13 @@ std::string ListObject::to_string() const {
     oss << "[";
     for (size_t i = 0; i < elements.size(); ++i) {
         if (i > 0) oss << ", ";
-        oss << elements[i].to_string();
+        // Wrap string values in quotes for display
+        if (elements[i].is_object() && elements[i].as_object() &&
+            elements[i].as_object()->type == ObjectType::String) {
+            oss << "\"" << elements[i].to_string() << "\"";
+        } else {
+            oss << elements[i].to_string();
+        }
     }
     oss << "]";
     return oss.str();
@@ -88,13 +94,20 @@ void ListObject::append(VM& vm, Value value) {
 
 std::string MapObject::to_string() const {
     std::ostringstream oss;
-    oss << "{";
+    oss << "[";
     size_t count = 0;
     for (const auto& [key, value] : entries) {
         if (count++ > 0) oss << ", ";
-        oss << key << ": " << value.to_string();
+        oss << "\"" << key << "\": ";
+        // Wrap string values in quotes for display
+        if (value.is_object() && value.as_object() &&
+            value.as_object()->type == ObjectType::String) {
+            oss << "\"" << value.to_string() << "\"";
+        } else {
+            oss << value.to_string();
+        }
     }
-    oss << "}";
+    oss << "]";
     return oss.str();
 }
 

@@ -162,6 +162,9 @@ StmtPtr Parser::statement() {
     if (check(TokenType::If)) return if_statement();
     if (check(TokenType::Guard)) return guard_statement();
     if (check(TokenType::While)) return while_statement();
+    if (check(TokenType::For)) return for_in_statement();
+    if (check(TokenType::Break)) return break_statement();
+    if (check(TokenType::Continue)) return continue_statement();
     if (check(TokenType::Return)) return return_statement();
     if (check(TokenType::LeftBrace)) {
         auto blk = block();
@@ -249,6 +252,42 @@ StmtPtr Parser::while_statement() {
     return stmt;
 }
 
+StmtPtr Parser::for_in_statement() {
+    const Token& for_tok = advance();  // consume 'for'
+    const Token& var_tok = consume(TokenType::Identifier, "Expected variable name after 'for'.");
+    consume(TokenType::In, "Expected 'in' after for loop variable.");
+    
+    // Parse range expression
+    ExprPtr iterable = expression();
+    
+    auto stmt = std::make_unique<ForInStmt>();
+    stmt->line = for_tok.line;
+    stmt->variable = std::string(var_tok.lexeme);
+    stmt->iterable = std::move(iterable);
+    stmt->body = block();
+    return stmt;
+}
+
+StmtPtr Parser::break_statement() {
+    const Token& break_tok = advance();  // consume 'break'
+
+    auto stmt = std::make_unique<BreakStmt>();
+    stmt->line = break_tok.line;
+
+    match(TokenType::Semicolon);
+    return stmt;
+}
+
+StmtPtr Parser::continue_statement() {
+    const Token& continue_tok = advance();  // consume 'continue'
+
+    auto stmt = std::make_unique<ContinueStmt>();
+    stmt->line = continue_tok.line;
+
+    match(TokenType::Semicolon);
+    return stmt;
+}
+
 StmtPtr Parser::return_statement() {
     const Token& ret_tok = advance();  // consume 'return'
 
@@ -309,12 +348,48 @@ ExprPtr Parser::expression() {
 }
 
 ExprPtr Parser::assignment() {
-    ExprPtr expr = nil_coalesce();
+    ExprPtr expr = ternary();
+
+    // Handle compound assignment operators: +=, -=, *=, /=
+    if (check(TokenType::PlusEqual) || check(TokenType::MinusEqual) ||
+        check(TokenType::StarEqual) || check(TokenType::SlashEqual)) {
+        TokenType op = peek().type;
+        uint32_t op_line = peek().line;
+        advance();
+        ExprPtr value = assignment();
+
+        if (expr->kind == ExprKind::Identifier) {
+            auto* ident = static_cast<IdentifierExpr*>(expr.get());
+            
+            // Desugar: x += 5 becomes x = x + 5
+            TokenType binop;
+            switch (op) {
+                case TokenType::PlusEqual: binop = TokenType::Plus; break;
+                case TokenType::MinusEqual: binop = TokenType::Minus; break;
+                case TokenType::StarEqual: binop = TokenType::Star; break;
+                case TokenType::SlashEqual: binop = TokenType::Slash; break;
+                default: error(previous(), "Invalid compound assignment operator.");
+            }
+            
+            // Create a copy of the identifier for the right side
+            auto ident_copy = std::make_unique<IdentifierExpr>(ident->name);
+            ident_copy->line = ident->line;
+            
+            // Create binary expression: x + value
+            auto bin_expr = std::make_unique<BinaryExpr>(binop, std::move(ident_copy), std::move(value));
+            bin_expr->line = op_line;
+            
+            // Create assignment: x = (x + value)
+            auto assign = std::make_unique<AssignExpr>(ident->name, std::move(bin_expr));
+            assign->line = ident->line;
+            return assign;
+        }
+        error(previous(), "Invalid assignment target.");
+    }
 
     if (match(TokenType::Equal)) {
-        ExprPtr value = assignment();  // right-associative
+        ExprPtr value = assignment();
 
-        // Must be a simple identifier for assignment
         if (expr->kind == ExprKind::Identifier) {
             auto* ident = static_cast<IdentifierExpr*>(expr.get());
             auto assign = std::make_unique<AssignExpr>(ident->name, std::move(value));
@@ -411,6 +486,18 @@ ExprPtr Parser::addition() {
         bin->line = line;
         expr = std::move(bin);
     }
+    
+    // Handle range operators: ..., ..<, and ..
+    if (check(TokenType::RangeInclusive) || check(TokenType::RangeExclusive) || check(TokenType::Range)) {
+        bool inclusive = check(TokenType::RangeInclusive);
+        advance();
+        uint32_t line = previous().line;
+        ExprPtr end = multiplication();
+        auto range = std::make_unique<RangeExpr>(std::move(expr), std::move(end), inclusive);
+        range->line = line;
+        return range;
+    }
+    
     return expr;
 }
 
@@ -480,6 +567,14 @@ ExprPtr Parser::postfix() {
             }
             consume(TokenType::RightParen, "Expected ')' after arguments.");
             expr = std::move(call);
+        } else if (match(TokenType::LeftBracket)) {
+            // Subscript access: expr[index]
+            uint32_t line = previous().line;
+            ExprPtr index = expression();
+            consume(TokenType::RightBracket, "Expected ']' after subscript index.");
+            auto sub = std::make_unique<SubscriptExpr>(std::move(expr), std::move(index));
+            sub->line = line;
+            expr = std::move(sub);
         } else {
             break;
         }
@@ -553,6 +648,64 @@ ExprPtr Parser::primary() {
         ExprPtr expr = expression();
         consume(TokenType::RightParen, "Expected ')' after expression.");
         return expr;
+    }
+
+    // Array or Dictionary literal: [ ... ]
+    if (match(TokenType::LeftBracket)) {
+        uint32_t line = previous().line;
+
+        // Empty array: []
+        if (match(TokenType::RightBracket)) {
+            auto arr = std::make_unique<ArrayLiteralExpr>();
+            arr->line = line;
+            return arr;
+        }
+
+        // Empty dictionary: [:]
+        if (match(TokenType::Colon)) {
+            consume(TokenType::RightBracket, "Expected ']' after empty dictionary literal.");
+            auto dict = std::make_unique<DictLiteralExpr>();
+            dict->line = line;
+            return dict;
+        }
+
+        // Parse first element
+        ExprPtr first = expression();
+
+        // Check if it's a dictionary (first element followed by ':')
+        if (match(TokenType::Colon)) {
+            // Dictionary literal: ["key": value, ...]
+            std::vector<std::pair<ExprPtr, ExprPtr>> entries;
+            ExprPtr first_value = expression();
+            entries.emplace_back(std::move(first), std::move(first_value));
+
+            while (match(TokenType::Comma)) {
+                if (check(TokenType::RightBracket)) break;  // trailing comma
+                ExprPtr key = expression();
+                consume(TokenType::Colon, "Expected ':' in dictionary literal.");
+                ExprPtr value = expression();
+                entries.emplace_back(std::move(key), std::move(value));
+            }
+
+            consume(TokenType::RightBracket, "Expected ']' after dictionary literal.");
+            auto dict = std::make_unique<DictLiteralExpr>(std::move(entries));
+            dict->line = line;
+            return dict;
+        }
+
+        // Array literal: [1, 2, 3]
+        std::vector<ExprPtr> elements;
+        elements.push_back(std::move(first));
+
+        while (match(TokenType::Comma)) {
+            if (check(TokenType::RightBracket)) break;  // trailing comma
+            elements.push_back(expression());
+        }
+
+        consume(TokenType::RightBracket, "Expected ']' after array literal.");
+        auto arr = std::make_unique<ArrayLiteralExpr>(std::move(elements));
+        arr->line = line;
+        return arr;
     }
 
     error(peek(), "Expected expression.");

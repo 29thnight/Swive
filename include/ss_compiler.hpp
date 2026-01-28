@@ -4,8 +4,21 @@
 #include "ss_chunk.hpp"
 #include <string>
 #include <vector>
+#include <stdexcept>
 
 namespace swiftscript {
+
+class CompilerError : public std::runtime_error {
+public:
+    CompilerError(const std::string& msg, uint32_t line = 0)
+        : std::runtime_error(line > 0 ? msg + " (line " + std::to_string(line) + ")" : msg)
+        , line_(line) {}
+    
+    uint32_t line() const { return line_; }
+
+private:
+    uint32_t line_;
+};
 
 class Compiler {
 public:
@@ -22,6 +35,20 @@ private:
 
     std::vector<Local> locals_;
     int scope_depth_{0};
+    int recursion_depth_{0};
+
+    static constexpr int MAX_RECURSION_DEPTH = 256;
+    static constexpr size_t MAX_LOCALS = 65535;
+
+    // �߰�: ���� ���ؽ�Ʈ
+    struct LoopContext {
+        std::vector<size_t> break_jumps;
+        std::vector<size_t> continue_jumps;
+        size_t loop_start;
+        int scope_depth_at_start;
+    };
+    
+    std::vector<LoopContext> loop_stack_;
 
     void compile_stmt(Stmt* stmt);
     void compile_expr(Expr* expr);
@@ -31,6 +58,9 @@ private:
     void visit(IfLetStmt* stmt);
     void visit(GuardLetStmt* stmt);
     void visit(WhileStmt* stmt);
+    void visit(ForInStmt* stmt);      // �߰�
+    void visit(BreakStmt* stmt);      // �߰�
+    void visit(ContinueStmt* stmt);   // �߰�
     void visit(BlockStmt* stmt);
     void visit(PrintStmt* stmt);
     void visit(ReturnStmt* stmt);
@@ -47,6 +77,10 @@ private:
     void visit(OptionalChainExpr* expr);
     void visit(MemberExpr* expr);
     void visit(CallExpr* expr);
+    void visit(RangeExpr* expr);
+    void visit(ArrayLiteralExpr* expr);
+    void visit(DictLiteralExpr* expr);
+    void visit(SubscriptExpr* expr);
 
     void begin_scope();
     void end_scope();
@@ -66,6 +100,23 @@ private:
 
     size_t identifier_constant(const std::string& name);
     Chunk compile_function_body(const FuncDeclStmt& stmt);
+
+    // Helper classes
+    class RecursionGuard {
+    public:
+        explicit RecursionGuard(Compiler& compiler) : compiler_(compiler) {
+            if (++compiler_.recursion_depth_ > MAX_RECURSION_DEPTH) {
+                throw CompilerError("Maximum recursion depth exceeded");
+            }
+        }
+        ~RecursionGuard() {
+            --compiler_.recursion_depth_;
+        }
+        RecursionGuard(const RecursionGuard&) = delete;
+        RecursionGuard& operator=(const RecursionGuard&) = delete;
+    private:
+        Compiler& compiler_;
+    };
 };
 
 } // namespace swiftscript

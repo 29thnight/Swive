@@ -1,7 +1,6 @@
 #include "ss_core.hpp"
 #include "ss_value.hpp"
 #include "ss_vm.hpp"
-#include <algorithm>
 
 namespace swiftscript {
 
@@ -48,6 +47,31 @@ void RC::release(VM* vm, Object* obj) {
                 obj, type_name, old_count, new_count);
     
     if (new_count == 0) {
+        if (!vm) {
+            for (Value* weak_slot : obj->rc.weak_refs) {
+                *weak_slot = Value::null();
+            }
+            obj->rc.weak_refs.clear();
+
+            if (obj->type == ObjectType::List) {
+                auto* list = static_cast<ListObject*>(obj);
+                for (auto& elem : list->elements) {
+                    if (elem.is_object() && elem.ref_type() == RefType::Strong) {
+                        RC::release(nullptr, elem.as_object());
+                    }
+                }
+            } else if (obj->type == ObjectType::Map) {
+                auto* map = static_cast<MapObject*>(obj);
+                for (auto& [key, value] : map->entries) {
+                    if (value.is_object() && value.ref_type() == RefType::Strong) {
+                        RC::release(nullptr, value.as_object());
+                    }
+                }
+            }
+
+            delete obj;
+            return;
+        }
         // RC reached zero - add to deferred release list
         vm->add_deferred_release(obj);
     } else if (new_count < 0) {
@@ -61,9 +85,7 @@ void RC::weak_retain(Object* obj, Value* weak_slot) {
     if (!obj) return;
     
     int32_t old_count = obj->rc.weak_count.fetch_add(1, std::memory_order_relaxed);
-    
-    // Add to weak references list
-    obj->rc.weak_refs.push_back(weak_slot);
+    obj->rc.weak_refs.insert(weak_slot);
     
     SS_DEBUG_RC("WEAK_RETAIN %p weak_rc: %d -> %d", 
                 obj, old_count, old_count + 1);
@@ -74,10 +96,7 @@ void RC::weak_release(Object* obj, Value* weak_slot) {
     
     int32_t old_count = obj->rc.weak_count.load(std::memory_order_relaxed);
     int32_t new_count = obj->rc.weak_count.fetch_sub(1, std::memory_order_relaxed) - 1;
-    
-    // Remove from weak references list
-    auto& refs = obj->rc.weak_refs;
-    refs.erase(std::remove(refs.begin(), refs.end(), weak_slot), refs.end());
+    obj->rc.weak_refs.erase(weak_slot);
     
     SS_DEBUG_RC("WEAK_RELEASE %p weak_rc: %d -> %d", 
                 obj, old_count, new_count);
@@ -130,7 +149,9 @@ void RC::process_deferred_releases(VM* vm) {
         SS_DEBUG_RC("DEALLOCATE %p [%s]", obj, type_name);
         
         // Actually delete the object
+        vm->remove_from_objects_list(obj);
         vm->record_deallocation(*obj);
+        delete obj;
     }
     
     deferred.clear();

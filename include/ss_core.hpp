@@ -1,7 +1,7 @@
 #pragma once
 
 #include <atomic>
-#include <vector>
+#include <unordered_set>
 #include <string>
 #include <memory>
 #include <cstdint>
@@ -40,7 +40,7 @@ enum class ObjectType : uint8_t {
 struct RCInfo {
     std::atomic<int32_t> strong_count{0};
     std::atomic<int32_t> weak_count{0};
-    std::vector<Value*> weak_refs;  // Weak reference slots to nil on dealloc
+    std::unordered_set<Value*> weak_refs;  // Weak reference slots to nil on dealloc
     
     RCInfo() = default;
     RCInfo(const RCInfo&) = delete;

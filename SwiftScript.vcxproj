@@ -129,13 +129,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="include\ss_ast.hpp" />
     <ClInclude Include="include\ss_core.hpp" />
+    <ClInclude Include="include\ss_lexer.hpp" />
+    <ClInclude Include="include\ss_parser.hpp" />
     <ClInclude Include="include\ss_token.hpp" />
     <ClInclude Include="include\ss_value.hpp" />
     <ClInclude Include="include\ss_vm.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ss_core.cpp" />
+    <ClCompile Include="src\ss_lexer.cpp" />
+    <ClCompile Include="src\ss_parser.cpp" />
     <ClCompile Include="src\ss_token.cpp" />
     <ClCompile Include="src\ss_value.cpp" />
     <ClCompile Include="src\ss_vm.cpp" />

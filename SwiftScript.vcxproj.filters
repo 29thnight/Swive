@@ -30,6 +30,15 @@
     <ClInclude Include="include\ss_vm.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="include\ss_ast.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ss_lexer.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ss_parser.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ss_core.cpp">
@@ -58,6 +67,12 @@
     </ClCompile>
     <ClCompile Include="test\test_vm.cpp">
       <Filter>Test</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ss_lexer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ss_parser.cpp">
+      <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

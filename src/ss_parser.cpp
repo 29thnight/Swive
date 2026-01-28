@@ -331,12 +331,12 @@ ExprPtr Parser::nil_coalesce() {
     ExprPtr expr = or_expr();
 
     // ?? is right-associative
-    while (match(TokenType::NilCoalesce)) {
+    if (match(TokenType::NilCoalesce)) {
         uint32_t line = previous().line;
-        ExprPtr right = or_expr();
+        ExprPtr right = nil_coalesce();
         auto coalesce = std::make_unique<NilCoalesceExpr>(std::move(expr), std::move(right));
         coalesce->line = line;
-        expr = std::move(coalesce);
+        return coalesce;
     }
 
     return expr;
@@ -508,31 +508,13 @@ ExprPtr Parser::primary() {
     // String literal — stored as lexeme without quotes
     if (match(TokenType::String)) {
         uint32_t line = previous().line;
-        // The lexeme includes quotes, so strip them
         std::string_view raw = previous().lexeme;
         std::string str_val;
         if (raw.size() >= 2) {
             str_val = std::string(raw.substr(1, raw.size() - 2));
         }
-        // String objects will be created during compilation/interpretation.
-        // For now, store as a null value with a tag or use a dedicated mechanism.
-        // We'll store the string content in an IdentifierExpr-like node for now,
-        // but the correct approach is to carry the string in the literal.
-        // Since Value doesn't hold strings directly, we store null and attach the string.
-        // The compiler will handle creating StringObject.
-        auto lit = std::make_unique<LiteralExpr>(Value::null());
+        auto lit = std::make_unique<LiteralExpr>(std::move(str_val));
         lit->line = line;
-        // We need to pass the string content through.
-        // Let's use a special identifier approach — actually,
-        // the cleaner design is to store the string in a side structure.
-        // For now, we'll treat string literals as identifier expressions
-        // that the compiler recognizes. This is a simplification.
-        auto ident = std::make_unique<IdentifierExpr>("__str:" + str_val);
-        ident->line = line;
-        // Actually, let's just keep the literal and handle strings at compile time.
-        // Store the raw string in a StringLiteral node — but we don't have one.
-        // The simplest approach: use LiteralExpr with a convention.
-        // We'll revisit this when implementing the compiler.
         return lit;
     }
 

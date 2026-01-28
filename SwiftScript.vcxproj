@@ -130,6 +130,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\ss_ast.hpp" />
+    <ClInclude Include="include\ss_chunk.hpp" />
+    <ClInclude Include="include\ss_compiler.hpp" />
     <ClInclude Include="include\ss_core.hpp" />
     <ClInclude Include="include\ss_lexer.hpp" />
     <ClInclude Include="include\ss_parser.hpp" />
@@ -139,6 +141,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ss_core.cpp" />
+    <ClCompile Include="src\ss_compiler.cpp" />
     <ClCompile Include="src\ss_lexer.cpp" />
     <ClCompile Include="src\ss_parser.cpp" />
     <ClCompile Include="src\ss_token.cpp" />
@@ -147,6 +150,7 @@
     <ClCompile Include="test\test_basic.cpp" />
     <ClCompile Include="test\test_minimal.cpp" />
     <ClCompile Include="test\test_object.cpp" />
+    <ClCompile Include="test\test_optional.cpp" />
     <ClCompile Include="test\test_simple.cpp" />
     <ClCompile Include="test\test_vm.cpp" />
   </ItemGroup>

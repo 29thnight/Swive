@@ -6,6 +6,8 @@
 
 using namespace swiftscript;
 
+void run_optional_tests();
+
 void test_value_types() {
     std::cout << "=== Testing Value Types ===\n";
     
@@ -213,6 +215,7 @@ int main() {
         test_weak_references();
         test_vm_stack();
         test_nested_objects();
+        run_optional_tests();
         
         std::cout << "\n✓ All tests passed!\n\n";
         return 0;

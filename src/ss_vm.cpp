@@ -321,7 +321,12 @@ namespace swiftscript {
         ip_ = 0;
         stack_.clear();
         call_frames_.clear();
-        return run();
+        Value result = run();
+        run_cleanup();
+        while (!deferred_releases_.empty()) {
+            run_cleanup();
+        }
+        return result;
     }
 
     Value VM::run() {

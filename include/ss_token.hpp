@@ -35,6 +35,8 @@ enum class TokenType {
     Let,
     Weak,        // weak keyword
     Unowned,     // unowned keyword
+    Nil,         // nil keyword
+    Guard,       // guard keyword
     If,
     Else,
     Switch,
@@ -85,6 +87,8 @@ enum class TokenType {
     LeftShift,      // <<
     RightShift,     // >>
     Question,       // ?
+    NilCoalesce,    // ??
+    OptionalChain,  // ?.
     Colon,          // :
     Arrow,          // ->
     

@@ -49,6 +49,8 @@ const char* TokenUtils::token_type_name(TokenType type) {
         "LET",
         "WEAK",
         "UNOWNED",
+        "NIL",
+        "GUARD",
         "IF",
         "ELSE",
         "SWITCH",
@@ -97,6 +99,8 @@ const char* TokenUtils::token_type_name(TokenType type) {
         "LEFT_SHIFT",
         "RIGHT_SHIFT",
         "QUESTION",
+        "NIL_COALESCE",
+        "OPTIONAL_CHAIN",
         "COLON",
         "ARROW",
         "LEFT_PAREN",
@@ -131,6 +135,8 @@ TokenType TokenUtils::keyword_type(std::string_view str) {
         {"let", TokenType::Let},
         {"weak", TokenType::Weak},
         {"unowned", TokenType::Unowned},
+        {"nil", TokenType::Nil},
+        {"guard", TokenType::Guard},
         {"if", TokenType::If},
         {"else", TokenType::Else},
         {"switch", TokenType::Switch},
@@ -185,7 +191,8 @@ bool TokenUtils::is_comparison_operator(TokenType type) {
 
 bool TokenUtils::is_binary_operator(TokenType type) {
     return (type >= TokenType::Plus && type <= TokenType::RightShift) ||
-           type == TokenType::Question;
+           type == TokenType::Question ||
+           type == TokenType::NilCoalesce;
 }
 
 bool TokenUtils::is_unary_operator(TokenType type) {
@@ -236,6 +243,7 @@ int TokenUtils::operator_precedence(TokenType type) {
             return 3;
             
         case TokenType::Question:  // Ternary
+        case TokenType::NilCoalesce:  // ??
             return 2;
             
         case TokenType::Equal:

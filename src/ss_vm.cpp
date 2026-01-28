@@ -10,19 +10,28 @@ namespace swiftscript {
     }
 
     VM::~VM() {
-        // Clean up all remaining objects
+        // First, drain the deferred releases queue
+        is_collecting_ = true;
+        RC::process_deferred_releases(this);
+        // Process any newly-deferred objects from child releases
+        while (!deferred_releases_.empty()) {
+            RC::process_deferred_releases(this);
+        }
+        is_collecting_ = false;
+
+        // Clean up all remaining objects in the linked list
         Object* obj = objects_head_;
         while (obj) {
             Object* next = obj->next;
 
-            // Nil out weak references
-            for (Value* weak_slot : obj->rc.weak_refs) {
-                *weak_slot = Value::null();
-            }
+            // Mark as dead and nil out weak references
+            obj->rc.is_dead = true;
+            RC::nil_weak_refs(obj);
 
             delete obj;
             obj = next;
         }
+        objects_head_ = nullptr;
 
         if (config_.enable_debug) {
             print_stats();
@@ -135,7 +144,8 @@ namespace swiftscript {
     }
 
     void VM::collect_if_needed() {
-        if (!is_collecting_ && rc_operations_ >= config_.deferred_cleanup_threshold) {
+        if (!is_collecting_ &&
+            static_cast<size_t>(rc_operations_) >= config_.deferred_cleanup_threshold) {
             run_cleanup();
             rc_operations_ = 0;
         }
@@ -152,6 +162,8 @@ namespace swiftscript {
     }
 
     void VM::print_stats() const {
+        int64_t leaked = static_cast<int64_t>(stats_.total_allocated)
+                       - static_cast<int64_t>(stats_.total_freed);
         std::cout << "\n=== SwiftScript VM Statistics ===\n";
         std::cout << "Total Allocated:  " << std::setw(10) << stats_.total_allocated << " bytes\n";
         std::cout << "Total Freed:      " << std::setw(10) << stats_.total_freed << " bytes\n";
@@ -159,8 +171,7 @@ namespace swiftscript {
         std::cout << "Peak Objects:     " << std::setw(10) << stats_.peak_objects << "\n";
         std::cout << "Total Retains:    " << std::setw(10) << stats_.retain_count << "\n";
         std::cout << "Total Releases:   " << std::setw(10) << stats_.release_count << "\n";
-        std::cout << "Memory Leaked:    " << std::setw(10)
-            << (stats_.total_allocated - stats_.total_freed) << " bytes\n";
+        std::cout << "Memory Leaked:    " << std::setw(10) << leaked << " bytes\n";
         std::cout << "=================================\n";
     }
 

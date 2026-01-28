@@ -4,157 +4,163 @@
 
 namespace swiftscript {
 
-void RC::retain(Object* obj) {
-    if (!obj) return;
-    
-    int32_t old_count = obj->rc.strong_count.fetch_add(1, std::memory_order_relaxed);
-    
-    const char* type_name = "Unknown";
-    switch(obj->type) {
-        case ObjectType::String: type_name = "String"; break;
-        case ObjectType::List: type_name = "List"; break;
-        case ObjectType::Map: type_name = "Map"; break;
-        case ObjectType::Function: type_name = "Function"; break;
-        case ObjectType::Closure: type_name = "Closure"; break;
-        case ObjectType::Class: type_name = "Class"; break;
-        case ObjectType::Instance: type_name = "Instance"; break;
-        default: break;
+// ---- Helper: nil out all weak reference slots for an object ----
+void RC::nil_weak_refs(Object* obj) {
+    for (Value* weak_slot : obj->rc.weak_refs) {
+        if (weak_slot) {
+            *weak_slot = Value::null();
+        }
     }
-    
-    SS_DEBUG_RC("RETAIN %p [%s] rc: %d -> %d", 
-                obj, type_name, old_count, old_count + 1);
+    obj->rc.weak_refs.clear();
 }
 
+// ---- Helper: recursively release child objects in containers ----
+void RC::release_children(VM* vm, Object* obj, std::unordered_set<Object*>& deleted_set) {
+    if (obj->type == ObjectType::List) {
+        auto* list = static_cast<ListObject*>(obj);
+        for (auto& elem : list->elements) {
+            if (elem.is_object() && elem.ref_type() == RefType::Strong) {
+                Object* child = elem.as_object();
+                if (child && deleted_set.find(child) == deleted_set.end()) {
+                    RC::release(vm, child);
+                }
+            }
+        }
+    } else if (obj->type == ObjectType::Map) {
+        auto* map = static_cast<MapObject*>(obj);
+        for (auto& [key, value] : map->entries) {
+            if (value.is_object() && value.ref_type() == RefType::Strong) {
+                Object* child = value.as_object();
+                if (child && deleted_set.find(child) == deleted_set.end()) {
+                    RC::release(vm, child);
+                }
+            }
+        }
+    }
+}
+
+// ---- Strong retain ----
+void RC::retain(Object* obj) {
+    if (!obj) return;
+
+    int32_t old_count = obj->rc.strong_count.fetch_add(1, std::memory_order_acq_rel);
+
+    SS_DEBUG_RC("RETAIN %p [%s] rc: %d -> %d",
+                obj, object_type_name(obj->type), old_count, old_count + 1);
+}
+
+// ---- Strong release ----
 void RC::release(VM* vm, Object* obj) {
     if (!obj) return;
 
     if (vm) {
         vm->record_rc_operation();
     }
-    
-    int32_t old_count = obj->rc.strong_count.load(std::memory_order_relaxed);
+
+    int32_t old_count = obj->rc.strong_count.load(std::memory_order_acquire);
     int32_t new_count = obj->rc.strong_count.fetch_sub(1, std::memory_order_acq_rel) - 1;
-    
-    const char* type_name = "Unknown";
-    switch(obj->type) {
-        case ObjectType::String: type_name = "String"; break;
-        case ObjectType::List: type_name = "List"; break;
-        case ObjectType::Map: type_name = "Map"; break;
-        default: break;
-    }
-    
-    SS_DEBUG_RC("RELEASE %p [%s] rc: %d -> %d", 
-                obj, type_name, old_count, new_count);
-    
+
+    SS_DEBUG_RC("RELEASE %p [%s] rc: %d -> %d",
+                obj, object_type_name(obj->type), old_count, new_count);
+
     if (new_count == 0) {
+        // Mark object as logically dead immediately so weak refs can detect it
+        obj->rc.is_dead = true;
+
+        // Nil out weak references immediately (both paths)
+        nil_weak_refs(obj);
+
         if (!vm) {
-            for (Value* weak_slot : obj->rc.weak_refs) {
-                *weak_slot = Value::null();
-            }
-            obj->rc.weak_refs.clear();
-
-            if (obj->type == ObjectType::List) {
-                auto* list = static_cast<ListObject*>(obj);
-                for (auto& elem : list->elements) {
-                    if (elem.is_object() && elem.ref_type() == RefType::Strong) {
-                        RC::release(nullptr, elem.as_object());
-                    }
-                }
-            } else if (obj->type == ObjectType::Map) {
-                auto* map = static_cast<MapObject*>(obj);
-                for (auto& [key, value] : map->entries) {
-                    if (value.is_object() && value.ref_type() == RefType::Strong) {
-                        RC::release(nullptr, value.as_object());
-                    }
-                }
-            }
-
+            // No VM context: release children and delete immediately
+            std::unordered_set<Object*> deleted_set;
+            deleted_set.insert(obj);
+            release_children(nullptr, obj, deleted_set);
             delete obj;
             return;
         }
-        // RC reached zero - add to deferred release list
+
+        // With VM context: add to deferred release list
         vm->add_deferred_release(obj);
     } else if (new_count < 0) {
-        // This should never happen
-        fprintf(stderr, "ERROR: Object %p has negative refcount: %d\n", obj, new_count);
+        fprintf(stderr, "ERROR: Object %p [%s] has negative refcount: %d\n",
+                obj, object_type_name(obj->type), new_count);
         abort();
     }
 }
 
+// ---- Weak retain ----
 void RC::weak_retain(Object* obj, Value* weak_slot) {
-    if (!obj) return;
-    
-    int32_t old_count = obj->rc.weak_count.fetch_add(1, std::memory_order_relaxed);
+    if (!obj || !weak_slot) return;
+
+    int32_t old_count = obj->rc.weak_count.fetch_add(1, std::memory_order_acq_rel);
     obj->rc.weak_refs.insert(weak_slot);
-    
-    SS_DEBUG_RC("WEAK_RETAIN %p weak_rc: %d -> %d", 
+
+    SS_DEBUG_RC("WEAK_RETAIN %p weak_rc: %d -> %d",
                 obj, old_count, old_count + 1);
 }
 
+// ---- Weak release ----
 void RC::weak_release(Object* obj, Value* weak_slot) {
-    if (!obj) return;
-    
-    int32_t old_count = obj->rc.weak_count.load(std::memory_order_relaxed);
-    int32_t new_count = obj->rc.weak_count.fetch_sub(1, std::memory_order_relaxed) - 1;
+    if (!obj || !weak_slot) return;
+
+    // If object is already dead, just clean up the tracking set
+    if (obj->rc.is_dead) {
+        obj->rc.weak_refs.erase(weak_slot);
+        obj->rc.weak_count.fetch_sub(1, std::memory_order_acq_rel);
+        return;
+    }
+
+    int32_t old_count = obj->rc.weak_count.load(std::memory_order_acquire);
+    int32_t new_count = obj->rc.weak_count.fetch_sub(1, std::memory_order_acq_rel) - 1;
     obj->rc.weak_refs.erase(weak_slot);
-    
-    SS_DEBUG_RC("WEAK_RELEASE %p weak_rc: %d -> %d", 
+
+    SS_DEBUG_RC("WEAK_RELEASE %p weak_rc: %d -> %d",
                 obj, old_count, new_count);
 
     if (new_count < 0) {
-        fprintf(stderr, "ERROR: Object %p has negative weak refcount: %d\n", obj, new_count);
+        fprintf(stderr, "ERROR: Object %p [%s] has negative weak refcount: %d\n",
+                obj, object_type_name(obj->type), new_count);
         abort();
     }
 }
 
+// ---- Deferred release processing ----
 void RC::process_deferred_releases(VM* vm) {
     auto& deferred = vm->get_deferred_releases();
-    
+
     if (deferred.empty()) return;
-    
+
     SS_DEBUG_RC("Processing %zu deferred releases", deferred.size());
-    
-    for (Object* obj : deferred) {
-        // Nil out all weak references
-        for (Value* weak_slot : obj->rc.weak_refs) {
-            *weak_slot = Value::null();
+
+    // Swap out the current deferred list so new deferrals during processing
+    // go into a fresh list (reentrant safety)
+    std::vector<Object*> to_process;
+    to_process.swap(deferred);
+
+    // Track already-deleted objects to prevent double-free from circular refs
+    std::unordered_set<Object*> deleted_set;
+
+    for (Object* obj : to_process) {
+        if (deleted_set.find(obj) != deleted_set.end()) {
+            continue;  // Already deleted via a child release
         }
-        obj->rc.weak_refs.clear();
-        
-        // Recursively release child objects
-        if (obj->type == ObjectType::List) {
-            auto* list = static_cast<ListObject*>(obj);
-            for (auto& elem : list->elements) {
-                if (elem.is_object() && elem.ref_type() == RefType::Strong) {
-                    RC::release(vm, elem.as_object());
-                }
-            }
-        } else if (obj->type == ObjectType::Map) {
-            auto* map = static_cast<MapObject*>(obj);
-            for (auto& [key, value] : map->entries) {
-                if (value.is_object() && value.ref_type() == RefType::Strong) {
-                    RC::release(vm, value.as_object());
-                }
-            }
-        }
-        
-        const char* type_name = "Unknown";
-        switch(obj->type) {
-            case ObjectType::String: type_name = "String"; break;
-            case ObjectType::List: type_name = "List"; break;
-            case ObjectType::Map: type_name = "Map"; break;
-            default: break;
-        }
-        
-        SS_DEBUG_RC("DEALLOCATE %p [%s]", obj, type_name);
-        
-        // Actually delete the object
+
+        // Weak refs should already be nil'd in release(), but ensure cleanup
+        nil_weak_refs(obj);
+
+        // Release child objects
+        deleted_set.insert(obj);
+        release_children(vm, obj, deleted_set);
+
+        SS_DEBUG_RC("DEALLOCATE %p [%s]", obj, object_type_name(obj->type));
+
         vm->remove_from_objects_list(obj);
         vm->record_deallocation(*obj);
         delete obj;
     }
-    
-    deferred.clear();
+
+    // If new objects were deferred during processing, they remain in
+    // deferred_releases_ and will be picked up on the next cleanup cycle.
 }
 
 } // namespace swiftscript

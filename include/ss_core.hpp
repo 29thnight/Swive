@@ -36,12 +36,31 @@ enum class ObjectType : uint8_t {
     Upvalue
 };
 
+// Utility: ObjectType to string
+inline const char* object_type_name(ObjectType t) {
+    switch (t) {
+        case ObjectType::String:   return "String";
+        case ObjectType::List:     return "List";
+        case ObjectType::Map:      return "Map";
+        case ObjectType::Function: return "Function";
+        case ObjectType::Closure:  return "Closure";
+        case ObjectType::Class:    return "Class";
+        case ObjectType::Instance: return "Instance";
+        case ObjectType::Module:   return "Module";
+        case ObjectType::Fiber:    return "Fiber";
+        case ObjectType::Range:    return "Range";
+        case ObjectType::Upvalue:  return "Upvalue";
+    }
+    return "Unknown";
+}
+
 // RC Management Structure
 struct RCInfo {
     std::atomic<int32_t> strong_count{0};
     std::atomic<int32_t> weak_count{0};
     std::unordered_set<Value*> weak_refs;  // Weak reference slots to nil on dealloc
-    
+    bool is_dead{false};  // Marks object as logically deallocated (strong_count == 0)
+
     RCInfo() = default;
     RCInfo(const RCInfo&) = delete;
     RCInfo& operator=(const RCInfo&) = delete;
@@ -53,14 +72,14 @@ public:
     ObjectType type;
     RCInfo rc;
     Object* next{nullptr};  // For VM's object linked list
-    
+
     explicit Object(ObjectType t) : type(t) {}
     virtual ~Object() = default;
-    
+
     // Virtual methods for type-specific behavior
     virtual std::string to_string() const = 0;
     virtual size_t memory_size() const = 0;
-    
+
     // Prevent copying
     Object(const Object&) = delete;
     Object& operator=(const Object&) = delete;
@@ -72,13 +91,20 @@ public:
     // Strong reference operations
     static void retain(Object* obj);
     static void release(VM* vm, Object* obj);
-    
+
     // Weak reference operations
     static void weak_retain(Object* obj, Value* weak_slot);
     static void weak_release(Object* obj, Value* weak_slot);
-    
+
     // Deferred cleanup
     static void process_deferred_releases(VM* vm);
+
+    // Nil out all weak reference slots for an object
+    static void nil_weak_refs(Object* obj);
+
+private:
+    // Internal: release child objects of containers
+    static void release_children(VM* vm, Object* obj, std::unordered_set<Object*>& deleted_set);
 };
 
 // Memory statistics

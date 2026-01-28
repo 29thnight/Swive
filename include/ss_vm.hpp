@@ -118,16 +118,7 @@ namespace swiftscript {
         }
 
         SS_DEBUG_RC("ALLOCATE %p [%s] size: %zu bytes",
-            obj,
-            [](ObjectType t) {
-                switch (t) {
-                case ObjectType::String: return "String";
-                case ObjectType::List: return "List";
-                case ObjectType::Map: return "Map";
-                default: return "Unknown";
-                }
-            }(obj->type),
-                obj->memory_size());
+            obj, object_type_name(obj->type), obj->memory_size());
 
         return obj;
     }

@@ -53,32 +53,44 @@ public:
     static Value from_bool(Bool b) {
         Value v;
         v.type_ = Type::Bool;
+        v.data_.int_val = 0;  // Zero union first
         v.data_.bool_val = b;
         return v;
     }
-    
+
     static Value from_int(Int i) {
         Value v;
         v.type_ = Type::Int;
         v.data_.int_val = i;
         return v;
     }
-    
+
     static Value from_float(Float f) {
         Value v;
         v.type_ = Type::Float;
+        v.data_.int_val = 0;  // Zero union first
         v.data_.float_val = f;
         return v;
     }
-    
+
     static Value from_object(Object* obj, RefType ref = RefType::Strong) {
         Value v;
         v.type_ = Type::Object;
         v.ref_type_ = ref;
+        v.data_.int_val = 0;  // Zero union first
         v.data_.object_val = obj;
         return v;
     }
-    
+
+    // Check if weak/unowned reference target is still alive
+    bool is_alive() const {
+        if (!is_object() || data_.object_val == nullptr) return false;
+        if (ref_type_ == RefType::Weak || ref_type_ == RefType::Unowned) {
+            return !data_.object_val->rc.is_dead;
+        }
+        return true;
+    }
+
     // Type checking
     bool is_null() const { return type_ == Type::Null; }
     bool is_undefined() const { return type_ == Type::Undefined; }

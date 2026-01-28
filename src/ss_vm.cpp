@@ -634,7 +634,7 @@ namespace swiftscript {
                     if (!func->chunk) {
                         throw std::runtime_error("Function has no body.");
                     }
-                    call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name, closure);
+                    call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name, closure, func->is_initializer);
                     chunk_ = func->chunk.get();
                     ip_ = 0;
                     break;
@@ -646,7 +646,7 @@ namespace swiftscript {
                     }
                     CallFrame frame = call_frames_.back();
                     call_frames_.pop_back();
-                    if (frame.closure && frame.closure->function && frame.closure->function->is_initializer) {
+                    if (frame.is_initializer) {
                         result = stack_[frame.stack_base];
                     }
                     close_upvalues(stack_.data() + frame.stack_base);

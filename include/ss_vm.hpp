@@ -116,13 +116,15 @@ namespace swiftscript {
         const Chunk* chunk;
         std::string function_name;
         ClosureObject* closure; // Current closure for upvalue access (nullptr for plain functions)
+        bool is_initializer;
 
-        CallFrame(size_t base, size_t ret_addr, const Chunk* call_chunk, std::string name, ClosureObject* c)
+        CallFrame(size_t base, size_t ret_addr, const Chunk* call_chunk, std::string name, ClosureObject* c, bool initializer)
             : stack_base(base),
               return_address(ret_addr),
               chunk(call_chunk),
               function_name(std::move(name)),
-              closure(c) {
+              closure(c),
+              is_initializer(initializer) {
         }
     };
 

@@ -14,6 +14,8 @@ using Int = int64_t;
 using Float = double;
 using Bool = bool;
 
+class VM;
+
 // Value class - 16 bytes on 64-bit systems
 class Value {
 public:
@@ -184,6 +186,7 @@ public:
     
     ListObject() : Object(ObjectType::List) {}
     
+    void append(VM& vm, Value value);
     std::string to_string() const override;
     size_t memory_size() const override {
         return sizeof(ListObject) + elements.capacity() * sizeof(Value);
@@ -196,6 +199,7 @@ public:
     
     MapObject() : Object(ObjectType::Map) {}
     
+    void insert(VM& vm, std::string key, Value value);
     std::string to_string() const override;
     size_t memory_size() const override {
         size_t total = sizeof(MapObject);

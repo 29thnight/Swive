@@ -1,4 +1,5 @@
 #include "ss_value.hpp"
+#include "ss_vm.hpp"
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -79,6 +80,11 @@ std::string ListObject::to_string() const {
     return oss.str();
 }
 
+void ListObject::append(VM& vm, Value value) {
+    elements.push_back(value);
+    vm.record_allocation_delta(*this, memory_size());
+}
+
 std::string MapObject::to_string() const {
     std::ostringstream oss;
     oss << "{";
@@ -89,6 +95,14 @@ std::string MapObject::to_string() const {
     }
     oss << "}";
     return oss.str();
+}
+
+void MapObject::insert(VM& vm, std::string key, Value value) {
+    auto [it, inserted] = entries.emplace(std::move(key), value);
+    if (!inserted) {
+        it->second = value;
+    }
+    vm.record_allocation_delta(*this, memory_size());
 }
 
 } // namespace swiftscript

@@ -160,8 +160,17 @@ namespace swiftscript {
     }
 
     void VM::record_deallocation(const Object& obj) {
-        stats_.total_freed += obj.memory_size();
+        stats_.total_freed += obj.tracked_size;
         stats_.current_objects--;
+    }
+
+    void VM::record_allocation_delta(Object& obj, size_t new_size) {
+        if (new_size > obj.tracked_size) {
+            stats_.total_allocated += (new_size - obj.tracked_size);
+        } else if (new_size < obj.tracked_size) {
+            stats_.total_freed += (obj.tracked_size - new_size);
+        }
+        obj.tracked_size = new_size;
     }
 
     void VM::print_stats() const {

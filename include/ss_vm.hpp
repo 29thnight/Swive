@@ -86,6 +86,7 @@ namespace swiftscript {
         // Statistics
         const MemoryStats& get_stats() const { return stats_; }
         void print_stats() const;
+        void record_allocation_delta(Object& obj, size_t new_size);
 
         // Configuration
         const VMConfig& config() const { return config_; }
@@ -125,14 +126,15 @@ namespace swiftscript {
         objects_head_ = obj;
 
         // Update stats
-        stats_.total_allocated += obj->memory_size();
+        obj->tracked_size = obj->memory_size();
+        stats_.total_allocated += obj->tracked_size;
         stats_.current_objects++;
         if (stats_.current_objects > stats_.peak_objects) {
             stats_.peak_objects = stats_.current_objects;
         }
 
         SS_DEBUG_RC("ALLOCATE %p [%s] size: %zu bytes",
-            obj, object_type_name(obj->type), obj->memory_size());
+            obj, object_type_name(obj->type), obj->tracked_size);
 
         return obj;
     }

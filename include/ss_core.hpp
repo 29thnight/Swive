@@ -72,6 +72,7 @@ public:
     ObjectType type;
     RCInfo rc;
     Object* next{nullptr};  // For VM's object linked list
+    size_t tracked_size{0};
 
     explicit Object(ObjectType t) : type(t) {}
     virtual ~Object() = default;

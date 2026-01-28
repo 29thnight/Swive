@@ -89,9 +89,9 @@ void test_list_object() {
     
     // Create list
     auto* list = vm.allocate_object<ListObject>();
-    list->elements.push_back(Value::from_int(1));
-    list->elements.push_back(Value::from_int(2));
-    list->elements.push_back(Value::from_int(3));
+    list->append(vm, Value::from_int(1));
+    list->append(vm, Value::from_int(2));
+    list->append(vm, Value::from_int(3));
     
     Value v_list = Value::from_object(list);
     std::cout << "List: " << v_list.to_string() << "\n";
@@ -185,8 +185,8 @@ void test_nested_objects() {
     RC::retain(str1);
     RC::retain(str2);
     
-    list->elements.push_back(Value::from_object(str1));
-    list->elements.push_back(Value::from_object(str2));
+    list->append(vm, Value::from_object(str1));
+    list->append(vm, Value::from_object(str2));
     
     std::cout << "List contents: " << list->to_string() << "\n";
     std::cout << "List RC: " << list->rc.strong_count << "\n";

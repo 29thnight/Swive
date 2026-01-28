@@ -83,6 +83,13 @@ void test_optional_assignment() {
     Value x = vm.get_global("x");
     assert(x.is_null());
 }
+
+void test_function_call_script() {
+    VM vm;
+    vm.interpret("func add(a: Int, b: Int) { return a + b; } var result = add(2, 3);");
+    Value result = vm.get_global("result");
+    assert(result.is_int() && result.as_int() == 5);
+}
 }
 
 void run_optional_tests() {
@@ -97,5 +104,6 @@ void run_optional_tests() {
     test_optional_chaining_nil();
     test_nil_coalesce_chain();
     test_optional_assignment();
+    test_function_call_script();
     std::cout << "✓ Optional tests passed!\n\n";
 }

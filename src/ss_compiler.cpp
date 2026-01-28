@@ -1,6 +1,7 @@
 #include "ss_compiler.hpp"
-#include <stdexcept>
 #include <limits>
+#include <memory>
+#include <stdexcept>
 
 namespace swiftscript {
 
@@ -214,7 +215,33 @@ void Compiler::visit(ReturnStmt* stmt) {
 }
 
 void Compiler::visit(FuncDeclStmt* stmt) {
-    throw std::runtime_error("Function declarations are not implemented yet.");
+    FunctionPrototype proto;
+    proto.name = stmt->name;
+    proto.params.reserve(stmt->params.size());
+    for (const auto& [param_name, param_type] : stmt->params) {
+        proto.params.push_back(param_name);
+    }
+
+    Chunk function_chunk = compile_function_body(*stmt);
+    proto.chunk = std::make_shared<Chunk>(std::move(function_chunk));
+
+    size_t function_index = chunk_.add_function(std::move(proto));
+    if (function_index > std::numeric_limits<uint16_t>::max()) {
+        throw std::runtime_error("Too many functions in chunk.");
+    }
+
+    emit_op(OpCode::OP_FUNCTION, stmt->line);
+    emit_short(static_cast<uint16_t>(function_index), stmt->line);
+
+    if (scope_depth_ == 0) {
+        size_t name_idx = identifier_constant(stmt->name);
+        emit_op(OpCode::OP_SET_GLOBAL, stmt->line);
+        emit_short(static_cast<uint16_t>(name_idx), stmt->line);
+        emit_op(OpCode::OP_POP, stmt->line);
+    } else {
+        declare_local(stmt->name, false);
+        mark_local_initialized();
+    }
 }
 
 void Compiler::visit(ExprStmt* stmt) {
@@ -360,7 +387,18 @@ void Compiler::visit(MemberExpr* expr) {
 }
 
 void Compiler::visit(CallExpr* expr) {
-    throw std::runtime_error("Function calls are not implemented yet.");
+    compile_expr(expr->callee.get());
+
+    if (expr->arguments.size() > std::numeric_limits<uint16_t>::max()) {
+        throw std::runtime_error("Too many arguments in function call.");
+    }
+
+    for (const auto& arg : expr->arguments) {
+        compile_expr(arg.get());
+    }
+
+    emit_op(OpCode::OP_CALL, expr->line);
+    emit_short(static_cast<uint16_t>(expr->arguments.size()), expr->line);
 }
 
 void Compiler::begin_scope() {
@@ -485,6 +523,28 @@ void Compiler::patch_jump(size_t offset) {
 
 size_t Compiler::identifier_constant(const std::string& name) {
     return chunk_.add_string(name);
+}
+
+Chunk Compiler::compile_function_body(const FuncDeclStmt& stmt) {
+    Compiler function_compiler;
+    function_compiler.chunk_ = Chunk{};
+    function_compiler.locals_.clear();
+    function_compiler.scope_depth_ = 1;
+
+    for (const auto& [param_name, param_type] : stmt.params) {
+        function_compiler.declare_local(param_name, param_type.is_optional);
+        function_compiler.mark_local_initialized();
+    }
+
+    if (stmt.body) {
+        for (const auto& statement : stmt.body->statements) {
+            function_compiler.compile_stmt(statement.get());
+        }
+    }
+
+    function_compiler.emit_op(OpCode::OP_NIL, stmt.line);
+    function_compiler.emit_op(OpCode::OP_RETURN, stmt.line);
+    return std::move(function_compiler.chunk_);
 }
 
 } // namespace swiftscript

@@ -65,6 +65,7 @@ private:
     void patch_jump(size_t offset);
 
     size_t identifier_constant(const std::string& name);
+    Chunk compile_function_body(const FuncDeclStmt& stmt);
 };
 
 } // namespace swiftscript

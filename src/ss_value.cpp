@@ -1,5 +1,6 @@
 #include "ss_value.hpp"
 #include "ss_vm.hpp"
+#include "ss_chunk.hpp"
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -103,6 +104,36 @@ void MapObject::insert(VM& vm, std::string key, Value value) {
         it->second = value;
     }
     vm.record_allocation_delta(*this, memory_size());
+}
+
+FunctionObject::FunctionObject(std::string function_name,
+                               std::vector<std::string> function_params,
+                               std::shared_ptr<Chunk> function_chunk)
+    : Object(ObjectType::Function),
+      name(std::move(function_name)),
+      params(std::move(function_params)),
+      chunk(std::move(function_chunk)) {}
+
+std::string FunctionObject::to_string() const {
+    if (name.empty()) {
+        return "<func>";
+    }
+    return "<func " + name + ">";
+}
+
+size_t FunctionObject::memory_size() const {
+    size_t total = sizeof(FunctionObject);
+    total += name.capacity();
+    for (const auto& param : params) {
+        total += param.capacity();
+    }
+    if (chunk) {
+        total += chunk->code.capacity() * sizeof(uint8_t);
+        total += chunk->constants.capacity() * sizeof(Value);
+        total += chunk->strings.capacity() * sizeof(std::string);
+        total += chunk->functions.capacity() * sizeof(FunctionPrototype);
+    }
+    return total;
 }
 
 } // namespace swiftscript

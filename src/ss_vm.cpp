@@ -387,18 +387,20 @@ namespace swiftscript {
                 }
                 case OpCode::OP_GET_LOCAL: {
                     uint16_t slot = read_short();
-                    if (slot >= stack_.size()) {
+                    size_t base = current_stack_base();
+                    if (base + slot >= stack_.size()) {
                         throw std::runtime_error("Local slot out of range.");
                     }
-                    push(stack_[slot]);
+                    push(stack_[base + slot]);
                     break;
                 }
                 case OpCode::OP_SET_LOCAL: {
                     uint16_t slot = read_short();
-                    if (slot >= stack_.size()) {
+                    size_t base = current_stack_base();
+                    if (base + slot >= stack_.size()) {
                         throw std::runtime_error("Local slot out of range.");
                     }
-                    stack_[slot] = peek(0);
+                    stack_[base + slot] = peek(0);
                     break;
                 }
                 case OpCode::OP_JUMP: {
@@ -418,10 +420,54 @@ namespace swiftscript {
                     ip_ -= offset;
                     break;
                 }
+                case OpCode::OP_FUNCTION: {
+                    uint16_t index = read_short();
+                    if (index >= chunk_->functions.size()) {
+                        throw std::runtime_error("Function index out of range.");
+                    }
+                    const auto& proto = chunk_->functions[index];
+                    auto* func = allocate_object<FunctionObject>(proto.name, proto.params, proto.chunk);
+                    push(Value::from_object(func));
+                    break;
+                }
                 case OpCode::OP_CALL:
-                    throw std::runtime_error("Call not implemented.");
-                case OpCode::OP_RETURN:
-                    return pop();
+                {
+                    uint16_t arg_count = read_short();
+                    if (stack_.size() < arg_count + 1) {
+                        throw std::runtime_error("Not enough values for function call.");
+                    }
+                    size_t callee_index = stack_.size() - arg_count - 1;
+                    Value callee = stack_[callee_index];
+                    if (!callee.is_object() || !callee.as_object() ||
+                        callee.as_object()->type != ObjectType::Function) {
+                        throw std::runtime_error("Attempted to call a non-function.");
+                    }
+                    auto* func = static_cast<FunctionObject*>(callee.as_object());
+                    if (arg_count != func->params.size()) {
+                        throw std::runtime_error("Incorrect argument count.");
+                    }
+                    if (!func->chunk) {
+                        throw std::runtime_error("Function has no body.");
+                    }
+                    call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name);
+                    chunk_ = func->chunk.get();
+                    ip_ = 0;
+                    break;
+                }
+                case OpCode::OP_RETURN: {
+                    Value result = pop();
+                    if (call_frames_.empty()) {
+                        return result;
+                    }
+                    CallFrame frame = call_frames_.back();
+                    call_frames_.pop_back();
+                    size_t callee_index = frame.stack_base - 1;
+                    stack_.resize(callee_index);
+                    chunk_ = frame.chunk;
+                    ip_ = frame.return_address;
+                    push(result);
+                    break;
+                }
                 case OpCode::OP_UNWRAP: {
                     Value v = peek(0);
                     if (v.is_null()) {
@@ -498,6 +544,13 @@ namespace swiftscript {
             throw std::runtime_error("String constant index out of range.");
         }
         return chunk_->strings[idx];
+    }
+
+    size_t VM::current_stack_base() const {
+        if (call_frames_.empty()) {
+            return 0;
+        }
+        return call_frames_.back().stack_base;
     }
 
     bool VM::is_truthy(const Value& value) const {

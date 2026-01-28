@@ -2,11 +2,20 @@
 
 #include "ss_value.hpp"
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 #include <stdexcept>
 
 namespace swiftscript {
+
+struct Chunk;
+
+struct FunctionPrototype {
+    std::string name;
+    std::vector<std::string> params;
+    std::shared_ptr<Chunk> chunk;
+};
 
 // Opcodes
 enum class OpCode : uint8_t {
@@ -52,6 +61,7 @@ enum class OpCode : uint8_t {
     OP_LOOP,
 
     // Functions
+    OP_FUNCTION,
     OP_CALL,
     OP_RETURN,
 
@@ -77,6 +87,7 @@ struct Chunk {
     std::vector<uint8_t> code;
     std::vector<Value> constants;
     std::vector<std::string> strings;
+    std::vector<FunctionPrototype> functions;
     std::vector<uint32_t> lines;
 
     size_t add_constant(Value val) {
@@ -92,6 +103,11 @@ struct Chunk {
         }
         strings.push_back(val);
         return strings.size() - 1;
+    }
+
+    size_t add_function(FunctionPrototype proto) {
+        functions.push_back(std::move(proto));
+        return functions.size() - 1;
     }
 
     void write(uint8_t byte, uint32_t line) {

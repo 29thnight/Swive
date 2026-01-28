@@ -99,6 +99,7 @@ namespace swiftscript {
         uint16_t read_short();
         Value read_constant();
         const std::string& read_string();
+        size_t current_stack_base() const;
         bool is_truthy(const Value& value) const;
         Value get_property(const Value& object, const std::string& name);
     };
@@ -108,11 +109,14 @@ namespace swiftscript {
     public:
         size_t stack_base;      // Base of this frame's stack
         size_t return_address;  // Where to return after call
+        const Chunk* chunk;
         std::string function_name;
 
-        CallFrame(size_t base, size_t ret_addr, std::string name)
-            : stack_base(base), return_address(ret_addr),
-            function_name(std::move(name)) {
+        CallFrame(size_t base, size_t ret_addr, const Chunk* call_chunk, std::string name)
+            : stack_base(base),
+              return_address(ret_addr),
+              chunk(call_chunk),
+              function_name(std::move(name)) {
         }
     };
 

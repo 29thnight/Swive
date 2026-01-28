@@ -6,6 +6,8 @@
 #include <string_view>
 #include <string>
 #include <unordered_map>
+#include <vector>
+#include <memory>
 
 namespace swiftscript {
 
@@ -15,6 +17,7 @@ using Float = double;
 using Bool = bool;
 
 class VM;
+struct Chunk;
 
 // Value class - 16 bytes on 64-bit systems
 class Value {
@@ -211,6 +214,20 @@ public:
         total += entries.bucket_count() * sizeof(void*);
         return total;
     }
+};
+
+class FunctionObject : public Object {
+public:
+    std::string name;
+    std::vector<std::string> params;
+    std::shared_ptr<Chunk> chunk;
+
+    FunctionObject(std::string function_name,
+                   std::vector<std::string> function_params,
+                   std::shared_ptr<Chunk> function_chunk);
+
+    std::string to_string() const override;
+    size_t memory_size() const override;
 };
 
 // Verify size constraint

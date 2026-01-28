@@ -158,16 +158,8 @@ void Compiler::visit(GuardLetStmt* stmt) {
 
     size_t else_jump = emit_jump(OpCode::OP_JUMP_IF_NIL, stmt->line);
     size_t locals_before = locals_.size();
-    bool is_global_scope = scope_depth_ == 0;
-    if (is_global_scope) {
-        size_t name_idx = identifier_constant(stmt->binding_name);
-        emit_op(OpCode::OP_SET_GLOBAL, stmt->line);
-        emit_short(static_cast<uint16_t>(name_idx), stmt->line);
-        emit_op(OpCode::OP_POP, stmt->line);
-    } else {
-        declare_local(stmt->binding_name, false);
-        mark_local_initialized();
-    }
+    declare_local(stmt->binding_name, false);
+    mark_local_initialized();
 
     size_t end_jump = emit_jump(OpCode::OP_JUMP, stmt->line);
     patch_jump(else_jump);

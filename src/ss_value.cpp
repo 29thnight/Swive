@@ -10,8 +10,9 @@ namespace swiftscript {
 namespace {
 bool nearly_equal(Float a, Float b) {
     const Float diff = std::fabs(a - b);
-    const Float scale = std::max<Float>({1.0, std::fabs(a), std::fabs(b)});
-    return diff <= std::numeric_limits<Float>::epsilon() * scale;
+    const Float scale = std::max({Float{1.0}, std::fabs(a), std::fabs(b)});
+    const Float eps = std::numeric_limits<Float>::epsilon();
+    return diff <= eps * scale;
 }
 } // namespace
 

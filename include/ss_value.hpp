@@ -190,6 +190,8 @@ public:
             total += sizeof(std::string) + sizeof(Value);
             total += key.capacity();
         }
+        // Approximate unordered_map bucket overhead.
+        total += entries.bucket_count() * sizeof(void*);
         return total;
     }
 };

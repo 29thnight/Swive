@@ -1,4 +1,5 @@
 #include "ss_token.hpp"
+#include <array>
 #include <unordered_map>
 
 namespace swiftscript {
@@ -26,99 +27,96 @@ std::string Token::to_string() const {
 }
 
 const char* TokenUtils::token_type_name(TokenType type) {
-    switch (type) {
-        case TokenType::Eof: return "EOF";
-        case TokenType::Error: return "ERROR";
-        case TokenType::Comment: return "COMMENT";
-        case TokenType::Integer: return "INTEGER";
-        case TokenType::Float: return "FLOAT";
-        case TokenType::String: return "STRING";
-        case TokenType::True: return "TRUE";
-        case TokenType::False: return "FALSE";
-        case TokenType::Null: return "NULL";
-        case TokenType::Identifier: return "IDENTIFIER";
-        
-        // Keywords
-        case TokenType::Func: return "FUNC";
-        case TokenType::Class: return "CLASS";
-        case TokenType::Struct: return "STRUCT";
-        case TokenType::Enum: return "ENUM";
-        case TokenType::Protocol: return "PROTOCOL";
-        case TokenType::Extension: return "EXTENSION";
-        case TokenType::Var: return "VAR";
-        case TokenType::Let: return "LET";
-        case TokenType::Weak: return "WEAK";
-        case TokenType::Unowned: return "UNOWNED";
-        case TokenType::If: return "IF";
-        case TokenType::Else: return "ELSE";
-        case TokenType::Switch: return "SWITCH";
-        case TokenType::Case: return "CASE";
-        case TokenType::Default: return "DEFAULT";
-        case TokenType::For: return "FOR";
-        case TokenType::While: return "WHILE";
-        case TokenType::Repeat: return "REPEAT";
-        case TokenType::Break: return "BREAK";
-        case TokenType::Continue: return "CONTINUE";
-        case TokenType::Return: return "RETURN";
-        case TokenType::In: return "IN";
-        case TokenType::Import: return "IMPORT";
-        case TokenType::Public: return "PUBLIC";
-        case TokenType::Private: return "PRIVATE";
-        case TokenType::Internal: return "INTERNAL";
-        case TokenType::Static: return "STATIC";
-        case TokenType::Override: return "OVERRIDE";
-        case TokenType::Init: return "INIT";
-        case TokenType::Deinit: return "DEINIT";
-        case TokenType::Self: return "SELF";
-        case TokenType::Super: return "SUPER";
-        
-        // Operators
-        case TokenType::Plus: return "PLUS";
-        case TokenType::Minus: return "MINUS";
-        case TokenType::Star: return "STAR";
-        case TokenType::Slash: return "SLASH";
-        case TokenType::Percent: return "PERCENT";
-        case TokenType::Equal: return "EQUAL";
-        case TokenType::PlusEqual: return "PLUS_EQUAL";
-        case TokenType::MinusEqual: return "MINUS_EQUAL";
-        case TokenType::StarEqual: return "STAR_EQUAL";
-        case TokenType::SlashEqual: return "SLASH_EQUAL";
-        case TokenType::EqualEqual: return "EQUAL_EQUAL";
-        case TokenType::NotEqual: return "NOT_EQUAL";
-        case TokenType::Less: return "LESS";
-        case TokenType::Greater: return "GREATER";
-        case TokenType::LessEqual: return "LESS_EQUAL";
-        case TokenType::GreaterEqual: return "GREATER_EQUAL";
-        case TokenType::And: return "AND";
-        case TokenType::Or: return "OR";
-        case TokenType::Not: return "NOT";
-        case TokenType::BitwiseAnd: return "BITWISE_AND";
-        case TokenType::BitwiseOr: return "BITWISE_OR";
-        case TokenType::BitwiseXor: return "BITWISE_XOR";
-        case TokenType::BitwiseNot: return "BITWISE_NOT";
-        case TokenType::LeftShift: return "LEFT_SHIFT";
-        case TokenType::RightShift: return "RIGHT_SHIFT";
-        case TokenType::Question: return "QUESTION";
-        case TokenType::Colon: return "COLON";
-        case TokenType::Arrow: return "ARROW";
-        
-        // Delimiters
-        case TokenType::LeftParen: return "LEFT_PAREN";
-        case TokenType::RightParen: return "RIGHT_PAREN";
-        case TokenType::LeftBrace: return "LEFT_BRACE";
-        case TokenType::RightBrace: return "RIGHT_BRACE";
-        case TokenType::LeftBracket: return "LEFT_BRACKET";
-        case TokenType::RightBracket: return "RIGHT_BRACKET";
-        case TokenType::Comma: return "COMMA";
-        case TokenType::Dot: return "DOT";
-        case TokenType::Semicolon: return "SEMICOLON";
-        
-        // Range operators
-        case TokenType::Range: return "RANGE";
-        case TokenType::RangeInclusive: return "RANGE_INCLUSIVE";
-        
-        default: return "UNKNOWN";
+    static constexpr std::array<std::string_view,
+        static_cast<size_t>(TokenType::RangeInclusive) + 1> kTokenTypeNames = {
+        "EOF",
+        "ERROR",
+        "COMMENT",
+        "INTEGER",
+        "FLOAT",
+        "STRING",
+        "TRUE",
+        "FALSE",
+        "NULL",
+        "IDENTIFIER",
+        "FUNC",
+        "CLASS",
+        "STRUCT",
+        "ENUM",
+        "PROTOCOL",
+        "EXTENSION",
+        "VAR",
+        "LET",
+        "WEAK",
+        "UNOWNED",
+        "IF",
+        "ELSE",
+        "SWITCH",
+        "CASE",
+        "DEFAULT",
+        "FOR",
+        "WHILE",
+        "REPEAT",
+        "BREAK",
+        "CONTINUE",
+        "RETURN",
+        "IN",
+        "IMPORT",
+        "PUBLIC",
+        "PRIVATE",
+        "INTERNAL",
+        "STATIC",
+        "OVERRIDE",
+        "INIT",
+        "DEINIT",
+        "SELF",
+        "SUPER",
+        "PLUS",
+        "MINUS",
+        "STAR",
+        "SLASH",
+        "PERCENT",
+        "EQUAL",
+        "PLUS_EQUAL",
+        "MINUS_EQUAL",
+        "STAR_EQUAL",
+        "SLASH_EQUAL",
+        "EQUAL_EQUAL",
+        "NOT_EQUAL",
+        "LESS",
+        "GREATER",
+        "LESS_EQUAL",
+        "GREATER_EQUAL",
+        "AND",
+        "OR",
+        "NOT",
+        "BITWISE_AND",
+        "BITWISE_OR",
+        "BITWISE_XOR",
+        "BITWISE_NOT",
+        "LEFT_SHIFT",
+        "RIGHT_SHIFT",
+        "QUESTION",
+        "COLON",
+        "ARROW",
+        "LEFT_PAREN",
+        "RIGHT_PAREN",
+        "LEFT_BRACE",
+        "RIGHT_BRACE",
+        "LEFT_BRACKET",
+        "RIGHT_BRACKET",
+        "COMMA",
+        "DOT",
+        "SEMICOLON",
+        "RANGE",
+        "RANGE_INCLUSIVE",
+    };
+
+    const auto index = static_cast<size_t>(type);
+    if (index >= kTokenTypeNames.size()) {
+        return "UNKNOWN_TOKEN";
     }
+    return kTokenTypeNames[index].data();
 }
 
 TokenType TokenUtils::keyword_type(std::string_view str) {

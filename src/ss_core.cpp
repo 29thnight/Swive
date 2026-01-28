@@ -28,6 +28,10 @@ void RC::retain(Object* obj) {
 
 void RC::release(VM* vm, Object* obj) {
     if (!obj) return;
+
+    if (vm) {
+        vm->record_rc_operation();
+    }
     
     int32_t old_count = obj->rc.strong_count.load(std::memory_order_relaxed);
     int32_t new_count = obj->rc.strong_count.fetch_sub(1, std::memory_order_acq_rel) - 1;
@@ -126,11 +130,7 @@ void RC::process_deferred_releases(VM* vm) {
         SS_DEBUG_RC("DEALLOCATE %p [%s]", obj, type_name);
         
         // Actually delete the object
-        auto& stats = vm->get_stats_mutable();
-        stats.total_freed++;
-        stats.current_objects--;
-        vm->stats.total_freed++;
-        vm->stats.current_objects--;
+        vm->record_deallocation(*obj);
     }
     
     deferred.clear();

@@ -126,13 +126,16 @@ namespace swiftscript {
     }
 
     void VM::run_cleanup() {
-        if (!deferred_releases_.empty()) {
-            RC::process_deferred_releases(this);
+        if (is_collecting_ || deferred_releases_.empty()) {
+            return;
         }
+        is_collecting_ = true;
+        RC::process_deferred_releases(this);
+        is_collecting_ = false;
     }
 
     void VM::collect_if_needed() {
-        if (rc_operations_ >= config_.deferred_cleanup_threshold) {
+        if (!is_collecting_ && rc_operations_ >= config_.deferred_cleanup_threshold) {
             run_cleanup();
             rc_operations_ = 0;
         }
@@ -141,6 +144,11 @@ namespace swiftscript {
     void VM::record_rc_operation() {
         ++rc_operations_;
         collect_if_needed();
+    }
+
+    void VM::record_deallocation(const Object& obj) {
+        stats_.total_freed += obj.memory_size();
+        stats_.current_objects--;
     }
 
     void VM::print_stats() const {

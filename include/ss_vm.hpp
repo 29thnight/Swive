@@ -41,6 +41,9 @@ namespace swiftscript {
 
         // Counters
         uint32_t rc_operations_{ 0 };
+        bool is_collecting_{ false };
+
+        void record_deallocation(const Object& obj);
 
     public:
         explicit VM(VMConfig config = VMConfig{});
@@ -77,11 +80,12 @@ namespace swiftscript {
 
         // Statistics
         const MemoryStats& get_stats() const { return stats_; }
-        MemoryStats& get_stats_mutable() { return stats_; }
         void print_stats() const;
 
         // Configuration
         const VMConfig& config() const { return config_; }
+
+        friend class RC;
     };
 
     // Call Frame for function calls

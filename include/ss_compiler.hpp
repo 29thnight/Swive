@@ -53,6 +53,7 @@ private:
     void declare_local(const std::string& name, bool is_optional);
     void mark_local_initialized();
     int resolve_local(const std::string& name) const;
+    bool is_exiting_stmt(Stmt* stmt) const;
 
     void emit_op(OpCode op, uint32_t line);
     void emit_byte(uint8_t byte, uint32_t line);

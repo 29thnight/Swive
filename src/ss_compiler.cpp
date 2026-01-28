@@ -150,6 +150,10 @@ void Compiler::visit(IfLetStmt* stmt) {
 }
 
 void Compiler::visit(GuardLetStmt* stmt) {
+    if (!is_exiting_stmt(stmt->else_branch.get())) {
+        throw std::runtime_error("guard let requires else branch to exit.");
+    }
+
     compile_expr(stmt->optional_expr.get());
 
     size_t else_jump = emit_jump(OpCode::OP_JUMP_IF_NIL, stmt->line);
@@ -395,6 +399,33 @@ int Compiler::resolve_local(const std::string& name) const {
         }
     }
     return -1;
+}
+
+bool Compiler::is_exiting_stmt(Stmt* stmt) const {
+    if (!stmt) {
+        return false;
+    }
+    switch (stmt->kind) {
+        case StmtKind::Return:
+            return true;
+        case StmtKind::Block: {
+            auto* block = static_cast<BlockStmt*>(stmt);
+            if (block->statements.empty()) {
+                return false;
+            }
+            return is_exiting_stmt(block->statements.back().get());
+        }
+        case StmtKind::If: {
+            auto* if_stmt = static_cast<IfStmt*>(stmt);
+            if (!if_stmt->else_branch) {
+                return false;
+            }
+            return is_exiting_stmt(if_stmt->then_branch.get())
+                && is_exiting_stmt(if_stmt->else_branch.get());
+        }
+        default:
+            return false;
+    }
 }
 
 void Compiler::emit_op(OpCode op, uint32_t line) {

@@ -412,6 +412,38 @@ namespace swiftscript {
                     stack_[base + slot] = peek(0);
                     break;
                 }
+                case OpCode::OP_GET_UPVALUE: {
+                    uint16_t slot = read_short();
+                    if (call_frames_.empty() || !call_frames_.back().closure) {
+                        throw std::runtime_error("No closure active for upvalue read.");
+                    }
+                    auto* closure = call_frames_.back().closure;
+                    if (slot >= closure->upvalues.size()) {
+                        throw std::runtime_error("Upvalue index out of range.");
+                    }
+                    push(*closure->upvalues[slot]->location);
+                    break;
+                }
+                case OpCode::OP_SET_UPVALUE: {
+                    uint16_t slot = read_short();
+                    if (call_frames_.empty() || !call_frames_.back().closure) {
+                        throw std::runtime_error("No closure active for upvalue write.");
+                    }
+                    auto* closure = call_frames_.back().closure;
+                    if (slot >= closure->upvalues.size()) {
+                        throw std::runtime_error("Upvalue index out of range.");
+                    }
+                    *closure->upvalues[slot]->location = peek(0);
+                    break;
+                }
+                case OpCode::OP_CLOSE_UPVALUE: {
+                    if (stack_.empty()) {
+                        throw std::runtime_error("Stack underflow on close upvalue.");
+                    }
+                    close_upvalues(&stack_.back());
+                    pop();
+                    break;
+                }
                 case OpCode::OP_JUMP: {
                     uint16_t offset = read_short();
                     ip_ += offset;
@@ -435,8 +467,70 @@ namespace swiftscript {
                         throw std::runtime_error("Function index out of range.");
                     }
                     const auto& proto = chunk_->functions[index];
-                    auto* func = allocate_object<FunctionObject>(proto.name, proto.params, proto.chunk);
+                    auto* func = allocate_object<FunctionObject>(proto.name, proto.params, proto.chunk, proto.is_initializer);
                     push(Value::from_object(func));
+                    break;
+                }
+                case OpCode::OP_CLOSURE: {
+                    uint16_t index = read_short();
+                    if (index >= chunk_->functions.size()) {
+                        throw std::runtime_error("Function index out of range.");
+                    }
+                    const auto& proto = chunk_->functions[index];
+                    auto* func = allocate_object<FunctionObject>(proto.name, proto.params, proto.chunk, proto.is_initializer);
+                    auto* closure = allocate_object<ClosureObject>(func);
+                    closure->upvalues.resize(proto.upvalues.size(), nullptr);
+
+                    ClosureObject* enclosing_closure = call_frames_.empty() ? nullptr : call_frames_.back().closure;
+                    size_t base = current_stack_base();
+
+                    for (size_t i = 0; i < proto.upvalues.size(); ++i) {
+                        const auto& uv = proto.upvalues[i];
+                        if (uv.is_local) {
+                            if (base + uv.index >= stack_.size()) {
+                                throw std::runtime_error("Upvalue local slot out of range.");
+                            }
+                            closure->upvalues[i] = capture_upvalue(&stack_[base + uv.index]);
+                        } else {
+                            if (!enclosing_closure) {
+                                throw std::runtime_error("Upvalue refers to enclosing closure, but none is active.");
+                            }
+                            if (uv.index >= enclosing_closure->upvalues.size()) {
+                                throw std::runtime_error("Upvalue index out of range.");
+                            }
+                            closure->upvalues[i] = enclosing_closure->upvalues[uv.index];
+                        }
+                    }
+
+                    push(Value::from_object(closure));
+                    break;
+                }
+                case OpCode::OP_CLASS: {
+                    uint16_t name_idx = read_short();
+                    if (name_idx >= chunk_->strings.size()) {
+                        throw std::runtime_error("Class name index out of range.");
+                    }
+                    const std::string& name = chunk_->strings[name_idx];
+                    auto* klass = allocate_object<ClassObject>(name);
+                    push(Value::from_object(klass));
+                    break;
+                }
+                case OpCode::OP_METHOD: {
+                    uint16_t name_idx = read_short();
+                    if (stack_.size() < 2) {
+                        throw std::runtime_error("Stack underflow on method definition.");
+                    }
+                    Value method_val = pop();
+                    Value class_val = peek(0);
+                    if (!class_val.is_object() || !class_val.as_object() || class_val.as_object()->type != ObjectType::Class) {
+                        throw std::runtime_error("OP_METHOD expects class on stack.");
+                    }
+                    if (name_idx >= chunk_->strings.size()) {
+                        throw std::runtime_error("Method name index out of range.");
+                    }
+                    auto* klass = static_cast<ClassObject*>(class_val.as_object());
+                    const std::string& name = chunk_->strings[name_idx];
+                    klass->methods[name] = method_val;
                     break;
                 }
                 case OpCode::OP_CALL:
@@ -447,6 +541,7 @@ namespace swiftscript {
                     }
                     size_t callee_index = stack_.size() - arg_count - 1;
                     Value callee = stack_[callee_index];
+                    bool has_receiver = false;
                     
                     if (!callee.is_object() || !callee.as_object()) {
                         throw std::runtime_error("Attempted to call a non-function.");
@@ -454,6 +549,26 @@ namespace swiftscript {
                     
                     Object* obj = callee.as_object();
                     
+                    // Class call -> instantiate
+                    if (obj->type == ObjectType::Class) {
+                        auto* klass = static_cast<ClassObject*>(obj);
+                        auto* instance = allocate_object<InstanceObject>(klass);
+                        // Replace callee with instance for return value
+                        stack_[callee_index] = Value::from_object(instance);
+                        // Initializer?
+                        auto it = klass->methods.find("init");
+                        if (it == klass->methods.end()) {
+                            // No init: discard args, leave instance on stack
+                            stack_.resize(callee_index + 1);
+                            break;
+                        }
+                        // Bind init as bound method
+                        auto* bound = allocate_object<BoundMethodObject>(instance, it->second);
+                        stack_[callee_index] = Value::from_object(bound);
+                        callee = stack_[callee_index];
+                        obj = callee.as_object();
+                    }
+
                     // Built-in method call handling
                     if (obj->type == ObjectType::BuiltinMethod) {
                         auto* method = static_cast<BuiltinMethodObject*>(obj);
@@ -483,20 +598,43 @@ namespace swiftscript {
                         
                         throw std::runtime_error("Unknown built-in method: " + method->method_name);
                     }
-                    
-                    // Regular function call
-                    if (obj->type != ObjectType::Function) {
-                        throw std::runtime_error("Attempted to call a non-function.");
+
+                    // Bound method: inject receiver
+                    if (obj->type == ObjectType::BoundMethod) {
+                        auto* bound = static_cast<BoundMethodObject*>(obj);
+                        stack_.insert(stack_.begin() + static_cast<long>(callee_index + 1), Value::from_object(bound->receiver));
+                        arg_count += 1;
+                        stack_[callee_index] = bound->method;
+                        callee = stack_[callee_index];
+                        obj = callee.as_object();
+                        has_receiver = true;
                     }
                     
-                    auto* func = static_cast<FunctionObject*>(obj);
-                    if (arg_count != func->params.size()) {
-                        throw std::runtime_error("Incorrect argument count.");
+                    FunctionObject* func = nullptr;
+                    ClosureObject* closure = nullptr;
+
+                    if (obj->type == ObjectType::Closure) {
+                        closure = static_cast<ClosureObject*>(obj);
+                        func = closure->function;
+                    } else if (obj->type == ObjectType::Function) {
+                        func = static_cast<FunctionObject*>(obj);
+                    } else {
+                        throw std::runtime_error("Attempted to call a non-function.");
+                    }
+
+                    if (has_receiver) {
+                        if (arg_count != func->params.size()) {
+                            throw std::runtime_error("Incorrect argument count.");
+                        }
+                    } else {
+                        if (arg_count != func->params.size()) {
+                            throw std::runtime_error("Incorrect argument count.");
+                        }
                     }
                     if (!func->chunk) {
                         throw std::runtime_error("Function has no body.");
                     }
-                    call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name);
+                    call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name, closure);
                     chunk_ = func->chunk.get();
                     ip_ = 0;
                     break;
@@ -508,6 +646,10 @@ namespace swiftscript {
                     }
                     CallFrame frame = call_frames_.back();
                     call_frames_.pop_back();
+                    if (frame.closure && frame.closure->function && frame.closure->function->is_initializer) {
+                        result = stack_[frame.stack_base];
+                    }
+                    close_upvalues(stack_.data() + frame.stack_base);
                     size_t callee_index = frame.stack_base - 1;
                     stack_.resize(callee_index);
                     chunk_ = frame.chunk;
@@ -553,7 +695,30 @@ namespace swiftscript {
                     break;
                 }
                 case OpCode::OP_SET_PROPERTY:
-                    throw std::runtime_error("Property set not implemented.");
+                {
+                    const std::string& name = read_string();
+                    Value value = pop();
+                    Value obj_val = pop();
+                    if (!obj_val.is_object()) {
+                        throw std::runtime_error("Property set on non-object.");
+                    }
+                    Object* obj = obj_val.as_object();
+                    if (!obj) {
+                        throw std::runtime_error("Null object in property set.");
+                    }
+                    if (obj->type == ObjectType::Instance) {
+                        auto* inst = static_cast<InstanceObject*>(obj);
+                        inst->fields[name] = value;
+                        push(value);
+                    } else if (obj->type == ObjectType::Map) {
+                        auto* dict = static_cast<MapObject*>(obj);
+                        dict->entries[name] = value;
+                        push(value);
+                    } else {
+                        throw std::runtime_error("Property set only supported on instances or maps.");
+                    }
+                    break;
+                }
                 case OpCode::OP_RANGE_INCLUSIVE:
                 case OpCode::OP_RANGE_EXCLUSIVE:
                     // Range opcodes are no-ops: start and end values are already on the stack
@@ -751,7 +916,64 @@ namespace swiftscript {
             return it->second;
         }
 
+        if (obj->type == ObjectType::Instance) {
+            auto* inst = static_cast<InstanceObject*>(obj);
+            auto field_it = inst->fields.find(name);
+            if (field_it != inst->fields.end()) {
+                return field_it->second;
+            }
+            if (inst->klass) {
+                auto method_it = inst->klass->methods.find(name);
+                if (method_it != inst->klass->methods.end()) {
+                    auto* bound = allocate_object<BoundMethodObject>(inst, method_it->second);
+                    return Value::from_object(bound);
+                }
+            }
+            return Value::null();
+        }
+
+        if (obj->type == ObjectType::Class) {
+            auto* klass = static_cast<ClassObject*>(obj);
+            auto it = klass->methods.find(name);
+            if (it != klass->methods.end()) {
+                return it->second;
+            }
+            return Value::null();
+        }
+
         throw std::runtime_error("Property access supported only on arrays and maps.");
+    }
+
+    UpvalueObject* VM::capture_upvalue(Value* local) {
+        UpvalueObject* prev = nullptr;
+        UpvalueObject* current = open_upvalues_;
+
+        while (current && current->location > local) {
+            prev = current;
+            current = current->next_upvalue;
+        }
+
+        if (current && current->location == local) {
+            return current;
+        }
+
+        auto* created = allocate_object<UpvalueObject>(local);
+        created->next_upvalue = current;
+        if (!prev) {
+            open_upvalues_ = created;
+        } else {
+            prev->next_upvalue = created;
+        }
+        return created;
+    }
+
+    void VM::close_upvalues(Value* last) {
+        while (open_upvalues_ && open_upvalues_->location >= last) {
+            UpvalueObject* upvalue = open_upvalues_;
+            upvalue->closed = *upvalue->location;
+            upvalue->location = &upvalue->closed;
+            open_upvalues_ = upvalue->next_upvalue;
+        }
     }
 
 } // namespace swiftscript

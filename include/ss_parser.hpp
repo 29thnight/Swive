@@ -29,6 +29,7 @@ private:
     StmtPtr declaration();
     StmtPtr var_declaration();
     StmtPtr func_declaration();
+    StmtPtr class_declaration();
     StmtPtr statement();
     StmtPtr if_statement();
     StmtPtr guard_statement();

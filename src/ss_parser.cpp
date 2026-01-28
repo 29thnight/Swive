@@ -74,7 +74,28 @@ bool Parser::is_at_end() const {
 // ============================================================
 
 TypeAnnotation Parser::parse_type_annotation() {
-    // Expects: TypeName  or  TypeName?
+    // Function type: (ParamType, ...) -> ReturnType
+    if (match(TokenType::LeftParen)) {
+        TypeAnnotation ta;
+        ta.is_function_type = true;
+        ta.name = "Function";
+
+        if (!check(TokenType::RightParen)) {
+            do {
+                ta.param_types.push_back(parse_type_annotation());
+            } while (match(TokenType::Comma));
+        }
+        consume(TokenType::RightParen, "Expected ')' in function type.");
+        consume(TokenType::Arrow, "Expected '->' in function type.");
+        ta.return_type = std::make_shared<TypeAnnotation>(parse_type_annotation());
+
+        if (match(TokenType::Question)) {
+            ta.is_optional = true;
+        }
+        return ta;
+    }
+
+    // Simple type: TypeName or TypeName?
     const Token& name_tok = consume(TokenType::Identifier, "Expected type name.");
     TypeAnnotation ta;
     ta.name = std::string(name_tok.lexeme);
@@ -94,6 +115,9 @@ TypeAnnotation Parser::parse_type_annotation() {
 StmtPtr Parser::declaration() {
     if (check(TokenType::Var) || check(TokenType::Let)) {
         return var_declaration();
+    }
+    if (check(TokenType::Class)) {
+        return class_declaration();
     }
     if (check(TokenType::Func)) {
         return func_declaration();
@@ -130,7 +154,12 @@ StmtPtr Parser::var_declaration() {
 
 StmtPtr Parser::func_declaration() {
     advance();  // consume 'func'
-    const Token& name_tok = consume(TokenType::Identifier, "Expected function name.");
+    const Token& name_tok = ([&]() -> const Token& {
+        if (check(TokenType::Identifier) || check(TokenType::Init)) {
+            return advance();
+        }
+        error(peek(), "Expected function name.");
+    })();
 
     auto stmt = std::make_unique<FuncDeclStmt>();
     stmt->line = name_tok.line;
@@ -155,6 +184,26 @@ StmtPtr Parser::func_declaration() {
 
     // Body
     stmt->body = block();
+    return stmt;
+}
+
+StmtPtr Parser::class_declaration() {
+    advance(); // consume 'class'
+    const Token& name_tok = consume(TokenType::Identifier, "Expected class name.");
+
+    auto stmt = std::make_unique<ClassDeclStmt>();
+    stmt->line = name_tok.line;
+    stmt->name = std::string(name_tok.lexeme);
+
+    consume(TokenType::LeftBrace, "Expected '{' after class name.");
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        if (!check(TokenType::Func)) {
+            error(peek(), "Expected method declaration inside class.");
+        }
+        auto method = std::unique_ptr<FuncDeclStmt>(static_cast<FuncDeclStmt*>(func_declaration().release()));
+        stmt->methods.push_back(std::move(method));
+    }
+    consume(TokenType::RightBrace, "Expected '}' after class body.");
     return stmt;
 }
 

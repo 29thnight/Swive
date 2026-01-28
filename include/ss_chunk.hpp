@@ -22,6 +22,7 @@ struct FunctionPrototype {
     std::vector<std::string> params;
     std::shared_ptr<Chunk> chunk;
     std::vector<UpvalueInfo> upvalues;  // Captured variables info
+    bool is_initializer{false};
 };
 
     // Opcodes
@@ -68,9 +69,11 @@ struct FunctionPrototype {
         OP_JUMP_IF_NIL,
         OP_LOOP,
 
-        // Functions
+        // Functions / Classes
         OP_FUNCTION,
         OP_CLOSURE,            // Create closure with upvalues
+        OP_CLASS,              // Create class object
+        OP_METHOD,             // Attach method to class on stack
         OP_CALL,
         OP_RETURN,
 

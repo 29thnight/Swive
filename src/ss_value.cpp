@@ -121,11 +121,13 @@ void MapObject::insert(VM& vm, std::string key, Value value) {
 
 FunctionObject::FunctionObject(std::string function_name,
                                std::vector<std::string> function_params,
-                               std::shared_ptr<Chunk> function_chunk)
+                               std::shared_ptr<Chunk> function_chunk,
+                               bool initializer)
     : Object(ObjectType::Function),
       name(std::move(function_name)),
       params(std::move(function_params)),
-      chunk(std::move(function_chunk)) {}
+      chunk(std::move(function_chunk)),
+      is_initializer(initializer) {}
 
 std::string FunctionObject::to_string() const {
     if (name.empty()) {

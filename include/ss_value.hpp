@@ -221,13 +221,76 @@ public:
     std::string name;
     std::vector<std::string> params;
     std::shared_ptr<Chunk> chunk;
+    bool is_initializer{false};
 
     FunctionObject(std::string function_name,
                    std::vector<std::string> function_params,
-                   std::shared_ptr<Chunk> function_chunk);
+                   std::shared_ptr<Chunk> function_chunk,
+                   bool initializer);
 
     std::string to_string() const override;
     size_t memory_size() const override;
+};
+
+class ClassObject : public Object {
+public:
+    std::string name;
+    std::unordered_map<std::string, Value> methods; // closures
+
+    explicit ClassObject(std::string n)
+        : Object(ObjectType::Class), name(std::move(n)) {}
+
+    std::string to_string() const override {
+        return "<class " + name + ">";
+    }
+
+    size_t memory_size() const override {
+        size_t total = sizeof(ClassObject) + name.capacity();
+        for (const auto& [k, v] : methods) {
+            total += k.capacity();
+            total += sizeof(Value);
+        }
+        return total;
+    }
+};
+
+class InstanceObject : public Object {
+public:
+    ClassObject* klass;
+    std::unordered_map<std::string, Value> fields;
+
+    explicit InstanceObject(ClassObject* k)
+        : Object(ObjectType::Instance), klass(k) {}
+
+    std::string to_string() const override {
+        return "<" + (klass ? klass->name : std::string("instance")) + " instance>";
+    }
+
+    size_t memory_size() const override {
+        size_t total = sizeof(InstanceObject);
+        for (const auto& [k, v] : fields) {
+            total += k.capacity();
+            total += sizeof(Value);
+        }
+        return total;
+    }
+};
+
+class BoundMethodObject : public Object {
+public:
+    InstanceObject* receiver;
+    Value method; // closure/function value
+
+    BoundMethodObject(InstanceObject* recv, Value m)
+        : Object(ObjectType::BoundMethod), receiver(recv), method(m) {}
+
+    std::string to_string() const override {
+        return "<bound method>";
+    }
+
+    size_t memory_size() const override {
+        return sizeof(BoundMethodObject);
+    }
 };
 
 class BuiltinMethodObject : public Object {
@@ -252,10 +315,10 @@ class UpvalueObject : public Object {
 public:
     Value* location;      // Points to stack slot or closed value
     Value closed;         // Holds value after variable goes out of scope
-    UpvalueObject* next;  // Linked list of open upvalues
+    UpvalueObject* next_upvalue;  // Linked list of open upvalues
     
     explicit UpvalueObject(Value* slot)
-        : Object(ObjectType::Upvalue), location(slot), closed(Value::null()), next(nullptr) {}
+        : Object(ObjectType::Upvalue), location(slot), closed(Value::null()), next_upvalue(nullptr) {}
     
     std::string to_string() const override {
         return "<upvalue>";

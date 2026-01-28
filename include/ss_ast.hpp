@@ -14,11 +14,16 @@ namespace swiftscript {
 struct TypeAnnotation {
     std::string name;
     bool is_optional{false};
+    bool is_function_type{false};
+    std::vector<TypeAnnotation> param_types;
+    std::shared_ptr<TypeAnnotation> return_type; // nullptr if not a function type
 };
 
 // ---- Forward declarations ----
 struct Expr;
 struct Stmt;
+struct FuncDeclStmt;
+struct ClassDeclStmt;
 
 using ExprPtr = std::unique_ptr<Expr>;
 using StmtPtr = std::unique_ptr<Stmt>;
@@ -205,6 +210,7 @@ enum class StmtKind {
     Print,
     Block,
     VarDecl,
+    ClassDecl,
     If,
     IfLet,
     GuardLet,
@@ -327,6 +333,12 @@ struct FuncDeclStmt : Stmt {
     std::unique_ptr<BlockStmt> body;
     std::optional<TypeAnnotation> return_type;
     FuncDeclStmt() : Stmt(StmtKind::FuncDecl) {}
+};
+
+struct ClassDeclStmt : Stmt {
+    std::string name;
+    std::vector<std::unique_ptr<FuncDeclStmt>> methods;
+    ClassDeclStmt() : Stmt(StmtKind::ClassDecl) {}
 };
 
 } // namespace swiftscript

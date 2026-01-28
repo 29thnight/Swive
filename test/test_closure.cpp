@@ -100,9 +100,8 @@ void test_closure_as_argument() {
     )";
     
     std::string result = execute_code(source);
-    // This test might fail if function types aren't fully supported yet
-    // For now, just check it doesn't crash
-    assert(result.find("ERROR") == std::string::npos || result.find("15") != std::string::npos);
+    assert(result.find("ERROR") == std::string::npos);
+    assert(result.find("15") != std::string::npos);
     
     std::cout << "PASSED\n";
 }
@@ -126,6 +125,35 @@ void test_closure_multiple_statements() {
     std::cout << "PASSED\n";
 }
 
+void test_function_returning_closure() {
+    std::cout << "Test: Function returning a closure ... ";
+    
+    std::string source = R"(
+        func makeCounter() -> () -> Int {
+            var count = 0
+            return { () -> Int in
+                count += 1
+                return count
+            }
+        }
+        var counter = makeCounter()
+        print(counter())
+        print(counter())
+        print(counter())
+    )";
+    
+    std::string result = execute_code(source);
+    size_t pos1 = result.find("1");
+    size_t pos2 = result.find("2", pos1 == std::string::npos ? 0 : pos1 + 1);
+    size_t pos3 = result.find("3", pos2 == std::string::npos ? 0 : pos2 + 1);
+    assert(result.find("ERROR") == std::string::npos);
+    assert(pos1 != std::string::npos);
+    assert(pos2 != std::string::npos);
+    assert(pos3 != std::string::npos);
+    
+    std::cout << "PASSED\n";
+}
+
 void test_closure_variable_assignment() {
     std::cout << "Test: Closure assigned to variable ... ";
     
@@ -143,6 +171,52 @@ void test_closure_variable_assignment() {
     std::cout << "PASSED\n";
 }
 
+void test_closure_captures_outer_variable() {
+    std::cout << "Test: Closure captures outer variable ... ";
+    
+    std::string source = R"(
+        var base = 10
+        var addBase = { (x: Int) -> Int in
+            return base + x
+        }
+        print(addBase(5))
+    )";
+    
+    std::string result = execute_code(source);
+    assert(result.find("15") != std::string::npos);
+    
+    std::cout << "PASSED\n";
+}
+
+void test_nested_closure_captures_after_scope_exit() {
+    std::cout << "Test: Nested closure keeps captured state after scope exit ... ";
+    
+    std::string source = R"(
+        var counter
+        {
+            var count = 0
+            counter = { () -> Int in
+                count += 1
+                return count
+            }
+        }
+        print(counter())
+        print(counter())
+        print(counter())
+    )";
+    
+    std::string result = execute_code(source);
+    // Expect 1, 2, 3 in order
+    size_t pos1 = result.find("1");
+    size_t pos2 = result.find("2", pos1 == std::string::npos ? 0 : pos1 + 1);
+    size_t pos3 = result.find("3", pos2 == std::string::npos ? 0 : pos2 + 1);
+    assert(pos1 != std::string::npos);
+    assert(pos2 != std::string::npos);
+    assert(pos3 != std::string::npos);
+    
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "======================================\n";
     std::cout << "  CLOSURE TEST SUITE\n";
@@ -154,7 +228,10 @@ int main() {
         test_closure_single_param();
         test_closure_multiple_statements();
         test_closure_variable_assignment();
-        // test_closure_as_argument();  // May need function type support
+        test_closure_captures_outer_variable();
+        test_nested_closure_captures_after_scope_exit();
+        test_closure_as_argument();
+        test_function_returning_closure();
         
         std::cout << "\n======================================\n";
         std::cout << "  ALL CLOSURE TESTS PASSED!\n";

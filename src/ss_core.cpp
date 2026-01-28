@@ -36,6 +36,26 @@ void RC::release_children(VM* vm, Object* obj, std::unordered_set<Object*>& dele
                 }
             }
         }
+    } else if (obj->type == ObjectType::Class) {
+        auto* klass = static_cast<ClassObject*>(obj);
+        for (auto& [key, value] : klass->methods) {
+            if (value.is_object() && value.ref_type() == RefType::Strong) {
+                Object* child = value.as_object();
+                if (child && deleted_set.find(child) == deleted_set.end()) {
+                    RC::release(vm, child);
+                }
+            }
+        }
+    } else if (obj->type == ObjectType::Instance) {
+        auto* inst = static_cast<InstanceObject*>(obj);
+        for (auto& [key, value] : inst->fields) {
+            if (value.is_object() && value.ref_type() == RefType::Strong) {
+                Object* child = value.as_object();
+                if (child && deleted_set.find(child) == deleted_set.end()) {
+                    RC::release(vm, child);
+                }
+            }
+        }
     }
 }
 

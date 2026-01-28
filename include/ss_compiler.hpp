@@ -72,6 +72,7 @@ private:
     void visit(ContinueStmt* stmt);   // �߰�
     void visit(SwitchStmt* stmt);     // �߰�
     void visit(BlockStmt* stmt);
+    void visit(ClassDeclStmt* stmt);
     void visit(PrintStmt* stmt);
     void visit(ReturnStmt* stmt);
     void visit(FuncDeclStmt* stmt);
@@ -113,6 +114,7 @@ private:
     void patch_jump(size_t offset);
 
     size_t identifier_constant(const std::string& name);
+
     Chunk compile_function_body(const FuncDeclStmt& stmt);
 
     // Helper classes

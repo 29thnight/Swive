@@ -52,6 +52,9 @@ void Compiler::compile_stmt(Stmt* stmt) {
         case StmtKind::Print:
             visit(static_cast<PrintStmt*>(stmt));
             break;
+        case StmtKind::ClassDecl:
+            visit(static_cast<ClassDeclStmt*>(stmt));
+            break;
         case StmtKind::Return:
             visit(static_cast<ReturnStmt*>(stmt));
             break;
@@ -75,6 +78,86 @@ void Compiler::compile_stmt(Stmt* stmt) {
             break;
         default:
             throw CompilerError("Unknown statement kind", stmt->line);
+    }
+}
+
+void Compiler::visit(ClassDeclStmt* stmt) {
+    size_t name_idx = identifier_constant(stmt->name);
+    emit_op(OpCode::OP_CLASS, stmt->line);
+    emit_short(static_cast<uint16_t>(name_idx), stmt->line);
+    if (scope_depth_ > 0) {
+        declare_local(stmt->name, false);
+        mark_local_initialized();
+    }
+
+    // Methods: class object remains on stack top
+    for (const auto& method : stmt->methods) {
+        FunctionPrototype proto;
+        proto.name = method->name;
+        proto.params.reserve(method->params.size() + 1);
+        proto.params.push_back("self");
+        for (const auto& [param_name, param_type] : method->params) {
+            proto.params.push_back(param_name);
+        }
+        proto.is_initializer = (method->name == "init");
+
+        Compiler method_compiler;
+        method_compiler.enclosing_ = this;
+        method_compiler.chunk_ = Chunk{};
+        method_compiler.locals_.clear();
+        method_compiler.scope_depth_ = 1;
+        method_compiler.recursion_depth_ = 0;
+
+        // Implicit self
+        method_compiler.declare_local("self", false);
+        method_compiler.mark_local_initialized();
+
+        for (const auto& [param_name, param_type] : method->params) {
+            method_compiler.declare_local(param_name, param_type.is_optional);
+            method_compiler.mark_local_initialized();
+        }
+
+        if (method->body) {
+            for (const auto& statement : method->body->statements) {
+                method_compiler.compile_stmt(statement.get());
+            }
+        }
+
+        method_compiler.emit_op(OpCode::OP_NIL, method->line);
+        method_compiler.emit_op(OpCode::OP_RETURN, method->line);
+
+        proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+        proto.upvalues.reserve(method_compiler.upvalues_.size());
+        for (const auto& uv : method_compiler.upvalues_) {
+            proto.upvalues.push_back({uv.index, uv.is_local});
+        }
+
+        size_t function_index = chunk_.add_function(std::move(proto));
+        if (function_index > std::numeric_limits<uint16_t>::max()) {
+            throw CompilerError("Too many functions in chunk", method->line);
+        }
+
+        bool has_captures = !method_compiler.upvalues_.empty();
+        emit_op(has_captures ? OpCode::OP_CLOSURE : OpCode::OP_FUNCTION, method->line);
+        emit_short(static_cast<uint16_t>(function_index), method->line);
+
+        size_t method_name_idx = identifier_constant(method->name);
+        if (method_name_idx > std::numeric_limits<uint16_t>::max()) {
+            throw CompilerError("Too many method identifiers", method->line);
+        }
+        emit_op(OpCode::OP_METHOD, method->line);
+        emit_short(static_cast<uint16_t>(method_name_idx), method->line);
+    }
+
+    if (scope_depth_ == 0) {
+        emit_op(OpCode::OP_SET_GLOBAL, stmt->line);
+        emit_short(static_cast<uint16_t>(name_idx), stmt->line);
+        emit_op(OpCode::OP_POP, stmt->line);
+    } else {
+        int local = resolve_local(stmt->name);
+        emit_op(OpCode::OP_SET_LOCAL, stmt->line);
+        emit_short(static_cast<uint16_t>(local), stmt->line);
+        emit_op(OpCode::OP_POP, stmt->line);
     }
 }
 
@@ -445,7 +528,7 @@ void Compiler::visit(BreakStmt* stmt) {
         if (it->depth <= target_depth) {
             break;
         }
-        emit_op(OpCode::OP_POP, stmt->line);
+        emit_op(it->is_captured ? OpCode::OP_CLOSE_UPVALUE : OpCode::OP_POP, stmt->line);
     }
     
     size_t jump = emit_jump(OpCode::OP_JUMP, stmt->line);
@@ -463,7 +546,7 @@ void Compiler::visit(ContinueStmt* stmt) {
         if (it->depth <= target_depth) {
             break;
         }
-        emit_op(OpCode::OP_POP, stmt->line);
+        emit_op(it->is_captured ? OpCode::OP_CLOSE_UPVALUE : OpCode::OP_POP, stmt->line);
     }
     
     size_t jump = emit_jump(OpCode::OP_JUMP, stmt->line);
@@ -601,15 +684,40 @@ void Compiler::visit(FuncDeclStmt* stmt) {
         proto.params.push_back(param_name);
     }
 
-    Chunk function_chunk = compile_function_body(*stmt);
-    proto.chunk = std::make_shared<Chunk>(std::move(function_chunk));
+    Compiler function_compiler;
+    function_compiler.enclosing_ = this;
+    function_compiler.chunk_ = Chunk{};
+    function_compiler.locals_.clear();
+    function_compiler.scope_depth_ = 1;
+    function_compiler.recursion_depth_ = 0;
+
+    for (const auto& [param_name, param_type] : stmt->params) {
+        function_compiler.declare_local(param_name, param_type.is_optional);
+        function_compiler.mark_local_initialized();
+    }
+
+    if (stmt->body) {
+        for (const auto& statement : stmt->body->statements) {
+            function_compiler.compile_stmt(statement.get());
+        }
+    }
+
+    function_compiler.emit_op(OpCode::OP_NIL, stmt->line);
+    function_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
+
+    proto.chunk = std::make_shared<Chunk>(std::move(function_compiler.chunk_));
+    proto.upvalues.reserve(function_compiler.upvalues_.size());
+    for (const auto& uv : function_compiler.upvalues_) {
+        proto.upvalues.push_back({uv.index, uv.is_local});
+    }
 
     size_t function_index = chunk_.add_function(std::move(proto));
     if (function_index > std::numeric_limits<uint16_t>::max()) {
         throw CompilerError("Too many functions in chunk", stmt->line);
     }
 
-    emit_op(OpCode::OP_FUNCTION, stmt->line);
+    bool has_captures = !function_compiler.upvalues_.empty();
+    emit_op(has_captures ? OpCode::OP_CLOSURE : OpCode::OP_FUNCTION, stmt->line);
     emit_short(static_cast<uint16_t>(function_index), stmt->line);
 
     if (scope_depth_ == 0) {
@@ -917,7 +1025,7 @@ void Compiler::visit(TernaryExpr* expr) {
 }
 
 void Compiler::visit(ClosureExpr* expr) {
-    // Closures are compiled similar to functions
+    // Closures are compiled similar to functions but can capture outer locals
     FunctionPrototype proto;
     proto.name = "<closure>";
     proto.params.reserve(expr->params.size());
@@ -925,36 +1033,37 @@ void Compiler::visit(ClosureExpr* expr) {
         proto.params.push_back(param_name);
     }
 
-    // Compile closure body
     Compiler closure_compiler;
+    closure_compiler.enclosing_ = this;
     closure_compiler.chunk_ = Chunk{};
     closure_compiler.locals_.clear();
     closure_compiler.scope_depth_ = 1;
     closure_compiler.recursion_depth_ = 0;
 
-    // Add parameters as local variables
     for (const auto& [param_name, param_type] : expr->params) {
         closure_compiler.declare_local(param_name, param_type.is_optional);
         closure_compiler.mark_local_initialized();
     }
 
-    // Compile body statements
     for (const auto& stmt : expr->body) {
         closure_compiler.compile_stmt(stmt.get());
     }
 
-    // Implicit return nil if no explicit return
     closure_compiler.emit_op(OpCode::OP_NIL, expr->line);
     closure_compiler.emit_op(OpCode::OP_RETURN, expr->line);
 
     proto.chunk = std::make_shared<Chunk>(std::move(closure_compiler.chunk_));
+    proto.upvalues.reserve(closure_compiler.upvalues_.size());
+    for (const auto& uv : closure_compiler.upvalues_) {
+        proto.upvalues.push_back({uv.index, uv.is_local});
+    }
 
     size_t function_index = chunk_.add_function(std::move(proto));
     if (function_index > std::numeric_limits<uint16_t>::max()) {
         throw CompilerError("Too many functions in chunk", expr->line);
     }
 
-    emit_op(OpCode::OP_FUNCTION, expr->line);
+    emit_op(OpCode::OP_CLOSURE, expr->line);
     emit_short(static_cast<uint16_t>(function_index), expr->line);
 }
 
@@ -965,7 +1074,11 @@ void Compiler::begin_scope() {
 void Compiler::end_scope() {
     scope_depth_--;
     while (!locals_.empty() && locals_.back().depth > scope_depth_) {
-        emit_op(OpCode::OP_POP, 0);
+        if (locals_.back().is_captured) {
+            emit_op(OpCode::OP_CLOSE_UPVALUE, 0);
+        } else {
+            emit_op(OpCode::OP_POP, 0);
+        }
         locals_.pop_back();
     }
 }

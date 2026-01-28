@@ -35,6 +35,7 @@ namespace swiftscript {
         std::vector<CallFrame> call_frames_;
         const Chunk* chunk_{ nullptr };
         size_t ip_{ 0 };
+        UpvalueObject* open_upvalues_{ nullptr };
 
         // Global scope
         std::unordered_map<std::string, Value> globals_;
@@ -102,6 +103,9 @@ namespace swiftscript {
         size_t current_stack_base() const;
         bool is_truthy(const Value& value) const;
         Value get_property(const Value& object, const std::string& name);
+
+        UpvalueObject* capture_upvalue(Value* local);
+        void close_upvalues(Value* last);
     };
 
     // Call Frame for function calls
@@ -111,12 +115,14 @@ namespace swiftscript {
         size_t return_address;  // Where to return after call
         const Chunk* chunk;
         std::string function_name;
+        ClosureObject* closure; // Current closure for upvalue access (nullptr for plain functions)
 
-        CallFrame(size_t base, size_t ret_addr, const Chunk* call_chunk, std::string name)
+        CallFrame(size_t base, size_t ret_addr, const Chunk* call_chunk, std::string name, ClosureObject* c)
             : stack_base(base),
               return_address(ret_addr),
               chunk(call_chunk),
-              function_name(std::move(name)) {
+              function_name(std::move(name)),
+              closure(c) {
         }
     };
 

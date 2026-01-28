@@ -34,7 +34,8 @@ enum class ObjectType : uint8_t {
     Fiber,
     Range,
     Upvalue,
-    BuiltinMethod
+    BuiltinMethod,
+    BoundMethod
 };
 
 // Utility: ObjectType to string
@@ -47,6 +48,7 @@ inline const char* object_type_name(ObjectType t) {
         case ObjectType::Closure:  return "Closure";
         case ObjectType::Class:    return "Class";
         case ObjectType::Instance: return "Instance";
+        case ObjectType::BoundMethod: return "BoundMethod";
         case ObjectType::Module:   return "Module";
         case ObjectType::Fiber:    return "Fiber";
         case ObjectType::Range:    return "Range";

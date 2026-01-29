@@ -1346,9 +1346,11 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             FunctionPrototype getter_proto;
             getter_proto.name = getter_name;
             getter_proto.is_override = false;
+            getter_proto.params.push_back("self");
             
             Compiler method_compiler;
             method_compiler.enclosing_ = this;
+            method_compiler.allow_implicit_self_property_ = true;
             
             // Allow access to 'self' in computed property getter
             method_compiler.begin_scope();
@@ -1385,12 +1387,14 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             method_compiler.enclosing_ = this;
             method_compiler.in_struct_method_ = method->is_mutating;
             method_compiler.in_mutating_method_ = method->is_mutating;
+            method_compiler.allow_implicit_self_property_ = true;
             
             // Add 'self' parameter
             method_compiler.begin_scope();
             method_compiler.declare_local("self", false);
             method_compiler.mark_local_initialized();
-            
+
+            func_proto.params.push_back("self");
             // Add method parameters
             for (const auto& [param_name, param_type] : method->params) {
                 method_compiler.declare_local(param_name, param_type.is_optional);

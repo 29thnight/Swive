@@ -1,9 +1,9 @@
 ========================================
 SwiftScript Test Results
-Date: 2026-01-29 16:06:13
+Date: 2026-01-29 17:06:40
 ========================================
 
-Starting 8 test suites with 66 tests.
+Starting 9 test suites with 76 tests.
 
 [ Test Suite ] ClassTests
   [ RUN      ] ClassTests.SimpleClassMethod
@@ -28,7 +28,7 @@ Starting 8 test suites with 66 tests.
   [       OK ] ClassTests.DeinitCalled (0 ms)
   [ RUN      ] ClassTests.DeinitWithProperties
   [       OK ] ClassTests.DeinitWithProperties (0 ms)
-  Tests passed: 11/11 (21 ms)
+  Tests passed: 11/11 (6 ms)
 
 [ Test Suite ] ComputedPropertiesTests
   [ RUN      ] ComputedPropertiesTests.GetterOnly
@@ -45,7 +45,7 @@ Starting 8 test suites with 66 tests.
   [       OK ] ComputedPropertiesTests.AccessOtherProperties (0 ms)
   [ RUN      ] ComputedPropertiesTests.MultipleInClass
   [       OK ] ComputedPropertiesTests.MultipleInClass (0 ms)
-  Tests passed: 7/7 (45 ms)
+  Tests passed: 7/7 (3 ms)
 
 [ Test Suite ] StructTests
   [ RUN      ] StructTests.BasicStruct
@@ -68,7 +68,7 @@ Starting 8 test suites with 66 tests.
   [       OK ] StructTests.PropertyModification (0 ms)
   [ RUN      ] StructTests.NestedStruct
   [       OK ] StructTests.NestedStruct (0 ms)
-  Tests passed: 10/10 (10 ms)
+  Tests passed: 10/10 (3 ms)
 
 [ Test Suite ] ClosureTests
   [ RUN      ] ClosureTests.BasicClosure
@@ -112,35 +112,14 @@ Starting 8 test suites with 66 tests.
   [ RUN      ] EnumTests.EnumAssociatedValues
   [       OK ] EnumTests.EnumAssociatedValues (0 ms)
   [ RUN      ] EnumTests.EnumComparison
-  [       OK ] EnumTests.EnumComparison (1 ms)
+  [       OK ] EnumTests.EnumComparison (0 ms)
   [ RUN      ] EnumTests.EnumMethods
   [       OK ] EnumTests.EnumMethods (0 ms)
   [ RUN      ] EnumTests.EnumComputedProperties
   [       OK ] EnumTests.EnumComputedProperties (0 ms)
   [ RUN      ] EnumTests.MultipleEnums
   [       OK ] EnumTests.MultipleEnums (0 ms)
-  Tests passed: 8/8 (8 ms)
-
-[ Test Suite ] EnumInlineTests
-  [ RUN      ] EnumInlineTests.BasicEnumDeclaration
-  [       OK ] EnumInlineTests.BasicEnumDeclaration (0 ms)
-  [ RUN      ] EnumInlineTests.EnumRawValues
-  [       OK ] EnumInlineTests.EnumRawValues (0 ms)
-  [ RUN      ] EnumInlineTests.EnumComparison
-  [       OK ] EnumInlineTests.EnumComparison (0 ms)
-  [ RUN      ] EnumInlineTests.EnumWithMethod
-  [       OK ] EnumInlineTests.EnumWithMethod (0 ms)
-  [ RUN      ] EnumInlineTests.EnumMethodWithSelfSwitch
-  [       OK ] EnumInlineTests.EnumMethodWithSelfSwitch (0 ms)
-  [ RUN      ] EnumInlineTests.EnumInSwitchStatement
-  [       OK ] EnumInlineTests.EnumInSwitchStatement (0 ms)
-  [ RUN      ] EnumInlineTests.EnumSimpleComputedProperty
-  [  FAILED  ] EnumInlineTests.EnumSimpleComputedProperty (1 ms)
-    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:756
-    Failed
-Exception: Enum case 'yes' has no property or method named 'text'
-
-  Tests passed: 6/7 (5 ms)
+  Tests passed: 8/8 (2 ms)
 
 [ Test Suite ] ProtocolTest
   [ RUN      ] ProtocolTest.BasicProtocolDeclaration
@@ -165,14 +144,66 @@ Exception: Enum case 'yes' has no property or method named 'text'
   [       OK ] ProtocolTest.ProtocolMethodParameters (0 ms)
   Tests passed: 10/10 (3 ms)
 
+[ Test Suite ] EnumInlineTests
+  [ RUN      ] EnumInlineTests.BasicEnumDeclaration
+  [       OK ] EnumInlineTests.BasicEnumDeclaration (0 ms)
+  [ RUN      ] EnumInlineTests.EnumRawValues
+  [       OK ] EnumInlineTests.EnumRawValues (0 ms)
+  [ RUN      ] EnumInlineTests.EnumComparison
+  [       OK ] EnumInlineTests.EnumComparison (0 ms)
+  [ RUN      ] EnumInlineTests.EnumWithMethod
+  [       OK ] EnumInlineTests.EnumWithMethod (0 ms)
+  [ RUN      ] EnumInlineTests.EnumMethodWithSelfSwitch
+  [       OK ] EnumInlineTests.EnumMethodWithSelfSwitch (0 ms)
+  [ RUN      ] EnumInlineTests.EnumInSwitchStatement
+  [       OK ] EnumInlineTests.EnumInSwitchStatement (0 ms)
+  [ RUN      ] EnumInlineTests.EnumSimpleComputedProperty
+  [       OK ] EnumInlineTests.EnumSimpleComputedProperty (0 ms)
+  Tests passed: 7/7 (2 ms)
+
+[ Test Suite ] ExtensionTest
+  [ RUN      ] ExtensionTest.BasicMethod
+  [       OK ] ExtensionTest.BasicMethod (0 ms)
+  [ RUN      ] ExtensionTest.ExtensionEnum
+  [       OK ] ExtensionTest.ExtensionEnum (0 ms)
+  [ RUN      ] ExtensionTest.ComputedProperty
+  [  FAILED  ] ExtensionTest.ComputedProperty (0 ms)
+    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:527
+    Expected: swiftscript::test::test_extension_computed_property() doesn't throw an exception.
+  Actual: it throws std::runtime_error with description "Expected to find '50' in output (test_extension_computed_property)
+Actual output: <bound method>
+".
+
+  [ RUN      ] ExtensionTest.MultipleMethods
+  [       OK ] ExtensionTest.MultipleMethods (0 ms)
+  [ RUN      ] ExtensionTest.ExtensionClass
+  [       OK ] ExtensionTest.ExtensionClass (0 ms)
+  [ RUN      ] ExtensionTest.MultipleExtensions
+  [       OK ] ExtensionTest.MultipleExtensions (0 ms)
+  [ RUN      ] ExtensionTest.SelfUsage
+  [       OK ] ExtensionTest.SelfUsage (0 ms)
+  [ RUN      ] ExtensionTest.WithParameters
+  [       OK ] ExtensionTest.WithParameters (0 ms)
+  [ RUN      ] ExtensionTest.EnumWithSwitch
+  [       OK ] ExtensionTest.EnumWithSwitch (0 ms)
+  [ RUN      ] ExtensionTest.SimpleComputedProperty
+  [  FAILED  ] ExtensionTest.SimpleComputedProperty (0 ms)
+    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:555
+    Expected: swiftscript::test::test_extension_simple_computed_property() doesn't throw an exception.
+  Actual: it throws std::runtime_error with description "Expected to find '40' in output (test_extension_simple_computed_property)
+Actual output: <bound method>
+".
+
+  Tests passed: 8/10 (5 ms)
+
 ========================================
 Test Summary
 ========================================
-Total test suites: 8
-Total tests: 66
-Passed: 65
-Failed: 1
-Elapsed time: 105 ms
+Total test suites: 9
+Total tests: 76
+Passed: 74
+Failed: 2
+Elapsed time: 33 ms
 ========================================
 
 SOME TESTS FAILED!

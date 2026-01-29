@@ -33,6 +33,7 @@ private:
     StmtPtr struct_declaration();  // Struct declaration parser
     StmtPtr enum_declaration();    // Enum declaration parser
     StmtPtr protocol_declaration(); // Protocol declaration parser
+    StmtPtr extension_declaration(); // Extension declaration parser
     StmtPtr import_declaration();  // Import statement parser
     std::unique_ptr<VarDeclStmt> parse_variable_decl(bool is_let);
     StmtPtr statement();

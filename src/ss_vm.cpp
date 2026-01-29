@@ -691,8 +691,14 @@ namespace swiftscript {
                         auto* enum_type = static_cast<EnumObject*>(type_obj);
                         enum_type->methods[name] = method_val;
                     }
+                    // Handle StructObject (for extension)
+                    else if (type_obj->type == ObjectType::Struct) {
+                        auto* struct_type = static_cast<StructObject*>(type_obj);
+                        struct_type->methods[name] = method_val;
+                        struct_type->mutating_methods[name] = false; // Extension methods are non-mutating by default
+                    }
                     else {
-                        throw std::runtime_error("OP_METHOD expects class or enum on stack.");
+                        throw std::runtime_error("OP_METHOD expects class, enum, or struct on stack.");
                     }
                     break;
                 }
@@ -809,8 +815,28 @@ namespace swiftscript {
                         info.setter = Value::null();
                         
                         enum_type->computed_properties.push_back(std::move(info));
+                    } else if (type_obj->type == ObjectType::Struct) {
+                        // Struct computed property (for extension)
+                        auto* struct_type = static_cast<StructObject*>(type_obj);
+                        
+                        // For now, struct computed properties via extension are stored as methods
+                        // that return the computed value. We'll create a wrapper method.
+                        const std::string& prop_name = chunk_->strings[name_idx];
+                        const auto& getter_proto = chunk_->functions[getter_idx];
+                        auto* getter_func = allocate_object<FunctionObject>(
+                            getter_proto.name,
+                            getter_proto.params,
+                            getter_proto.chunk,
+                            false,
+                            false
+                        );
+                        auto* getter_closure = allocate_object<ClosureObject>(getter_func);
+                        
+                        // Store as a method that can be called
+                        struct_type->methods[prop_name] = Value::from_object(getter_closure);
+                        struct_type->mutating_methods[prop_name] = false;
                     } else {
-                        throw std::runtime_error("OP_DEFINE_COMPUTED_PROPERTY expects class or enum on stack.");
+                        throw std::runtime_error("OP_DEFINE_COMPUTED_PROPERTY expects class, enum, or struct on stack.");
                     }
                     break;
                 }

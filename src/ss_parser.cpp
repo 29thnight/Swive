@@ -131,6 +131,9 @@ StmtPtr Parser::declaration() {
     if (check(TokenType::Protocol)) {
         return protocol_declaration();
     }
+    if (check(TokenType::Extension)) {
+        return extension_declaration();
+    }
     if (check(TokenType::Func)) {
         return func_declaration();
     }
@@ -704,6 +707,99 @@ StmtPtr Parser::protocol_declaration() {
     }
 
     consume(TokenType::RightBrace, "Expected '}' after protocol body.");
+    return stmt;
+}
+
+StmtPtr Parser::extension_declaration() {
+    advance(); // consume 'extension'
+    const Token& type_tok = consume(TokenType::Identifier, "Expected type name after 'extension'.");
+
+    auto stmt = std::make_unique<ExtensionDeclStmt>();
+    stmt->line = type_tok.line;
+    stmt->extended_type = std::string(type_tok.lexeme);
+
+    // Parse protocol conformances: extension String: Equatable, Hashable { ... }
+    if (match(TokenType::Colon)) {
+        do {
+            const Token& protocol_tok = consume(TokenType::Identifier, "Expected protocol name.");
+            stmt->protocol_conformances.push_back(std::string(protocol_tok.lexeme));
+        } while (match(TokenType::Comma));
+    }
+
+    consume(TokenType::LeftBrace, "Expected '{' after extension declaration.");
+
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        // Check for mutating modifier
+        bool is_mutating = false;
+        if (match(TokenType::Mutating)) {
+            is_mutating = true;
+        }
+
+        // Method declaration: [mutating] func name(...) -> Type { ... }
+        if (check(TokenType::Func)) {
+            advance(); // consume 'func'
+            const Token& method_name = consume(TokenType::Identifier, "Expected method name.");
+
+            auto method = std::make_unique<StructMethodDecl>();
+            method->name = std::string(method_name.lexeme);
+            method->is_mutating = is_mutating;
+
+            // Parameter list
+            consume(TokenType::LeftParen, "Expected '(' after method name.");
+            if (!check(TokenType::RightParen)) {
+                do {
+                    const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
+                    consume(TokenType::Colon, "Expected ':' after parameter name.");
+                    TypeAnnotation param_type = parse_type_annotation();
+                    method->params.emplace_back(std::string(param_name.lexeme), param_type);
+                } while (match(TokenType::Comma));
+            }
+            consume(TokenType::RightParen, "Expected ')' after parameters.");
+
+            // Optional return type: -> Type
+            if (match(TokenType::Arrow)) {
+                method->return_type = parse_type_annotation();
+            }
+
+            // Body
+            method->body = block();
+            stmt->methods.push_back(std::move(method));
+            continue;
+        }
+
+        // Computed property: var description: String { ... }
+        if (check(TokenType::Var) || check(TokenType::Let)) {
+            if (is_mutating) {
+                error(previous(), "'mutating' can only be used with methods.");
+            }
+            bool is_let = check(TokenType::Let);
+            advance(); // consume 'var' or 'let'
+            const Token& prop_name = consume(TokenType::Identifier, "Expected property name.");
+            
+            auto computed_prop = std::make_unique<StructMethodDecl>();
+            computed_prop->name = std::string(prop_name.lexeme);
+            computed_prop->is_computed_property = true;
+
+            // Type annotation
+            if (match(TokenType::Colon)) {
+                computed_prop->return_type = parse_type_annotation();
+            }
+
+            // Body: { return ... } or { get { ... } set { ... } }
+            computed_prop->body = block();
+            stmt->methods.push_back(std::move(computed_prop));
+            match(TokenType::Semicolon);
+            continue;
+        }
+
+        if (is_mutating) {
+            error(previous(), "'mutating' must precede a method declaration.");
+        }
+
+        error(peek(), "Expected method or computed property declaration inside extension.");
+    }
+
+    consume(TokenType::RightBrace, "Expected '}' after extension body.");
     return stmt;
 }
 

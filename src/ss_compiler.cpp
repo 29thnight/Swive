@@ -92,6 +92,9 @@ void Compiler::compile_stmt(Stmt* stmt) {
         case StmtKind::ProtocolDecl:
             visit(static_cast<ProtocolDeclStmt*>(stmt));
             break;
+        case StmtKind::ExtensionDecl:
+            visit(static_cast<ExtensionDeclStmt*>(stmt));
+            break;
         default:
             throw CompilerError("Unknown statement kind", stmt->line);
     }
@@ -1322,6 +1325,111 @@ void Compiler::visit(ProtocolDeclStmt* stmt) {
         declare_local(stmt->name, false);
         mark_local_initialized();
     }
+}
+
+void Compiler::visit(ExtensionDeclStmt* stmt) {
+    // Extension adds methods to an existing type
+    // 1. Load the type (class, struct, or enum) from globals
+    emit_variable_get(stmt->extended_type, stmt->line);
+    
+    // 2. Compile each method and add it to the type
+    for (const auto& method : stmt->methods) {
+        // Load the type again (for each method attachment)
+        emit_variable_get(stmt->extended_type, stmt->line);
+        
+        if (method->is_computed_property) {
+            // Computed property
+            size_t method_name_idx = identifier_constant(method->name);
+            
+            // Compile getter
+            std::string getter_name = "$get_" + method->name;
+            FunctionPrototype getter_proto;
+            getter_proto.name = getter_name;
+            getter_proto.is_override = false;
+            
+            Compiler method_compiler;
+            method_compiler.enclosing_ = this;
+            
+            // Allow access to 'self' in computed property getter
+            method_compiler.begin_scope();
+            method_compiler.declare_local("self", false);
+            method_compiler.mark_local_initialized();
+            
+            // Compile body
+            for (const auto& body_stmt : method->body->statements) {
+                method_compiler.compile_stmt(body_stmt.get());
+            }
+            
+            // Implicit return nil if no explicit return
+            method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
+            method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
+            
+            getter_proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+            size_t func_idx = chunk_.add_function(std::move(getter_proto));
+            
+            // Emit OP_DEFINE_COMPUTED_PROPERTY with indices
+            emit_op(OpCode::OP_DEFINE_COMPUTED_PROPERTY, stmt->line);
+            emit_short(static_cast<uint16_t>(method_name_idx), stmt->line);
+            emit_short(static_cast<uint16_t>(func_idx), stmt->line); // getter index
+            emit_short(0xFFFF, stmt->line); // No setter
+        } else {
+            // Regular method
+            size_t method_name_idx = identifier_constant(method->name);
+            
+            FunctionPrototype func_proto;
+            func_proto.name = method->name;
+            func_proto.is_override = false;
+            
+            // Compile method body
+            Compiler method_compiler;
+            method_compiler.enclosing_ = this;
+            method_compiler.in_struct_method_ = method->is_mutating;
+            method_compiler.in_mutating_method_ = method->is_mutating;
+            
+            // Add 'self' parameter
+            method_compiler.begin_scope();
+            method_compiler.declare_local("self", false);
+            method_compiler.mark_local_initialized();
+            
+            // Add method parameters
+            for (const auto& [param_name, param_type] : method->params) {
+                method_compiler.declare_local(param_name, param_type.is_optional);
+                method_compiler.mark_local_initialized();
+                func_proto.params.push_back(param_name);
+            }
+            
+            // Compile body
+            for (const auto& body_stmt : method->body->statements) {
+                method_compiler.compile_stmt(body_stmt.get());
+            }
+            
+            // Implicit return nil if no explicit return
+            method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
+            method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
+            
+            func_proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+            size_t func_idx = chunk_.add_function(std::move(func_proto));
+            
+            emit_op(OpCode::OP_FUNCTION, stmt->line);
+            emit_short(static_cast<uint16_t>(func_idx), stmt->line);
+            
+            // Attach method to type (works for class, struct, and enum)
+            if (method->is_mutating) {
+                emit_op(OpCode::OP_STRUCT_METHOD, stmt->line);
+                emit_short(static_cast<uint16_t>(method_name_idx), stmt->line);
+                emit_byte(1, stmt->line); // mutating flag
+            } else {
+                emit_op(OpCode::OP_METHOD, stmt->line);
+                emit_short(static_cast<uint16_t>(method_name_idx), stmt->line);
+            }
+        }
+        
+        // Pop the type object after attaching method
+        emit_op(OpCode::OP_POP, stmt->line);
+    }
+    
+    // Pop the final type reference
+    emit_op(OpCode::OP_POP, stmt->line);
 }
 
 void Compiler::visit(BlockStmt* stmt) {

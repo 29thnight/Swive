@@ -88,6 +88,7 @@ private:
     void visit(StructDeclStmt* stmt);  // Struct declaration
     void visit(EnumDeclStmt* stmt);    // Enum declaration
     void visit(ProtocolDeclStmt* stmt); // Protocol declaration
+    void visit(ExtensionDeclStmt* stmt); // Extension declaration
     void visit(ImportStmt* stmt);
     void visit(PrintStmt* stmt);
     void visit(ReturnStmt* stmt);

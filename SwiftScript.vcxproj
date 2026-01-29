@@ -146,7 +146,6 @@
     <ClInclude Include="test\test_helpers.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="debug_computed.cpp" />
     <ClCompile Include="src\ss_chunk.cpp" />
     <ClCompile Include="src\ss_core.cpp" />
     <ClCompile Include="src\ss_compiler.cpp" />
@@ -168,6 +167,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="test\test_enum.cpp" />
+    <ClCompile Include="test\test_extension.cpp" />
     <ClCompile Include="test\test_gtest.cpp" />
     <ClCompile Include="test\test_helpers_example.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
@@ -214,6 +214,9 @@
     <None Include="test\README_TESTS.md" />
     <None Include="test\SUMMARY.md" />
     <None Include="test\TEST_FRAMEWORK_README.md" />
+    <None Include="test_computed_ext.ss" />
+    <None Include="test_ext1.ss" />
+    <None Include="test_extension_simple.ss" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="testlog.txt" />

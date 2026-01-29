@@ -179,6 +179,37 @@ void test_enum_comparison();
 void test_enum_methods();
 void test_enum_computed_properties();
 void test_multiple_enums();
+void test_enum_basic_inline();
+void test_enum_raw_values_inline();
+void test_enum_comparison_inline();
+void test_enum_with_method_inline();
+void test_enum_method_with_self_switch_inline();
+void test_enum_in_switch_statement_inline();
+void test_enum_simple_computed_property_inline();
+
+// Protocol tests
+void test_protocol_basic_declaration();
+void test_protocol_method_requirements();
+void test_protocol_property_requirements();
+void test_protocol_inheritance();
+void test_protocol_mutating_method();
+void test_protocol_struct_conformance();
+void test_protocol_class_conformance();
+void test_protocol_class_superclass_and_protocol();
+void test_protocol_multiple_conformance();
+void test_protocol_method_parameters();
+
+// Extension tests
+void test_extension_basic_method();
+void test_extension_enum();
+void test_extension_computed_property();
+void test_extension_multiple_methods();
+void test_extension_class();
+void test_multiple_extensions();
+void test_extension_self_usage();
+void test_extension_with_parameters();
+void test_extension_enum_with_switch();
+void test_extension_simple_computed_property();
 
 } // namespace test
 } // namespace swiftscript
@@ -405,356 +436,123 @@ TEST(EnumTests, MultipleEnums) {
 }
 
 // ============================================================================
+// Protocol Tests
+// ============================================================================
+
+TEST(ProtocolTest, BasicProtocolDeclaration) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_basic_declaration());
+}
+
+TEST(ProtocolTest, ProtocolMethodRequirements) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_method_requirements());
+}
+
+TEST(ProtocolTest, ProtocolPropertyRequirements) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_property_requirements());
+}
+
+TEST(ProtocolTest, ProtocolInheritance) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_inheritance());
+}
+
+TEST(ProtocolTest, ProtocolMutatingMethod) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_mutating_method());
+}
+
+TEST(ProtocolTest, StructProtocolConformance) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_struct_conformance());
+}
+
+TEST(ProtocolTest, ClassProtocolConformance) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_class_conformance());
+}
+
+TEST(ProtocolTest, ClassSuperclassAndProtocol) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_class_superclass_and_protocol());
+}
+
+TEST(ProtocolTest, MultipleProtocolConformance) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_multiple_conformance());
+}
+
+TEST(ProtocolTest, ProtocolMethodParameters) {
+    EXPECT_NO_THROW(swiftscript::test::test_protocol_method_parameters());
+}
+
+// ============================================================================
 // Inline Enum Tests (Quick Verification)
 // ============================================================================
 
 TEST(EnumInlineTests, BasicEnumDeclaration) {
-    std::string source = R"(
-        enum Direction {
-            case north
-            case south
-            case east
-            case west
-        }
-        
-        var dir = Direction.north
-        print(dir)
-    )";
-    
-    swiftscript::Lexer lexer(source);
-    auto tokens = lexer.tokenize_all();
-    swiftscript::Parser parser(std::move(tokens));
-    auto program = parser.parse();
-    swiftscript::Compiler compiler;
-    swiftscript::Chunk chunk = compiler.compile(program);
-    
-    swiftscript::VMConfig config;
-    config.enable_debug = false;
-    swiftscript::VM vm(config);
-    
-    std::ostringstream output;
-    std::streambuf* old = std::cout.rdbuf(output.rdbuf());
-    
-    EXPECT_NO_THROW(vm.execute(chunk));
-    
-    std::cout.rdbuf(old);
-    std::string result = output.str();
-    
-    EXPECT_NE(result.find("north"), std::string::npos) << "Expected 'north' in output, got: " << result;
+    EXPECT_NO_THROW(swiftscript::test::test_enum_basic_inline());
 }
 
 TEST(EnumInlineTests, EnumRawValues) {
-    std::string source = R"(
-        enum Priority {
-            case low = 1
-            case medium = 2
-            case high = 3
-        }
-        
-        var p = Priority.high
-        print(p.rawValue)
-    )";
-    
-    swiftscript::Lexer lexer(source);
-    auto tokens = lexer.tokenize_all();
-    swiftscript::Parser parser(std::move(tokens));
-    auto program = parser.parse();
-    swiftscript::Compiler compiler;
-    swiftscript::Chunk chunk = compiler.compile(program);
-    
-    swiftscript::VMConfig config;
-    config.enable_debug = false;
-    swiftscript::VM vm(config);
-    
-    std::ostringstream output;
-    std::streambuf* old = std::cout.rdbuf(output.rdbuf());
-    
-    EXPECT_NO_THROW(vm.execute(chunk));
-    
-    std::cout.rdbuf(old);
-    std::string result = output.str();
-    
-    EXPECT_NE(result.find("3"), std::string::npos) << "Expected '3' in output, got: " << result;
+    EXPECT_NO_THROW(swiftscript::test::test_enum_raw_values_inline());
 }
 
 TEST(EnumInlineTests, EnumComparison) {
-    std::string source = R"(
-        enum Color {
-            case red
-            case green
-            case blue
-        }
-        
-        var c1 = Color.red
-        var c2 = Color.red
-        var c3 = Color.blue
-        
-        if c1 == c2 {
-            print("SAME")
-        }
-        
-        if c1 != c3 {
-            print("DIFFERENT")
-        }
-    )";
-    
-    swiftscript::Lexer lexer(source);
-    auto tokens = lexer.tokenize_all();
-    swiftscript::Parser parser(std::move(tokens));
-    auto program = parser.parse();
-    swiftscript::Compiler compiler;
-    swiftscript::Chunk chunk = compiler.compile(program);
-    
-    swiftscript::VMConfig config;
-    config.enable_debug = false;
-    swiftscript::VM vm(config);
-    
-    std::ostringstream output;
-    std::streambuf* old = std::cout.rdbuf(output.rdbuf());
-    
-    EXPECT_NO_THROW(vm.execute(chunk));
-    
-    std::cout.rdbuf(old);
-    std::string result = output.str();
-    
-    EXPECT_NE(result.find("SAME"), std::string::npos) << "Expected 'SAME' in output";
-    EXPECT_NE(result.find("DIFFERENT"), std::string::npos) << "Expected 'DIFFERENT' in output";
+    EXPECT_NO_THROW(swiftscript::test::test_enum_comparison_inline());
 }
 
 TEST(EnumInlineTests, EnumWithMethod) {
-    std::string source = R"(
-        enum CompassPoint {
-            case north
-            case south
-            case east
-            case west
-            
-            func describe() -> String {
-                return "Direction"
-            }
-        }
-        
-        var direction = CompassPoint.north
-        print(direction.describe())
-    )";
-    
-    swiftscript::Lexer lexer(source);
-    auto tokens = lexer.tokenize_all();
-    swiftscript::Parser parser(std::move(tokens));
-    auto program = parser.parse();
-    swiftscript::Compiler compiler;
-    swiftscript::Chunk chunk = compiler.compile(program);
-    
-    swiftscript::VMConfig config;
-    config.enable_debug = false;
-    swiftscript::VM vm(config);
-    
-    std::ostringstream output;
-    std::streambuf* old = std::cout.rdbuf(output.rdbuf());
-    
-    EXPECT_NO_THROW(vm.execute(chunk));
-    
-    std::cout.rdbuf(old);
-    std::string result = output.str();
-    
-    EXPECT_NE(result.find("Direction"), std::string::npos) 
-        << "Expected 'Direction' in output, got: " << result;
+    EXPECT_NO_THROW(swiftscript::test::test_enum_with_method_inline());
 }
 
 TEST(EnumInlineTests, EnumMethodWithSelfSwitch) {
-    std::string source = R"(
-        enum Direction {
-            case north
-            case south
-            case east
-            case west
-            
-            func describe() -> String {
-                switch self {
-                case Direction.north:
-                    return "NORTH"
-                case Direction.south:
-                    return "SOUTH"
-                case Direction.east:
-                    return "EAST"
-                case Direction.west:
-                    return "WEST"
-                }
-            }
-        }
-        
-        var dir = Direction.north
-        print(dir.describe())
-    )";
-    
-    swiftscript::Lexer lexer(source);
-    auto tokens = lexer.tokenize_all();
-    swiftscript::Parser parser(std::move(tokens));
-    auto program = parser.parse();
-    swiftscript::Compiler compiler;
-    swiftscript::Chunk chunk = compiler.compile(program);
-    
-    swiftscript::VMConfig config;
-    config.enable_debug = false;
-    swiftscript::VM vm(config);
-    
-    std::ostringstream output;
-    std::streambuf* old = std::cout.rdbuf(output.rdbuf());
-    
-    EXPECT_NO_THROW(vm.execute(chunk));
-    
-    std::cout.rdbuf(old);
-    std::string result = output.str();
-    
-    EXPECT_NE(result.find("NORTH"), std::string::npos) 
-        << "Expected 'NORTH' in output, got: " << result;
+    EXPECT_NO_THROW(swiftscript::test::test_enum_method_with_self_switch_inline());
 }
 
 TEST(EnumInlineTests, EnumInSwitchStatement) {
-    std::string source = R"(
-        enum Status {
-            case pending
-            case active
-            case completed
-        }
-        
-        var status = Status.active
-        
-        switch status {
-        case Status.pending:
-            print("PENDING")
-        case Status.active:
-            print("ACTIVE")
-        case Status.completed:
-            print("COMPLETED")
-        }
-    )";
-    
-    swiftscript::Lexer lexer(source);
-    auto tokens = lexer.tokenize_all();
-    swiftscript::Parser parser(std::move(tokens));
-    auto program = parser.parse();
-    swiftscript::Compiler compiler;
-    swiftscript::Chunk chunk = compiler.compile(program);
-    
-    swiftscript::VMConfig config;
-    config.enable_debug = false;
-    swiftscript::VM vm(config);
-    
-    std::ostringstream output;
-    std::streambuf* old = std::cout.rdbuf(output.rdbuf());
-    
-    EXPECT_NO_THROW(vm.execute(chunk));
-    
-    std::cout.rdbuf(old);
-    std::string result = output.str();
-    
-    EXPECT_NE(result.find("ACTIVE"), std::string::npos) 
-        << "Expected 'ACTIVE' in output, got: " << result;
+    EXPECT_NO_THROW(swiftscript::test::test_enum_in_switch_statement_inline());
 }
 
 TEST(EnumInlineTests, EnumSimpleComputedProperty) {
-    std::string source = R"(
-        enum Answer {
-            case yes
-            case no
-            
-            var text: String {
-                return "Answer"
-            }
-        }
-        
-        var answer = Answer.yes
-        var result = answer.text
-        print(result)
-    )";
-    
-    swiftscript::Lexer lexer(source);
-    auto tokens = lexer.tokenize_all();
-    swiftscript::Parser parser(std::move(tokens));
-    auto program = parser.parse();
-    
-    // DIAGNOSTIC: Check if enum has methods
-    bool found_enum = false;
-    int method_count = 0;
-    int computed_property_count = 0;
-    
-    for (const auto& stmt : program) {
-        if (stmt->kind == swiftscript::StmtKind::EnumDecl) {
-            found_enum = true;
-            auto* enum_stmt = static_cast<swiftscript::EnumDeclStmt*>(stmt.get());
-            method_count = static_cast<int>(enum_stmt->methods.size());
-            
-            for (const auto& method : enum_stmt->methods) {
-                if (method->is_computed_property) {
-                    computed_property_count++;
-                }
-            }
-        }
-    }
-    
-    // Print diagnostic info
-    std::cout << "DIAGNOSTIC: Found enum: " << found_enum << std::endl;
-    std::cout << "DIAGNOSTIC: Method count: " << method_count << std::endl;
-    std::cout << "DIAGNOSTIC: Computed property count: " << computed_property_count << std::endl;
-    
-    ASSERT_TRUE(found_enum) << "Enum not found in AST";
-    ASSERT_EQ(computed_property_count, 1) << "Expected 1 computed property, got " << computed_property_count;
-    
-    // Now try to compile
-    swiftscript::Compiler compiler;
-    swiftscript::Chunk chunk = compiler.compile(std::move(program));
-    
-    // DIAGNOSTIC: Check bytecode for OP_DEFINE_COMPUTED_PROPERTY
-    bool found_computed_property_opcode = false;
-    size_t computed_property_position = 0;
-    
-    // Also check for OP_ENUM and OP_ENUM_CASE positions
-    for (size_t i = 0; i < chunk.code.size(); ++i) {
-        auto opcode = static_cast<swiftscript::OpCode>(chunk.code[i]);
-        
-        if (opcode == swiftscript::OpCode::OP_ENUM) {
-            std::cout << "DIAGNOSTIC: OP_ENUM at position " << i << std::endl;
-        }
-        else if (opcode == swiftscript::OpCode::OP_ENUM_CASE) {
-            std::cout << "DIAGNOSTIC: OP_ENUM_CASE at position " << i << std::endl;
-        }
-        else if (opcode == swiftscript::OpCode::OP_DEFINE_COMPUTED_PROPERTY) {
-            found_computed_property_opcode = true;
-            computed_property_position = i;
-            std::cout << "DIAGNOSTIC: OP_DEFINE_COMPUTED_PROPERTY at position " << i << std::endl;
-        }
-        else if (opcode == swiftscript::OpCode::OP_METHOD) {
-            std::cout << "DIAGNOSTIC: OP_METHOD at position " << i << std::endl;
-        }
-    }
-    
-    if (!found_computed_property_opcode) {
-        std::cout << "DIAGNOSTIC: OP_DEFINE_COMPUTED_PROPERTY NOT FOUND in bytecode!" << std::endl;
-    }
-    
-    // Run
-    swiftscript::VMConfig config;
-    config.enable_debug = false;
-    swiftscript::VM vm(config);
-    
-    std::ostringstream output;
-    std::streambuf* old = std::cout.rdbuf(output.rdbuf());
-    
-    try {
-        vm.execute(chunk);
-        std::cout.rdbuf(old);
-        std::string result = output.str();
-        
-        std::cout << "OUTPUT: " << result << std::endl;
-        
-        EXPECT_NE(result.find("Answer"), std::string::npos) 
-            << "Expected 'Answer' in output, got: " << result;
-    } catch (const std::exception& e) {
-        std::cout.rdbuf(old);
-        std::cout << "EXCEPTION: " << e.what() << std::endl;
-        FAIL() << "Exception: " << e.what();
-    }
+    EXPECT_NO_THROW(swiftscript::test::test_enum_simple_computed_property_inline());
+}
+
+// ============================================================================
+// Extension Tests
+// ============================================================================
+
+TEST(ExtensionTest, BasicMethod) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_basic_method());
+}
+
+TEST(ExtensionTest, ExtensionEnum) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_enum());
+}
+
+TEST(ExtensionTest, ComputedProperty) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_computed_property());
+}
+
+TEST(ExtensionTest, MultipleMethods) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_multiple_methods());
+}
+
+TEST(ExtensionTest, ExtensionClass) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_class());
+}
+
+TEST(ExtensionTest, MultipleExtensions) {
+    EXPECT_NO_THROW(swiftscript::test::test_multiple_extensions());
+}
+
+TEST(ExtensionTest, SelfUsage) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_self_usage());
+}
+
+TEST(ExtensionTest, WithParameters) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_with_parameters());
+}
+
+TEST(ExtensionTest, EnumWithSwitch) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_enum_with_switch());
+}
+
+TEST(ExtensionTest, SimpleComputedProperty) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_simple_computed_property());
 }
 
 // ============================================================================

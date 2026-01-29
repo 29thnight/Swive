@@ -224,6 +224,7 @@ enum class StmtKind {
     StructDecl,  // Struct declaration
     EnumDecl,    // Enum declaration
     ProtocolDecl, // Protocol declaration
+    ExtensionDecl, // Extension declaration
     If,
     IfLet,
     GuardLet,
@@ -438,6 +439,15 @@ struct ProtocolDeclStmt : Stmt {
     std::vector<std::string> inherited_protocols;  // Protocol inheritance
 
     ProtocolDeclStmt() : Stmt(StmtKind::ProtocolDecl) {}
+};
+
+// Extension declaration: extension String { func reversed() -> String { ... } }
+struct ExtensionDeclStmt : Stmt {
+    std::string extended_type;  // Type being extended (e.g., "String", "Int", "MyClass")
+    std::vector<std::string> protocol_conformances;  // Protocols added in this extension
+    std::vector<std::unique_ptr<StructMethodDecl>> methods;  // Methods (including computed properties)
+    
+    ExtensionDeclStmt() : Stmt(StmtKind::ExtensionDecl) {}
 };
 
 } // namespace swiftscript

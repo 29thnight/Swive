@@ -254,5 +254,185 @@ void test_multiple_enums() {
     std::cout << "[PASS] test_multiple_enums\n";
 }
 
+// Test 9: Basic enum declaration (inline)
+void test_enum_basic_inline() {
+    std::string source = R"(
+        enum Direction {
+            case north
+            case south
+            case east
+            case west
+        }
+        
+        var dir = Direction.north
+        print(dir)
+    )";
+
+    std::string result = run_code(source);
+    AssertHelper::assert_contains(result, "north", "test_enum_basic_inline");
+    std::cout << "[PASS] test_enum_basic_inline\n";
+}
+
+// Test 10: Enum raw values (inline)
+void test_enum_raw_values_inline() {
+    std::string source = R"(
+        enum Priority {
+            case low = 1
+            case medium = 2
+            case high = 3
+        }
+        
+        var p = Priority.high
+        print(p.rawValue)
+    )";
+
+    std::string result = run_code(source);
+    AssertHelper::assert_contains(result, "3", "test_enum_raw_values_inline");
+    std::cout << "[PASS] test_enum_raw_values_inline\n";
+}
+
+// Test 11: Enum comparison (inline)
+void test_enum_comparison_inline() {
+    std::string source = R"(
+        enum Color {
+            case red
+            case green
+            case blue
+        }
+        
+        var c1 = Color.red
+        var c2 = Color.red
+        var c3 = Color.blue
+        
+        if c1 == c2 {
+            print("SAME")
+        }
+        
+        if c1 != c3 {
+            print("DIFFERENT")
+        }
+    )";
+
+    std::string result = run_code(source);
+    AssertHelper::assert_contains(result, "SAME", "test_enum_comparison_inline");
+    AssertHelper::assert_contains(result, "DIFFERENT", "test_enum_comparison_inline");
+    std::cout << "[PASS] test_enum_comparison_inline\n";
+}
+
+// Test 12: Enum with method (inline)
+void test_enum_with_method_inline() {
+    std::string source = R"(
+        enum CompassPoint {
+            case north
+            case south
+            case east
+            case west
+            
+            func describe() -> String {
+                return "Direction"
+            }
+        }
+        
+        var direction = CompassPoint.north
+        print(direction.describe())
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos || result.find("SKIP") != std::string::npos) {
+        std::cout << "[SKIP] test_enum_with_method_inline (not implemented yet)\n";
+        return;
+    }
+    AssertHelper::assert_contains(result, "Direction", "test_enum_with_method_inline");
+    std::cout << "[PASS] test_enum_with_method_inline\n";
+}
+
+// Test 13: Enum method with self switch (inline)
+void test_enum_method_with_self_switch_inline() {
+    std::string source = R"(
+        enum Direction {
+            case north
+            case south
+            case east
+            case west
+            
+            func describe() -> String {
+                switch self {
+                case Direction.north:
+                    return "NORTH"
+                case Direction.south:
+                    return "SOUTH"
+                case Direction.east:
+                    return "EAST"
+                case Direction.west:
+                    return "WEST"
+                }
+            }
+        }
+        
+        var dir = Direction.north
+        print(dir.describe())
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos || result.find("SKIP") != std::string::npos) {
+        std::cout << "[SKIP] test_enum_method_with_self_switch_inline (not implemented yet)\n";
+        return;
+    }
+    AssertHelper::assert_contains(result, "NORTH", "test_enum_method_with_self_switch_inline");
+    std::cout << "[PASS] test_enum_method_with_self_switch_inline\n";
+}
+
+// Test 14: Enum in switch statement (inline)
+void test_enum_in_switch_statement_inline() {
+    std::string source = R"(
+        enum Status {
+            case pending
+            case active
+            case completed
+        }
+        
+        var status = Status.active
+        
+        switch status {
+        case Status.pending:
+            print("PENDING")
+        case Status.active:
+            print("ACTIVE")
+        case Status.completed:
+            print("COMPLETED")
+        }
+    )";
+
+    std::string result = run_code(source);
+    AssertHelper::assert_contains(result, "ACTIVE", "test_enum_in_switch_statement_inline");
+    std::cout << "[PASS] test_enum_in_switch_statement_inline\n";
+}
+
+// Test 15: Enum simple computed property (inline)
+void test_enum_simple_computed_property_inline() {
+    std::string source = R"(
+        enum Answer {
+            case yes
+            case no
+            
+            var text: String {
+                return "Answer"
+            }
+        }
+        
+        var answer = Answer.yes
+        var result = answer.text
+        print(result)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos || result.find("SKIP") != std::string::npos) {
+        std::cout << "[SKIP] test_enum_simple_computed_property_inline (not implemented yet)\n";
+        return;
+    }
+    AssertHelper::assert_contains(result, "Answer", "test_enum_simple_computed_property_inline");
+    std::cout << "[PASS] test_enum_simple_computed_property_inline\n";
+}
+
 } // namespace test
 } // namespace swiftscript

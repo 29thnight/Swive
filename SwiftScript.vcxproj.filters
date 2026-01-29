@@ -134,17 +134,17 @@
     <ClCompile Include="test\test_gtest.cpp">
       <Filter>Test\internal</Filter>
     </ClCompile>
-    <ClCompile Include="test\test_minimal.cpp">
-      <Filter>소스 파일</Filter>
+    <ClCompile Include="test\test_protocol.cpp">
+      <Filter>Test\internal\src</Filter>
     </ClCompile>
     <ClCompile Include="test\test_enum.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="test\test_protocol.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Test\internal\src</Filter>
     </ClCompile>
     <ClCompile Include="test\test_extension.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Test\internal\src</Filter>
+    </ClCompile>
+    <ClCompile Include="test\test_minimal.cpp">
+      <Filter>Test\internal\src</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

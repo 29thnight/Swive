@@ -346,7 +346,13 @@ public:
         Value default_value;
         bool is_let{false};
     };
+    struct ComputedPropertyInfo {
+        std::string name;
+        Value getter;  // Function value
+        Value setter;  // Function value (or null if read-only)
+    };
     std::vector<PropertyInfo> properties;
+    std::vector<ComputedPropertyInfo> computed_properties;
     std::unordered_map<std::string, bool> mutating_methods;  // method_name -> is_mutating
 
     explicit StructObject(std::string n)
@@ -365,6 +371,10 @@ public:
         for (const auto& prop : properties) {
             total += prop.name.capacity();
             total += sizeof(Value);
+        }
+        for (const auto& comp_prop : computed_properties) {
+            total += comp_prop.name.capacity();
+            total += sizeof(Value) * 2;
         }
         return total;
     }

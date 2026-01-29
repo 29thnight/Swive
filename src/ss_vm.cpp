@@ -818,10 +818,10 @@ namespace swiftscript {
                     } else if (type_obj->type == ObjectType::Struct) {
                         // Struct computed property (for extension)
                         auto* struct_type = static_cast<StructObject*>(type_obj);
-                        
-                        // For now, struct computed properties via extension are stored as methods
-                        // that return the computed value. We'll create a wrapper method.
-                        const std::string& prop_name = chunk_->strings[name_idx];
+                        StructObject::ComputedPropertyInfo info;
+                        info.name = chunk_->strings[name_idx];
+
+                        // Create getter function and closure
                         const auto& getter_proto = chunk_->functions[getter_idx];
                         auto* getter_func = allocate_object<FunctionObject>(
                             getter_proto.name,
@@ -831,10 +831,25 @@ namespace swiftscript {
                             false
                         );
                         auto* getter_closure = allocate_object<ClosureObject>(getter_func);
-                        
-                        // Store as a method that can be called
-                        struct_type->methods[prop_name] = Value::from_object(getter_closure);
-                        struct_type->mutating_methods[prop_name] = false;
+                        info.getter = Value::from_object(getter_closure);
+
+                        // Create setter function and closure if present
+                        if (setter_idx != 0xFFFF && setter_idx < chunk_->functions.size()) {
+                            const auto& setter_proto = chunk_->functions[setter_idx];
+                            auto* setter_func = allocate_object<FunctionObject>(
+                                setter_proto.name,
+                                setter_proto.params,
+                                setter_proto.chunk,
+                                false,
+                                false
+                            );
+                            auto* setter_closure = allocate_object<ClosureObject>(setter_func);
+                            info.setter = Value::from_object(setter_closure);
+                        } else {
+                            info.setter = Value::null();
+                        }
+
+                        struct_type->computed_properties.push_back(std::move(info));
                     } else {
                         throw std::runtime_error("OP_DEFINE_COMPUTED_PROPERTY expects class, enum, or struct on stack.");
                     }
@@ -1237,7 +1252,59 @@ namespace swiftscript {
                     if (handled_computed) {
                         break;
                     }
-                    
+
+                    // Check for computed property on StructInstance
+                    if (obj.is_object() && obj.as_object()->type == ObjectType::StructInstance) {
+                        auto* struct_inst = static_cast<StructInstanceObject*>(obj.as_object());
+                        if (struct_inst->struct_type) {
+                            for (const auto& comp_prop : struct_inst->struct_type->computed_properties) {
+                                if (comp_prop.name == name) {
+                                    // Found computed property - call getter
+                                    Value getter = comp_prop.getter;
+
+                                    if (!getter.is_object()) {
+                                        throw std::runtime_error("Computed property getter is not a function.");
+                                    }
+
+                                    Object* obj_callee = getter.as_object();
+                                    FunctionObject* func = nullptr;
+                                    ClosureObject* closure = nullptr;
+
+                                    if (obj_callee->type == ObjectType::Closure) {
+                                        closure = static_cast<ClosureObject*>(obj_callee);
+                                        func = closure->function;
+                                    } else if (obj_callee->type == ObjectType::Function) {
+                                        func = static_cast<FunctionObject*>(obj_callee);
+                                    } else {
+                                        throw std::runtime_error("Computed property getter must be a function.");
+                                    }
+
+                                    if (!func || !func->chunk) {
+                                        throw std::runtime_error("Getter function has no body.");
+                                    }
+                                    if (func->params.size() != 1) {
+                                        throw std::runtime_error("Getter should have exactly 1 parameter (self).");
+                                    }
+
+                                    // Push callee and self argument
+                                    push(getter);
+                                    push(obj);  // self (struct instance)
+
+                                    // Setup call frame
+                                    size_t callee_index = stack_.size() - 2;
+                                    call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name, closure, false);
+                                    chunk_ = func->chunk.get();
+                                    ip_ = 0;
+                                    handled_computed = true;
+                                    break;  // Continue execution in getter
+                                }
+                            }
+                        }
+                    }
+                    if (handled_computed) {
+                        break;
+                    }
+
                     // Not a computed property, use regular get_property
                     push(get_property(obj, name));
                     break;

@@ -138,6 +138,9 @@
     <ClInclude Include="include\ss_token.hpp" />
     <ClInclude Include="include\ss_value.hpp" />
     <ClInclude Include="include\ss_vm.hpp" />
+    <ClInclude Include="test\EXAMPLES_test_helpers.hpp" />
+    <ClInclude Include="test\QUICK_REFERENCE.hpp" />
+    <ClInclude Include="test\test_helpers.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ss_chunk.cpp" />
@@ -186,6 +189,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="test\DEBUGHELPER_SUMMARY_KR.md" />
+    <None Include="test\TEST_FRAMEWORK_README.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

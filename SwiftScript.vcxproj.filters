@@ -45,6 +45,15 @@
     <ClInclude Include="include\ss_compiler.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="test\EXAMPLES_test_helpers.hpp">
+      <Filter>Test</Filter>
+    </ClInclude>
+    <ClInclude Include="test\QUICK_REFERENCE.hpp">
+      <Filter>Test</Filter>
+    </ClInclude>
+    <ClInclude Include="test\test_helpers.hpp">
+      <Filter>Test</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ss_core.cpp">
@@ -104,5 +113,13 @@
     <ClCompile Include="test\test_class.cpp">
       <Filter>Test</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="test\DEBUGHELPER_SUMMARY_KR.md">
+      <Filter>Test</Filter>
+    </None>
+    <None Include="test\TEST_FRAMEWORK_README.md">
+      <Filter>Test</Filter>
+    </None>
   </ItemGroup>
 </Project>

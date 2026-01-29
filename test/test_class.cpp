@@ -1,13 +1,15 @@
-#include "ss_compiler.hpp"
+﻿#include "ss_compiler.hpp"
 #include "ss_lexer.hpp"
 #include "ss_parser.hpp"
 #include "ss_vm.hpp"
+#include "test_helpers.hpp"
 #include <cassert>
 #include <iostream>
 #include <sstream>
 #include <string>
 
 using namespace swiftscript;
+using namespace swiftscript::test;
 
 std::string run_code(const std::string& source) {
     try {
@@ -34,7 +36,6 @@ std::string run_code(const std::string& source) {
 }
 
 void test_simple_class_method() {
-    std::cout << "Test: simple class method ... ";
     std::string source = R"(
         class Greeter {
             func greet() {
@@ -45,12 +46,11 @@ void test_simple_class_method() {
         g.greet()
     )";
     auto out = run_code(source);
-    assert(out.find("hi") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    AssertHelper::assert_contains(out, "hi", "greet() should print 'hi'");
 }
 
 void test_initializer_called() {
-    std::cout << "Test: initializer is invoked ... ";
     std::string source = R"(
         class Counter {
             func init() {
@@ -64,13 +64,11 @@ void test_initializer_called() {
         print(c.value())
     )";
     auto out = run_code(source);
-    assert(out.find("init called") != std::string::npos);
-    assert(out.find("123") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    AssertHelper::assert_order(out, "init called", "123", "init should be called before value()");
 }
 
 void test_stored_property_defaults() {
-    std::cout << "Test: stored property defaults ... ";
     std::string source = R"(
         class Box {
             var value: Int = 42
@@ -84,13 +82,12 @@ void test_stored_property_defaults() {
         box.describe()
     )";
     auto out = run_code(source);
-    assert(out.find("42") != std::string::npos);
-    assert(out.find("box") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    AssertHelper::assert_contains(out, "42", "Property value should be 42");
+    AssertHelper::assert_contains(out, "box", "Property label should be 'box'");
 }
 
 void test_inherited_method_call() {
-    std::cout << "Test: inherited method call ... ";
     std::string source = R"(
         class Animal {
             func speak() {
@@ -103,12 +100,11 @@ void test_inherited_method_call() {
         d.speak()
     )";
     auto out = run_code(source);
-    assert(out.find("woof") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    AssertHelper::assert_contains(out, "woof", "Inherited method should work");
 }
 
 void test_super_method_call() {
-    std::cout << "Test: super method call ... ";
     std::string source = R"(
         class Animal {
             func speak() {
@@ -125,13 +121,11 @@ void test_super_method_call() {
         d.speak()
     )";
     auto out = run_code(source);
-    assert(out.find("animal") != std::string::npos);
-    assert(out.find("dog") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    AssertHelper::assert_order(out, "animal", "dog", "super.speak() should be called first");
 }
 
 void test_inherited_property_defaults() {
-    std::cout << "Test: inherited property defaults ... ";
     std::string source = R"(
         class Base {
             var a: Int = 1
@@ -144,13 +138,12 @@ void test_inherited_property_defaults() {
         print(obj.b)
     )";
     auto out = run_code(source);
-    assert(out.find("1") != std::string::npos);
-    assert(out.find("2") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    OutputMatcher::assert_contains_all(out, {"1", "2"});
+    AssertHelper::assert_order(out, "1", "2", "Properties should print in order a, b");
 }
 
 void test_override_required() {
-    std::cout << "Test: override keyword required ... ";
     std::string source = R"(
         class Animal {
             func speak() {
@@ -167,14 +160,10 @@ void test_override_required() {
     )";
     auto out = run_code(source);
     // Should error: override not used
-    assert(out.find("ERROR") != std::string::npos || 
-           out.find("override") != std::string::npos ||
-           out.find("overrides") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_error(out, "Missing override keyword should produce error");
 }
 
 void test_override_without_base_method() {
-    std::cout << "Test: override without base method (should error) ... ";
     std::string source = R"(
         class Animal {
             func speak() {
@@ -191,14 +180,10 @@ void test_override_without_base_method() {
     )";
     auto out = run_code(source);
     // Should error: override used but no base method
-    assert(out.find("ERROR") != std::string::npos || 
-           out.find("override") != std::string::npos ||
-           out.find("does not override") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_error(out, "Override without base method should produce error");
 }
 
 void test_override_init_allowed() {
-    std::cout << "Test: override init without keyword allowed ... ";
     std::string source = R"(
         class Base {
             func init() {
@@ -214,12 +199,11 @@ void test_override_init_allowed() {
     )";
     auto out = run_code(source);
     // init can be overridden without override keyword
-    assert(out.find("derived") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    AssertHelper::assert_contains(out, "derived", "Derived init should be called");
 }
 
 void test_deinit_called() {
-    std::cout << "Test: deinit is called on deallocation ... ";
     std::string source = R"(
         class Resource {
             deinit {
@@ -234,14 +218,20 @@ void test_deinit_called() {
         print("done")
     )";
     auto out = run_code(source);
-    assert(out.find("created") != std::string::npos);
-    assert(out.find("cleanup") != std::string::npos);
-    assert(out.find("done") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    
+    // Note: deinit may be called after function returns (deferred deallocation)
+    // Just verify all three messages are present
+    AssertHelper::assert_contains(out, "created", "Should create resource");
+    AssertHelper::assert_contains(out, "cleanup", "Should call deinit");
+    AssertHelper::assert_contains(out, "done", "Should complete");
+    
+    // If VM uses immediate deallocation (ARC-style), order would be: created, cleanup, done
+    // If VM uses deferred deallocation (GC-style), order would be: created, done, cleanup
+    // Both are valid depending on memory management strategy
 }
 
 void test_deinit_with_properties() {
-    std::cout << "Test: deinit can access properties ... ";
     std::string source = R"(
         class Counter {
             var value: Int = 42
@@ -255,8 +245,8 @@ void test_deinit_with_properties() {
         test()
     )";
     auto out = run_code(source);
-    assert(out.find("42") != std::string::npos);
-    std::cout << "PASSED\n";
+    AssertHelper::assert_no_error(out);
+    AssertHelper::assert_contains(out, "42", "deinit should access property value");
 }
 
 int main() {
@@ -264,28 +254,36 @@ int main() {
     std::cout << "  CLASS TEST SUITE\n";
     std::cout << "======================================\n\n";
 
-    try {
-        test_simple_class_method();
-        test_initializer_called();
-        test_stored_property_defaults();
-        test_inherited_method_call();
-        test_super_method_call();
-        test_inherited_property_defaults();
-        test_override_required();
-        test_override_without_base_method();
-        test_override_init_allowed();
-        test_deinit_called();
-        test_deinit_with_properties();
+    TestRunner runner;
 
-        std::cout << "\n======================================\n";
-        std::cout << "  ALL CLASS TESTS PASSED!\n";
-        std::cout << "======================================\n";
+    // Run all tests with automatic tracking
+    runner.run_test("simple class method", test_simple_class_method);
+    runner.run_test("initializer is invoked", test_initializer_called);
+    runner.run_test("stored property defaults", test_stored_property_defaults);
+    runner.run_test("inherited method call", test_inherited_method_call);
+    runner.run_test("super method call", test_super_method_call);
+    runner.run_test("inherited property defaults", test_inherited_property_defaults);
+    runner.run_test("override keyword required", test_override_required);
+    runner.run_test("override without base method (should error)", test_override_without_base_method);
+    runner.run_test("override init without keyword allowed", test_override_init_allowed);
+    runner.run_test("deinit is called on deallocation", test_deinit_called);
+    runner.run_test("deinit can access properties", test_deinit_with_properties);
+
+    // Print summary
+    runner.print_summary();
+
+    // Check memory (if tracking was enabled)
+    auto& mem_tracker = MemoryTracker::instance();
+    if (mem_tracker.is_tracking()) {
+        mem_tracker.print_memory_stats();
+        mem_tracker.print_leak_report();
+    }
+
+    if (runner.all_passed()) {
+        std::cout << "\n✓ ALL CLASS TESTS PASSED!\n";
         return 0;
-    } catch (const std::exception& e) {
-        std::cerr << "\n======================================\n";
-        std::cerr << "  CLASS TEST FAILED!\n";
-        std::cerr << "  Error: " << e.what() << "\n";
-        std::cerr << "======================================\n";
+    } else {
+        std::cout << "\n✗ SOME TESTS FAILED\n";
         return 1;
     }
 }

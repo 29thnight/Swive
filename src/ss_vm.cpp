@@ -198,30 +198,31 @@ namespace swiftscript {
 
     void VM::execute_deinit(InstanceObject* inst, Value deinit_method) {
         if (!deinit_method.is_object()) return;
-        
+
         Object* method_obj = deinit_method.as_object();
         FunctionObject* func = nullptr;
         ClosureObject* closure = nullptr;
-        
+
         if (method_obj->type == ObjectType::Closure) {
             closure = static_cast<ClosureObject*>(method_obj);
             func = closure->function;
         } else if (method_obj->type == ObjectType::Function) {
             func = static_cast<FunctionObject*>(method_obj);
         }
-        
+
         if (!func || !func->chunk) return;
-        
+
         // Save current execution state
         const Chunk* saved_chunk = chunk_;
         size_t saved_ip = ip_;
         size_t saved_stack_size = stack_.size();
         size_t saved_frames = call_frames_.size();
-        
+
         try {
-            // Push self (the instance being deallocated)
-            push(Value::from_object(inst));
-            
+            // Push self directly without RC (instance is already being deallocated)
+            // Do NOT use push() as it would retain the dying object
+            stack_.push_back(Value::from_object(inst));
+
             // Setup call frame for deinit
             call_frames_.emplace_back(
                 saved_stack_size + 1,  // stack_base (after self)
@@ -231,54 +232,59 @@ namespace swiftscript {
                 closure,                // closure (if any)
                 false                   // is_initializer
             );
-            
+
             // Switch to deinit's chunk
             chunk_ = func->chunk.get();
             ip_ = 0;
-            
+
             // Execute deinit bytecode until OP_RETURN
+            // NOTE: We use stack_.push_back/pop_back directly to avoid RC on the dying instance
             while (ip_ < chunk_->code.size()) {
                 OpCode op = static_cast<OpCode>(read_byte());
-                
+
                 if (op == OpCode::OP_RETURN) {
                     break;  // Exit deinit execution
                 }
-                
-                // Execute the opcode (simplified - just run the main loop step)
-                // We need to handle opcodes manually or call a helper
+
+                // Execute the opcode (simplified - RC-free for deinit context)
                 switch (op) {
                     case OpCode::OP_CONSTANT: {
-                        push(read_constant());
+                        stack_.push_back(read_constant());
                         break;
                     }
                     case OpCode::OP_STRING: {
                         const std::string& str = read_string();
                         auto* obj = allocate_object<StringObject>(str);
-                        push(Value::from_object(obj));
+                        stack_.push_back(Value::from_object(obj));
                         break;
                     }
                     case OpCode::OP_GET_LOCAL: {
                         uint16_t slot = read_short();
                         size_t base = call_frames_.back().stack_base;
-                        push(stack_[base + slot - 1]);  // -1 because self is at base-1
+                        // Push without RC (self is dying, other locals shouldn't exist in deinit)
+                        stack_.push_back(stack_[base + slot - 1]);
                         break;
                     }
                     case OpCode::OP_GET_PROPERTY: {
                         const std::string& name = read_string();
-                        Value obj_val = pop();
-                        push(get_property(obj_val, name));
+                        Value obj_val = stack_.back();
+                        stack_.pop_back();
+                        // get_property may allocate BoundMethod, handle with push for proper RC
+                        Value prop = get_property(obj_val, name);
+                        stack_.push_back(prop);
                         break;
                     }
                     case OpCode::OP_PRINT: {
-                        Value val = pop();
+                        Value val = stack_.back();
+                        stack_.pop_back();
                         std::cout << val.to_string() << '\n';
                         break;
                     }
                     case OpCode::OP_POP:
-                        pop();
+                        stack_.pop_back();
                         break;
                     case OpCode::OP_NIL:
-                        push(Value::null());
+                        stack_.push_back(Value::null());
                         break;
                     // Add other necessary opcodes...
                     default:
@@ -286,20 +292,19 @@ namespace swiftscript {
                         break;
                 }
             }
-            
+
         } catch (...) {
             // Ignore errors in deinit
         }
-        
+
         // Restore execution state
         chunk_ = saved_chunk;
         ip_ = saved_ip;
-        
-        // Restore stack
-        while (stack_.size() > saved_stack_size) {
-            pop();
-        }
-        
+
+        // Restore stack without RC (deinit runs in RC-free context)
+        // All values pushed during deinit are either primitives or from the dying object
+        stack_.resize(saved_stack_size);
+
         // Restore call frames
         while (call_frames_.size() > saved_frames) {
             call_frames_.pop_back();
@@ -734,13 +739,13 @@ namespace swiftscript {
                     size_t callee_index = stack_.size() - arg_count - 1;
                     Value callee = stack_[callee_index];
                     bool has_receiver = false;
-                    
+
                     if (!callee.is_object() || !callee.as_object()) {
                         throw std::runtime_error("Attempted to call a non-function.");
                     }
-                    
+
                     Object* obj = callee.as_object();
-                    
+
                     // Class call -> instantiate
                     if (obj->type == ObjectType::Class) {
                         auto* klass = static_cast<ClassObject*>(obj);
@@ -761,16 +766,26 @@ namespace swiftscript {
                             }
                         }
 
-                        // Replace callee with instance for return value
+                        // Replace callee with instance: release old callee (class object)
+                        // Note: instance starts with refcount=1 from allocate_object, which represents the stack slot
+                        Value old_callee = stack_[callee_index];
+                        if (old_callee.is_object() && old_callee.ref_type() == RefType::Strong && old_callee.as_object()) {
+                            RC::release(this, old_callee.as_object());
+                        }
                         stack_[callee_index] = Value::from_object(instance);
+
                         // Initializer?
                         auto it = klass->methods.find("init");
                         if (it == klass->methods.end()) {
-                            // No init: discard args, leave instance on stack
-                            stack_.resize(callee_index + 1);
+                            // No init: discard args using pop(), leave instance on stack
+                            while (stack_.size() > callee_index + 1) {
+                                pop();
+                            }
                             break;
                         }
                         // Bind init as bound method
+                        // BoundMethod takes ownership of instance (no retain/release needed)
+                        // bound gets refcount=1 from allocate, instance refcount stays at 1 (now owned by BoundMethod)
                         auto* bound = allocate_object<BoundMethodObject>(instance, it->second);
                         stack_[callee_index] = Value::from_object(bound);
                         callee = stack_[callee_index];
@@ -780,44 +795,67 @@ namespace swiftscript {
                     // Built-in method call handling
                     if (obj->type == ObjectType::BuiltinMethod) {
                         auto* method = static_cast<BuiltinMethodObject*>(obj);
-                        
+
                         if (method->method_name == "append") {
                             if (arg_count != 1) {
                                 throw std::runtime_error("append() requires exactly 1 argument.");
                             }
-                            
+
                             if (method->target->type != ObjectType::List) {
                                 throw std::runtime_error("append() can only be called on arrays.");
                             }
-                            
+
                             auto* arr = static_cast<ListObject*>(method->target);
-                            Value arg = stack_[stack_.size() - 1];
-                            
-                            // Add element to array
+                            Value arg = peek(0);
+
+                            // Add element to array (retain for the array)
+                            if (arg.is_object() && arg.ref_type() == RefType::Strong && arg.as_object()) {
+                                RC::retain(arg.as_object());
+                            }
                             arr->elements.push_back(arg);
-                            
-                            // Clean up stack: remove callee and arguments
-                            stack_.resize(callee_index);
-                            
+
+                            // Clean up stack using pop()
+                            while (stack_.size() > callee_index) {
+                                pop();
+                            }
+
                             // append returns nil
                             push(Value::null());
                             break;
                         }
-                        
+
                         throw std::runtime_error("Unknown built-in method: " + method->method_name);
                     }
 
                     // Bound method: inject receiver
                     if (obj->type == ObjectType::BoundMethod) {
                         auto* bound = static_cast<BoundMethodObject*>(obj);
-                        stack_.insert(stack_.begin() + static_cast<long>(callee_index + 1), Value::from_object(bound->receiver));
+
+                        // Insert receiver with retain (new stack slot needs ownership)
+                        Value receiver_val = Value::from_object(bound->receiver);
+                        if (receiver_val.is_object() && receiver_val.ref_type() == RefType::Strong && receiver_val.as_object()) {
+                            RC::retain(receiver_val.as_object());
+                        }
+                        stack_.insert(stack_.begin() + static_cast<long>(callee_index + 1), receiver_val);
                         arg_count += 1;
-                        stack_[callee_index] = bound->method;
+
+                        // Replace callee slot: BoundMethod -> method
+                        // Retain method first (it's referenced from bound which will be released)
+                        Value method_val = bound->method;
+                        if (method_val.is_object() && method_val.ref_type() == RefType::Strong && method_val.as_object()) {
+                            RC::retain(method_val.as_object());
+                        }
+                        // Now release BoundMethod from callee slot
+                        Value old_bound = stack_[callee_index];
+                        stack_[callee_index] = method_val;  // Replace first to avoid use-after-free
+                        if (old_bound.is_object() && old_bound.ref_type() == RefType::Strong && old_bound.as_object()) {
+                            RC::release(this, old_bound.as_object());
+                        }
                         callee = stack_[callee_index];
                         obj = callee.as_object();
                         has_receiver = true;
                     }
-                    
+
                     FunctionObject* func = nullptr;
                     ClosureObject* closure = nullptr;
 
@@ -855,11 +893,19 @@ namespace swiftscript {
                     CallFrame frame = call_frames_.back();
                     call_frames_.pop_back();
                     if (frame.is_initializer) {
+                        // For initializer, return the instance (self) instead
                         result = stack_[frame.stack_base];
+                        // Retain it since we're returning it
+                        if (result.is_object() && result.ref_type() == RefType::Strong && result.as_object()) {
+                            RC::retain(result.as_object());
+                        }
                     }
                     close_upvalues(stack_.data() + frame.stack_base);
+                    // Pop all locals and arguments (releases their refcounts)
                     size_t callee_index = frame.stack_base - 1;
-                    stack_.resize(callee_index);
+                    while (stack_.size() > callee_index) {
+                        pop();
+                    }
                     chunk_ = frame.chunk;
                     ip_ = frame.return_address;
                     push(result);

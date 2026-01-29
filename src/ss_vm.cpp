@@ -1105,6 +1105,7 @@ namespace swiftscript {
                 case OpCode::OP_GET_PROPERTY: {
                     const std::string& name = read_string();
                     Value obj = pop();  // Pop object from stack
+                    bool handled_computed = false;
                     
                     // Check for computed property first (for instances)
                     if (obj.is_object() && obj.as_object()->type == ObjectType::Instance) {
@@ -1149,10 +1150,14 @@ namespace swiftscript {
                                     call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name, closure, false);
                                     chunk_ = func->chunk.get();
                                     ip_ = 0;
+                                    handled_computed = true;
                                     break;  // Continue execution in getter
                                 }
                             }
                         }
+                    }
+                    if (handled_computed) {
+                        break;
                     }
                     
                     // Check for computed property on EnumCase
@@ -1197,10 +1202,14 @@ namespace swiftscript {
                                     call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name, closure, false);
                                     chunk_ = func->chunk.get();
                                     ip_ = 0;
+                                    handled_computed = true;
                                     break;  // Continue execution in getter
                                 }
                             }
                         }
+                    }
+                    if (handled_computed) {
+                        break;
                     }
                     
                     // Not a computed property, use regular get_property

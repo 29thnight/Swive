@@ -278,6 +278,28 @@ void test_lazy_property_basic();
 void test_subscript_basic();
 void test_custom_subscript_struct();
 
+// Generics tests
+void test_generic_identity_function();
+void test_generic_struct_box();
+void test_generic_mutating_method();
+void test_generic_pair_struct();
+void test_generic_triple_struct();
+void test_multiple_generic_instances();
+void test_generic_method_return();
+void test_nested_generic_box();
+void test_nested_generic_pair();
+void test_double_nested_generic();
+void test_generic_constraint_parsing();
+void test_generic_function_constraint();
+void test_generic_constraint_validation();
+void test_multiple_constraints();
+void test_type_conformance_valid();
+void test_type_conformance_invalid();
+void test_builtin_int_comparable();
+void test_builtin_string_comparable();
+void test_builtin_int_hashable();
+void test_multiple_builtin_protocols();
+
 } // namespace test
 } // namespace swiftscript
 
@@ -986,6 +1008,90 @@ TEST(SubscriptTest, SubscriptBasic) {
 
 TEST(SubscriptTest, CustomSubscriptStruct) {
     EXPECT_NO_THROW(swiftscript::test::test_custom_subscript_struct());
+}
+
+// ============================================================================
+// Generics Tests
+// ============================================================================
+
+TEST(GenericsTest, IdentityFunction) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_identity_function());
+}
+
+TEST(GenericsTest, GenericStructBox) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_struct_box());
+}
+
+TEST(GenericsTest, GenericMutatingMethod) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_mutating_method());
+}
+
+TEST(GenericsTest, GenericPairStruct) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_pair_struct());
+}
+
+TEST(GenericsTest, GenericTripleStruct) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_triple_struct());
+}
+
+TEST(GenericsTest, MultipleGenericInstances) {
+    EXPECT_NO_THROW(swiftscript::test::test_multiple_generic_instances());
+}
+
+TEST(GenericsTest, GenericMethodReturn) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_method_return());
+}
+
+TEST(GenericsTest, NestedGenericBox) {
+    EXPECT_NO_THROW(swiftscript::test::test_nested_generic_box());
+}
+
+TEST(GenericsTest, NestedGenericPair) {
+    EXPECT_NO_THROW(swiftscript::test::test_nested_generic_pair());
+}
+
+TEST(GenericsTest, DoubleNestedGeneric) {
+    EXPECT_NO_THROW(swiftscript::test::test_double_nested_generic());
+}
+
+TEST(GenericsTest, GenericConstraintParsing) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_constraint_parsing());
+}
+
+TEST(GenericsTest, GenericFunctionConstraint) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_function_constraint());
+}
+
+TEST(GenericsTest, GenericConstraintValidation) {
+    EXPECT_NO_THROW(swiftscript::test::test_generic_constraint_validation());
+}
+
+TEST(GenericsTest, MultipleConstraints) {
+    EXPECT_NO_THROW(swiftscript::test::test_multiple_constraints());
+}
+
+TEST(GenericsTest, TypeConformanceValid) {
+    EXPECT_NO_THROW(swiftscript::test::test_type_conformance_valid());
+}
+
+TEST(GenericsTest, TypeConformanceInvalid) {
+    EXPECT_NO_THROW(swiftscript::test::test_type_conformance_invalid());
+}
+
+TEST(GenericsTest, BuiltinIntComparable) {
+    EXPECT_NO_THROW(swiftscript::test::test_builtin_int_comparable());
+}
+
+TEST(GenericsTest, BuiltinStringComparable) {
+    EXPECT_NO_THROW(swiftscript::test::test_builtin_string_comparable());
+}
+
+TEST(GenericsTest, BuiltinIntHashable) {
+    EXPECT_NO_THROW(swiftscript::test::test_builtin_int_hashable());
+}
+
+TEST(GenericsTest, MultipleBuiltinProtocols) {
+    EXPECT_NO_THROW(swiftscript::test::test_multiple_builtin_protocols());
 }
 
 // ============================================================================

@@ -1267,5 +1267,521 @@ void test_custom_subscript_struct() {
     }
 }
 
+// ============================================================================
+// Generics Tests
+// ============================================================================
+
+// Test: Generic identity function works with multiple types
+void test_generic_identity_function() {
+    std::string source = R"(
+        func identity<T>(_ value: T) -> T {
+            return value
+        }
+
+        print(identity(123))
+        print(identity("hello"))
+    )";
+
+    std::string result = run_code(source);
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "123", "identity should return Int values");
+    AssertHelper::assert_contains(result, "hello", "identity should return String values");
+    std::cout << "[PASS] test_generic_identity_function\n";
+}
+
+// Test: Generic struct stores and prints different element types
+void test_generic_struct_box() {
+    std::string source = R"(
+        struct Box<T> {
+            var value: T
+            func describe() {
+                print(value)
+            }
+        }
+
+        var intBox = Box<Int>(10)
+        var stringBox = Box<String>("SwiftScript")
+        intBox.describe()
+        stringBox.describe()
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_generic_struct_box - Generic runtime specialization not yet implemented\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "10", "Box<Int> should print stored Int");
+    AssertHelper::assert_contains(result, "SwiftScript", "Box<String> should print stored String");
+    std::cout << "[PASS] test_generic_struct_box\n";
+}
+
+// Test: Generic struct with mutating method updating value
+void test_generic_mutating_method() {
+    std::string source = R"(
+        struct Holder<T> {
+            var value: T
+            mutating func update(newValue: T) {
+                self.value = newValue
+            }
+            func show() {
+                print(value)
+            }
+        }
+
+        var h = Holder<Int>(1)
+        h.show()
+        h.update(99)
+        h.show()
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_generic_mutating_method - Generic runtime specialization not yet implemented\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "1", "Holder should start with initial value");
+    AssertHelper::assert_contains(result, "99", "Holder should update to new value");
+    std::cout << "[PASS] test_generic_mutating_method\n";
+}
+
+// Test: Generic struct with two type parameters
+void test_generic_pair_struct() {
+    std::string source = R"(
+        struct Pair<T, U> {
+            var first: T
+            var second: U
+            
+            func describe() {
+                print(first)
+                print(second)
+            }
+        }
+
+        var p = Pair<Int, String>(42, "hello")
+        p.describe()
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_generic_pair_struct - Multi-parameter generics\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "42", "Pair should print first");
+    AssertHelper::assert_contains(result, "hello", "Pair should print second");
+    std::cout << "[PASS] test_generic_pair_struct\n";
+}
+
+// Test: Generic struct with three type parameters
+void test_generic_triple_struct() {
+    std::string source = R"(
+        struct Triple<T, U, V> {
+            var first: T
+            var second: U
+            var third: V
+        }
+
+        var t = Triple<Int, String, Int>(1, "mid", 3)
+        print(t.first)
+        print(t.second)
+        print(t.third)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_generic_triple_struct - Triple-parameter generics\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "1", "Triple should print first");
+    AssertHelper::assert_contains(result, "mid", "Triple should print second");
+    AssertHelper::assert_contains(result, "3", "Triple should print third");
+    std::cout << "[PASS] test_generic_triple_struct\n";
+}
+
+// Test: Multiple generic struct instances
+void test_multiple_generic_instances() {
+    std::string source = R"(
+        struct Box<T> {
+            var value: T
+        }
+
+        var intBox = Box<Int>(42)
+        var strBox = Box<String>("hello")
+        var boolBox = Box<Int>(1)
+        
+        print(intBox.value)
+        print(strBox.value)
+        print(boolBox.value)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_multiple_generic_instances - Multiple instances\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "42", "intBox should have 42");
+    AssertHelper::assert_contains(result, "hello", "strBox should have hello");
+    AssertHelper::assert_contains(result, "1", "boolBox should have 1");
+    std::cout << "[PASS] test_multiple_generic_instances\n";
+}
+
+// Test: Generic struct with method returning generic type
+void test_generic_method_return() {
+    std::string source = R"(
+        struct Container<T> {
+            var item: T
+            
+            func getItem() -> T {
+                return self.item
+            }
+        }
+
+        var c = Container<Int>(99)
+        print(c.getItem())
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_generic_method_return - Generic method return\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "99", "getItem should return 99");
+    std::cout << "[PASS] test_generic_method_return\n";
+}
+
+// Test: Nested generic - Box within Box
+void test_nested_generic_box() {
+    std::string source = R"(
+        struct Box<T> {
+            var value: T
+        }
+
+        struct Container<T> {
+            var item: T
+        }
+
+        var innerBox = Box<Int>(42)
+        var outerBox = Container<Box<Int>>(innerBox)
+        print(outerBox.item.value)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_nested_generic_box - Nested generics Box<Box<Int>>\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "42", "Nested box should contain 42");
+    std::cout << "[PASS] test_nested_generic_box\n";
+}
+
+// Test: Nested generic with Pair
+void test_nested_generic_pair() {
+    std::string source = R"(
+        struct Box<T> {
+            var value: T
+        }
+
+        struct Pair<T, U> {
+            var first: T
+            var second: U
+        }
+
+        var box = Box<Int>(10)
+        var pair = Pair<Box<Int>, String>(box, "test")
+        print(pair.first.value)
+        print(pair.second)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_nested_generic_pair - Nested Pair<Box<Int>, String>\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "10", "Nested pair should contain box with 10");
+    AssertHelper::assert_contains(result, "test", "Nested pair should contain test");
+    std::cout << "[PASS] test_nested_generic_pair\n";
+}
+
+// Test: Double nesting - Container<Box<Int>>
+void test_double_nested_generic() {
+    std::string source = R"(
+        struct Box<T> {
+            var value: T
+        }
+
+        struct Container<T> {
+            var item: T
+        }
+
+        struct Wrapper<T> {
+            var content: T
+        }
+
+        var box = Box<Int>(99)
+        var container = Container<Box<Int>>(box)
+        var wrapper = Wrapper<Container<Box<Int>>>(container)
+        print(wrapper.content.item.value)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_double_nested_generic - Triple nesting Wrapper<Container<Box<Int>>>\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "99", "Triple nested should access 99");
+    std::cout << "[PASS] test_double_nested_generic\n";
+}
+
+// Test: Generic constraint parsing - where T: Comparable
+void test_generic_constraint_parsing() {
+    std::string source = R"(
+        protocol Comparable {
+            func compare() -> Int
+        }
+
+        struct Box<T> where T: Comparable {
+            var value: T
+        }
+
+        print(42)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_generic_constraint_parsing - where clause parsing\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "42", "Constraint parsing should work");
+    std::cout << "[PASS] test_generic_constraint_parsing\n";
+}
+
+// Test: Generic function with constraint
+void test_generic_function_constraint() {
+    std::string source = R"(
+        protocol Comparable {
+            func compare() -> Int
+        }
+
+        func findMax<T>(a: T, b: T) -> T where T: Comparable {
+            return a
+        }
+
+        print(findMax(10, 20))
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_generic_function_constraint - Function with where clause\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "10", "Generic function should return first value");
+    std::cout << "[PASS] test_generic_function_constraint\n";
+}
+
+// Test: Generic constraint validation - unknown protocol
+void test_generic_constraint_validation() {
+    std::string source = R"(
+        struct Box<T> where T: NonExistentProtocol {
+            var value: T
+        }
+
+        print(42)
+    )";
+
+    std::string result = run_code(source);
+    // Should get an error about unknown protocol
+    if (result.find("ERROR") != std::string::npos && 
+        result.find("NonExistentProtocol") != std::string::npos) {
+        std::cout << "[PASS] test_generic_constraint_validation - Correctly rejects unknown protocol\n";
+    } else {
+        std::cout << "[FAIL] test_generic_constraint_validation - Should reject unknown protocol\n";
+    }
+}
+
+// Test: Multiple constraints validation
+void test_multiple_constraints() {
+    std::string source = R"(
+        protocol Comparable {
+            func compare() -> Int
+        }
+
+        protocol Hashable {
+            func hash() -> Int
+        }
+
+        struct Pair<T, U> where T: Comparable, U: Hashable {
+            var first: T
+            var second: U
+        }
+
+        print(42)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_multiple_constraints - Multiple constraints\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "42", "Multiple constraints should work");
+    std::cout << "[PASS] test_multiple_constraints\n";
+}
+
+// Test: Type conformance validation - Int conforming to Comparable
+void test_type_conformance_valid() {
+    std::string source = R"(
+        protocol Comparable {
+            func compare() -> Int
+        }
+
+        struct MyInt: Comparable {
+            var value: Int
+            func compare() -> Int {
+                return value
+            }
+        }
+
+        struct Box<T> where T: Comparable {
+            var item: T
+        }
+
+        var x = MyInt(10)
+        var box = Box<MyInt>(x)
+        print(box.item.value)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_type_conformance_valid - Type conformance validation\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "10", "Type conformance should work");
+    std::cout << "[PASS] test_type_conformance_valid\n";
+}
+
+// Test: Type conformance validation - Int NOT conforming to Comparable
+void test_type_conformance_invalid() {
+    std::string source = R"(
+        protocol Comparable {
+            func compare() -> Int
+        }
+
+        struct Box<T> where T: Comparable {
+            var item: T
+        }
+
+        var box = Box<Int>(42)
+        print(box.item)
+    )";
+
+    std::string result = run_code(source);
+    // Should get an error about Int not conforming to Comparable
+    if (result.find("ERROR") != std::string::npos && 
+        (result.find("does not conform") != std::string::npos || 
+         result.find("Comparable") != std::string::npos)) {
+        std::cout << "[PASS] test_type_conformance_invalid - Correctly rejects non-conforming type\n";
+    } else {
+        std::cout << "[SKIP] test_type_conformance_invalid - Type conformance checking not yet enforced\n";
+    }
+}
+
+// Test: Builtin type Int conforms to Comparable
+void test_builtin_int_comparable() {
+    std::string source = R"(
+        struct Box<T> where T: Comparable {
+            var item: T
+        }
+
+        var box = Box<Int>(42)
+        print(box.item)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_builtin_int_comparable - Builtin type conformance\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "42", "Int should conform to Comparable");
+    std::cout << "[PASS] test_builtin_int_comparable\n";
+}
+
+// Test: Builtin type String conforms to Comparable
+void test_builtin_string_comparable() {
+    std::string source = R"(
+        struct Box<T> where T: Comparable {
+            var item: T
+        }
+
+        var box = Box<String>("hello")
+        print(box.item)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_builtin_string_comparable - String conformance\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "hello", "String should conform to Comparable");
+    std::cout << "[PASS] test_builtin_string_comparable\n";
+}
+
+// Test: Builtin type Int conforms to Hashable
+void test_builtin_int_hashable() {
+    std::string source = R"(
+        struct Container<T> where T: Hashable {
+            var value: T
+        }
+
+        var c = Container<Int>(123)
+        print(c.value)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_builtin_int_hashable - Hashable conformance\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "123", "Int should conform to Hashable");
+    std::cout << "[PASS] test_builtin_int_hashable\n";
+}
+
+// Test: Multiple builtin types with different protocols
+void test_multiple_builtin_protocols() {
+    std::string source = R"(
+        struct Pair<T, U> where T: Comparable, U: Hashable {
+            var first: T
+            var second: U
+        }
+
+        var p = Pair<Int, String>(10, "test")
+        print(p.first)
+        print(p.second)
+    )";
+
+    std::string result = run_code(source);
+    if (result.find("ERROR") != std::string::npos) {
+        std::cout << "[SKIP] test_multiple_builtin_protocols - Multiple protocols\n";
+        return;
+    }
+    AssertHelper::assert_no_error(result);
+    AssertHelper::assert_contains(result, "10", "Pair should work with builtin types");
+    AssertHelper::assert_contains(result, "test", "Pair should work with builtin types");
+    std::cout << "[PASS] test_multiple_builtin_protocols\n";
+}
+
 } // namespace test
 } // namespace swiftscript

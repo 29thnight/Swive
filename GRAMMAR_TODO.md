@@ -162,23 +162,33 @@
 
 ## 우선순위 3: 확장 기능
 
-### 3.1 제네릭 (Generics)
-- **현황**: 미구현
-- **필요 작업**:
-  - [ ] 제네릭 타입 파라미터 파싱 (`<T>`)
-  - [ ] 제네릭 함수 (`func swap<T>`)
-  - [ ] 제네릭 타입 (`struct Stack<Element>`)
+### 3.1 제네릭 (Generics) ⚠️ 부분 구현
+- **현황**: 파싱 및 타입 체커 등록 완료, 런타임 타입 특수화 미구현
+- **구현 완료**:
+  - [x] 제네릭 타입 파라미터 파싱 (`<T>`)
+  - [x] 제네릭 함수 파싱 (`func swap<T>`)
+  - [x] 제네릭 타입 파싱 (`struct Stack<Element>`, `class Box<T>`)
+  - [x] 타입 체커에서 제네릭 파라미터 스코프 관리
+  - [x] Protocol/Enum/Extension에서도 제네릭 파싱 지원
+- **미완성**:
+  - [ ] 런타임 타입 특수화 (monomorphization)
   - [ ] 타입 제약 (`<T: Comparable>`)
   - [ ] where 절 제약
 
-### 3.2 연산자 오버로딩
-- **현황**: 미구현
-- **필요 작업**:
-  - [ ] 연산자 함수 선언 (`static func +`)
+### 3.2 연산자 오버로딩 ✅ 완료!
+- **현황**: ✅ 완전 구현 (VM에서 동작)
+- **구현 완료**:
+  - [x] 연산자 함수 선언 (`static func +`, `func +`, etc.)
+  - [x] 파서에서 연산자 이름 메서드 인식
+  - [x] VM에서 `call_operator_overload` 호출
+  - [x] 산술 연산자: `+`, `-`, `*`, `/`, `%`
+  - [x] 비트 연산자: `&`, `|`, `^`, `<<`, `>>`
+  - [x] 비교 연산자: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- **미완성**:
   - [ ] 커스텀 연산자 정의 (`prefix`, `infix`, `postfix`)
-  - [ ] 우선순위 그룹
+  - [ ] 우선순위 그룹 선언
 
-### 3.3 async/await
+### 3.3 async/await ❌ 미구현
 - **현황**: 미구현
 - **필요 작업**:
   - [ ] `async` 함수 선언
@@ -186,9 +196,14 @@
   - [ ] Task 기본 지원
   - [ ] 비동기 런타임
 
-### 3.4 Pattern Matching 확장
-- **현황**: 기본 패턴만 지원
-- **필요 작업**:
+### 3.4 Pattern Matching 확장 ⚠️ 부분 구현
+- **현황**: 기본 패턴 및 associated values 패턴 매칭 완료
+- **구현 완료**:
+  - [x] switch 문에서 enum case 매칭
+  - [x] Associated values 추출 (`case .success(let value)`)
+  - [x] 범위 패턴 (`case 1...5`)
+  - [x] 다중 패턴 (`case 1, 2, 3`)
+- **미완성**:
   - [ ] 튜플 패턴 (`let (x, y) = point`)
   - [ ] 옵셔널 패턴 (`case let x?`)
   - [ ] 타입 캐스팅 패턴 (`case let x as Int`)
@@ -273,7 +288,13 @@
 
 ## 변경 이력
 
-### 2026-01-30 (심야)
+### 2026-01-30 (심야) - 우선순위 3 분석
+- ✅ 제네릭 (Generics): 파싱 및 타입 체커 완료, 런타임 특수화 미구현
+- ✅ **연산자 오버로딩 완전 구현 확인!** (VM call_operator_overload)
+- ❌ async/await: 미구현
+- ⚠️ Pattern Matching: 기본 패턴 + associated values 추출 완료
+
+### 2026-01-30 (심야) - 우선순위 2 분석
 - ✅ Property Observers (willSet/didSet) 완전 구현 확인 (4개 테스트 통과)
 - ✅ Lazy Properties 완전 구현 확인 (2개 테스트 통과)
 - ⚠️ Subscript: 배열 쓰기 및 커스텀 subscript 미완성 (SKIP)

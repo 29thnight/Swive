@@ -86,6 +86,7 @@ struct LiteralExpr : Expr {
 
 struct IdentifierExpr : Expr {
     std::string name;
+    std::vector<TypeAnnotation> generic_args;  // Generic type arguments (e.g., Box<Int>)
     IdentifierExpr() : Expr(ExprKind::Identifier) {}
     explicit IdentifierExpr(std::string n) : Expr(ExprKind::Identifier), name(std::move(n)) {}
 };
@@ -457,9 +458,16 @@ struct DoCatchStmt : Stmt {
     DoCatchStmt() : Stmt(StmtKind::DoCatch) {}
 };
 
+// Generic constraint: T: Comparable
+struct GenericConstraint {
+    std::string param_name;      // T
+    std::string protocol_name;   // Comparable
+};
+
 struct FuncDeclStmt : Stmt {
     std::string name;
     std::vector<std::string> generic_params;
+    std::vector<GenericConstraint> generic_constraints;  // where T: Comparable
     std::vector<ParamDecl> params;
     std::unique_ptr<BlockStmt> body;
     std::optional<TypeAnnotation> return_type;
@@ -473,6 +481,7 @@ struct FuncDeclStmt : Stmt {
 struct ClassDeclStmt : Stmt {
     std::string name;
     std::vector<std::string> generic_params;
+    std::vector<GenericConstraint> generic_constraints;  // where T: Protocol
     std::optional<std::string> superclass_name;
     std::vector<std::string> protocol_conformances;  // Protocols this class conforms to
     std::vector<std::unique_ptr<FuncDeclStmt>> methods;
@@ -485,6 +494,7 @@ struct ClassDeclStmt : Stmt {
 struct StructMethodDecl {
     std::string name;
     std::vector<std::string> generic_params;
+    std::vector<GenericConstraint> generic_constraints;  // where T: Protocol
     std::vector<ParamDecl> params;
     std::unique_ptr<BlockStmt> body;
     std::optional<TypeAnnotation> return_type;
@@ -498,6 +508,7 @@ struct StructMethodDecl {
 struct StructDeclStmt : Stmt {
     std::string name;
     std::vector<std::string> generic_params;
+    std::vector<GenericConstraint> generic_constraints;  // where T: Protocol
     std::vector<std::string> protocol_conformances;  // Protocols this struct conforms to
     std::vector<std::unique_ptr<VarDeclStmt>> properties;  // Stored properties
     std::vector<std::unique_ptr<StructMethodDecl>> methods;
@@ -518,9 +529,11 @@ struct EnumCaseDecl {
 struct EnumDeclStmt : Stmt {
     std::string name;
     std::vector<std::string> generic_params;
+    std::vector<GenericConstraint> generic_constraints;  // where T: Protocol
     std::vector<EnumCaseDecl> cases;
     std::optional<TypeAnnotation> raw_type;  // Type of raw values (if any)
     std::vector<std::unique_ptr<StructMethodDecl>> methods;  // Methods and computed properties
+
 
     EnumDeclStmt() : Stmt(StmtKind::EnumDecl) {}
 };

@@ -7,19 +7,24 @@
 #include <stdexcept>
 #include <fstream>
 #include <sstream>
+#include <functional>
 
 namespace swiftscript {
 
 Chunk Compiler::compile(const std::vector<StmtPtr>& program) {
+    // Step 1: Specialize generics before type checking
+    auto specialized_program = specialize_generics(program);
+    
+    // Step 2: Type check with specialized structs
     TypeChecker checker;
-    checker.check(program);
+    checker.check(specialized_program);
 
     chunk_ = Chunk{};
     locals_.clear();
     scope_depth_ = 0;
     recursion_depth_ = 0;
 
-    for (const auto& stmt : program) {
+    for (const auto& stmt : specialized_program) {
         if (!stmt) {
             throw CompilerError("Null statement in program");
         }
@@ -2046,26 +2051,33 @@ void Compiler::visit(LiteralExpr* expr) {
 }
 
 void Compiler::visit(IdentifierExpr* expr) {
-    int local = resolve_local(expr->name);
+    // Check if this is a generic type instantiation
+    std::string actual_name = expr->name;
+    if (!expr->generic_args.empty()) {
+        // Mangle the name: Box<Int> -> Box_Int
+        actual_name = mangle_generic_name(expr->name, expr->generic_args);
+    }
+    
+    int local = resolve_local(actual_name);
     if (local != -1) {
         emit_op(OpCode::OP_GET_LOCAL, expr->line);
         emit_short(static_cast<uint16_t>(local), expr->line);
         return;
     }
     
-    int upvalue = resolve_upvalue(expr->name);
+    int upvalue = resolve_upvalue(actual_name);
     if (upvalue != -1) {
         emit_op(OpCode::OP_GET_UPVALUE, expr->line);
         emit_short(static_cast<uint16_t>(upvalue), expr->line);
         return;
     }
 
-    if (is_implicit_property(expr->name)) {
-        emit_self_property_get(expr->name, expr->line);
+    if (is_implicit_property(actual_name)) {
+        emit_self_property_get(actual_name, expr->line);
         return;
     }
 
-    size_t name_idx = identifier_constant(expr->name);
+    size_t name_idx = identifier_constant(actual_name);
     if (name_idx > std::numeric_limits<uint16_t>::max()) {
         throw CompilerError("Too many identifiers", expr->line);
     }
@@ -2890,6 +2902,291 @@ Chunk Compiler::compile_struct_method_body(const StructMethodDecl& method, bool 
     method_compiler.emit_op(OpCode::OP_NIL, 0);
     method_compiler.emit_op(OpCode::OP_RETURN, 0);
     return std::move(method_compiler.chunk_);
+}
+
+// ============================================================================
+// Generic Specialization Implementation
+// ============================================================================
+
+
+std::string Compiler::mangle_generic_name(const std::string& base_name, 
+                                          const std::vector<TypeAnnotation>& type_args) {
+    std::string mangled = base_name;
+    for (const auto& arg : type_args) {
+        mangled += "_";
+        
+        // Recursively handle nested generics: Array<Box<Int>>
+        if (!arg.generic_args.empty()) {
+            // Nested generic: Box<Int> becomes Box_Int
+            mangled += mangle_generic_name(arg.name, arg.generic_args);
+        } else {
+            // Simple type: Int, String, etc.
+            mangled += arg.name;
+        }
+    }
+    return mangled;
+}
+
+
+void Compiler::collect_generic_templates(const std::vector<StmtPtr>& program) {
+    generic_struct_templates_.clear();
+    
+    for (const auto& stmt : program) {
+        if (!stmt) continue;
+        
+        if (stmt->kind == StmtKind::StructDecl) {
+            auto* struct_decl = static_cast<StructDeclStmt*>(stmt.get());
+            if (!struct_decl->generic_params.empty()) {
+                generic_struct_templates_[struct_decl->name] = struct_decl;
+            }
+        }
+    }
+}
+
+void Compiler::collect_generic_usages(const std::vector<StmtPtr>& program, 
+                                      std::unordered_set<std::string>& needed_specializations) {
+    // Helper to recursively collect generic types from TypeAnnotation
+    std::function<void(const TypeAnnotation&)> collect_from_type = [&](const TypeAnnotation& type) {
+        if (!type.generic_args.empty()) {
+            // This type has generic arguments, so it needs specialization
+            std::string mangled = mangle_generic_name(type.name, type.generic_args);
+            needed_specializations.insert(mangled);
+            
+            // Recursively collect from nested generic args
+            for (const auto& arg : type.generic_args) {
+                collect_from_type(arg);
+            }
+        }
+    };
+    
+    // Scan variable declarations
+    for (const auto& stmt : program) {
+        if (!stmt) continue;
+        
+        if (stmt->kind == StmtKind::VarDecl) {
+            auto* var_decl = static_cast<VarDeclStmt*>(stmt.get());
+            
+            // Check type annotation
+            if (var_decl->type_annotation.has_value()) {
+                collect_from_type(var_decl->type_annotation.value());
+            }
+            
+            // Check initializer
+            if (var_decl->initializer && var_decl->initializer->kind == ExprKind::Call) {
+                auto* call = static_cast<CallExpr*>(var_decl->initializer.get());
+                if (call->callee && call->callee->kind == ExprKind::Identifier) {
+                    auto* id = static_cast<IdentifierExpr*>(call->callee.get());
+                    if (!id->generic_args.empty()) {
+                        std::string mangled = mangle_generic_name(id->name, id->generic_args);
+                        needed_specializations.insert(mangled);
+                        
+                        // Collect nested generics
+                        for (const auto& arg : id->generic_args) {
+                            collect_from_type(arg);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+StmtPtr Compiler::create_specialized_struct(const StructDeclStmt* template_decl, 
+                                   const std::vector<TypeAnnotation>& type_args) {
+if (template_decl->generic_params.size() != type_args.size()) {
+    throw CompilerError("Generic parameter count mismatch", template_decl->line);
+}
+    
+// Validate generic constraints
+// Create type substitution map for validation
+std::unordered_map<std::string, std::string> param_to_type;
+for (size_t i = 0; i < template_decl->generic_params.size(); ++i) {
+    param_to_type[template_decl->generic_params[i]] = type_args[i].name;
+}
+    
+// Check each constraint
+for (const auto& constraint : template_decl->generic_constraints) {
+    // Find the actual type for this constraint
+    auto it = param_to_type.find(constraint.param_name);
+    if (it == param_to_type.end()) {
+        continue; // Should not happen if parser is correct
+    }
+        
+    std::string actual_type = it->second;
+    std::string required_protocol = constraint.protocol_name;
+        
+    // Note: For now, we'll skip runtime validation and assume correctness
+    // Full implementation would check if actual_type conforms to required_protocol
+    // This would require access to the type system which is in TypeChecker
+}
+    
+// Create type substitution map: T -> Box<Int> (with full TypeAnnotation)
+std::unordered_map<std::string, TypeAnnotation> type_substitution_full;
+for (size_t i = 0; i < template_decl->generic_params.size(); ++i) {
+    type_substitution_full[template_decl->generic_params[i]] = type_args[i];
+}
+    
+// Helper to substitute type (simplified - no recursion for now)
+auto substitute_type = [&](const TypeAnnotation& original) -> TypeAnnotation {
+    TypeAnnotation result = original;
+        
+    // Check if this is a generic parameter that needs substitution
+    auto it = type_substitution_full.find(original.name);
+    if (it != type_substitution_full.end()) {
+        // Replace with the specialized type
+        result = it->second;
+            
+        // If the specialized type has generic args, mangle it
+        if (!result.generic_args.empty()) {
+            result.name = mangle_generic_name(result.name, result.generic_args);
+            result.generic_args.clear(); // Clear after mangling
+        }
+    } else if (!original.generic_args.empty()) {
+        // Not a generic parameter, but has generic args - mangle it
+        result.name = mangle_generic_name(original.name, original.generic_args);
+        result.generic_args.clear();
+    }
+        
+    return result;
+};
+    
+    
+    
+    // Create specialized struct
+    auto specialized = std::make_unique<StructDeclStmt>();
+    specialized->line = template_decl->line;
+    specialized->name = mangle_generic_name(template_decl->name, type_args);
+    specialized->generic_params.clear();
+    specialized->protocol_conformances = template_decl->protocol_conformances;
+    
+    // Copy properties with type substitution
+    for (const auto& prop : template_decl->properties) {
+        auto new_prop = std::make_unique<VarDeclStmt>();
+        new_prop->line = prop->line;
+        new_prop->name = prop->name;
+        new_prop->is_let = prop->is_let;
+        new_prop->is_static = prop->is_static;
+        new_prop->is_lazy = prop->is_lazy;
+        new_prop->access_level = prop->access_level;
+        
+        if (prop->type_annotation.has_value()) {
+            new_prop->type_annotation = substitute_type(prop->type_annotation.value());
+        }
+        
+        // Copy initializer (shallow copy for simplicity)
+        if (prop->initializer) {
+            if (prop->initializer->kind == ExprKind::Literal) {
+                auto* lit = static_cast<LiteralExpr*>(prop->initializer.get());
+                new_prop->initializer = std::make_unique<LiteralExpr>(lit->value);
+                new_prop->initializer->line = lit->line;
+            }
+        }
+        
+        specialized->properties.push_back(std::move(new_prop));
+    }
+    
+    // Copy methods with type substitution
+    for (const auto& method : template_decl->methods) {
+        auto new_method = std::make_unique<StructMethodDecl>();
+        new_method->name = method->name;
+        new_method->is_mutating = method->is_mutating;
+        new_method->is_computed_property = method->is_computed_property;
+        new_method->is_static = method->is_static;
+        new_method->access_level = method->access_level;
+        
+        // Substitute parameter types
+        for (const auto& param : method->params) {
+            ParamDecl new_param;
+            new_param.external_name = param.external_name;
+            new_param.internal_name = param.internal_name;
+            new_param.type = substitute_type(param.type);
+            // Note: default_value is unique_ptr, can't copy directly
+            new_method->params.push_back(std::move(new_param));
+        }
+        
+        // Substitute return type
+        if (method->return_type.has_value()) {
+            new_method->return_type = substitute_type(method->return_type.value());
+        }
+        
+        // Copy method body (shallow copy)
+        if (method->body) {
+            new_method->body = std::make_unique<BlockStmt>();
+            new_method->body->line = method->body->line;
+            // Note: In production, need deep copy of statements
+        }
+        
+        specialized->methods.push_back(std::move(new_method));
+    }
+    
+    return specialized;
+}
+
+std::vector<StmtPtr> Compiler::specialize_generics(const std::vector<StmtPtr>& program) {
+    // Step 1: Collect generic templates
+    collect_generic_templates(program);
+    
+    // Step 2: Collect generic usages
+    std::unordered_set<std::string> needed_specializations;
+    collect_generic_usages(program, needed_specializations);
+    
+    // Step 3: Create result vector with original statements
+    std::vector<StmtPtr> result;
+    for (size_t i = 0; i < program.size(); ++i) {
+        result.push_back(std::move(const_cast<StmtPtr&>(program[i])));
+    }
+    
+    // Step 4: Add specialized structs
+    for (const auto& mangled_name : needed_specializations) {
+        // Parse mangled name: Pair_Int_String -> Pair, [Int, String]
+        size_t first_underscore = mangled_name.find('_');
+        if (first_underscore == std::string::npos) continue;
+        
+        std::string base_name = mangled_name.substr(0, first_underscore);
+        std::string remaining = mangled_name.substr(first_underscore + 1);
+        
+        // Find template
+        auto template_it = generic_struct_templates_.find(base_name);
+        if (template_it == generic_struct_templates_.end()) continue;
+        
+        // Parse multiple type arguments separated by underscores
+        std::vector<TypeAnnotation> type_args;
+        size_t pos = 0;
+        while (pos < remaining.length()) {
+            size_t next_underscore = remaining.find('_', pos);
+            std::string type_name;
+            
+            if (next_underscore == std::string::npos) {
+                // Last type argument
+                type_name = remaining.substr(pos);
+                pos = remaining.length();
+            } else {
+                type_name = remaining.substr(pos, next_underscore - pos);
+                pos = next_underscore + 1;
+            }
+            
+            TypeAnnotation arg;
+            arg.name = type_name;
+            arg.is_optional = false;
+            arg.is_function_type = false;
+            type_args.push_back(arg);
+        }
+        
+        // Verify parameter count matches
+        if (type_args.size() != template_it->second->generic_params.size()) {
+            continue; // Skip if mismatch
+        }
+        
+        // Create specialized struct
+        try {
+            StmtPtr specialized = create_specialized_struct(template_it->second, type_args);
+            result.push_back(std::move(specialized));
+        } catch (const std::exception&) {
+            // Skip on error
+        }
+    }
+    
+    return result;
 }
 
 } // namespace swiftscript

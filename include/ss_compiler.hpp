@@ -33,6 +33,17 @@ private:
     std::string base_directory_;  // Base directory for resolving imports
     std::unordered_set<std::string> imported_modules_;  // Track imported modules to prevent duplicates
     std::unordered_set<std::string> compiling_modules_; // Track modules being compiled (circular dependency detection)
+    
+    // Generic specialization
+    std::unordered_map<std::string, const StructDeclStmt*> generic_struct_templates_;
+    std::vector<StmtPtr> specialize_generics(const std::vector<StmtPtr>& program);
+    StmtPtr create_specialized_struct(const StructDeclStmt* template_decl, 
+                                      const std::vector<TypeAnnotation>& type_args);
+    std::string mangle_generic_name(const std::string& base_name, 
+                                     const std::vector<TypeAnnotation>& type_args);
+    void collect_generic_templates(const std::vector<StmtPtr>& program);
+    void collect_generic_usages(const std::vector<StmtPtr>& program, 
+                                std::unordered_set<std::string>& needed_specializations);
 
     struct Local {
         std::string name;

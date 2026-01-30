@@ -130,6 +130,47 @@ std::vector<std::string> Parser::parse_generic_params() {
     return params;
 }
 
+std::vector<GenericConstraint> Parser::parse_generic_constraints(
+    const std::vector<std::string>& generic_params) {
+    std::vector<GenericConstraint> constraints;
+    
+    // Check for where clause
+    if (!match(TokenType::Where)) {
+        return constraints;
+    }
+    
+    // Parse constraints: where T: Comparable, U: Hashable
+    do {
+        const Token& param_tok = consume(TokenType::Identifier, "Expected generic parameter name in constraint.");
+        std::string param_name = std::string(param_tok.lexeme);
+        
+        // Verify this is a valid generic parameter
+        bool valid = false;
+        for (const auto& param : generic_params) {
+            if (param == param_name) {
+                valid = true;
+                break;
+            }
+        }
+        if (!valid) {
+            error(param_tok, "Unknown generic parameter '" + param_name + "' in constraint");
+        }
+        
+        consume(TokenType::Colon, "Expected ':' after generic parameter in constraint.");
+        
+        const Token& protocol_tok = consume(TokenType::Identifier, "Expected protocol name in constraint.");
+        std::string protocol_name = std::string(protocol_tok.lexeme);
+        
+        GenericConstraint constraint;
+        constraint.param_name = param_name;
+        constraint.protocol_name = protocol_name;
+        constraints.push_back(constraint);
+        
+    } while (match(TokenType::Comma));
+    
+    return constraints;
+}
+
 // ============================================================
 //  Statement parsers
 // ============================================================
@@ -303,6 +344,9 @@ StmtPtr Parser::func_declaration() {
         stmt->return_type = parse_type_annotation();
     }
 
+    // Parse generic constraints: where T: Comparable
+    stmt->generic_constraints = parse_generic_constraints(stmt->generic_params);
+
     // Body
     stmt->body = block();
     return stmt;
@@ -457,6 +501,9 @@ if (match(TokenType::Colon)) {
         stmt->protocol_conformances.push_back(std::string(protocol_tok.lexeme));
     } while (match(TokenType::Comma));
 }
+
+// Parse generic constraints: where T: Comparable
+stmt->generic_constraints = parse_generic_constraints(stmt->generic_params);
 
 consume(TokenType::LeftBrace, "Expected '{' after struct name.");
 
@@ -1728,8 +1775,22 @@ ExprPtr Parser::primary() {
     // Identifier
     if (match(TokenType::Identifier)) {
         uint32_t line = previous().line;
-        auto ident = std::make_unique<IdentifierExpr>(std::string(previous().lexeme));
+        std::string name = std::string(previous().lexeme);
+        auto ident = std::make_unique<IdentifierExpr>(name);
         ident->line = line;
+        
+        // Check for generic type arguments: Box<Int>
+        if (match(TokenType::Less)) {
+            std::vector<TypeAnnotation> generic_args;
+            do {
+                TypeAnnotation arg = parse_type_annotation();
+                generic_args.push_back(arg);
+            } while (match(TokenType::Comma));
+            
+            consume(TokenType::Greater, "Expected '>' after generic type arguments.");
+            ident->generic_args = std::move(generic_args);
+        }
+        
         return ident;
     }
 

@@ -1,9 +1,9 @@
 ========================================
 SwiftScript Test Results
-Date: 2026-01-30 22:26:16
+Date: 2026-01-31 08:32:16
 ========================================
 
-Starting 18 test suites with 152 tests.
+Starting 19 test suites with 172 tests.
 
 [ Test Suite ] ClassTests
   [ RUN      ] ClassTests.SimpleClassMethod
@@ -28,7 +28,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] ClassTests.DeinitCalled (0 ms)
   [ RUN      ] ClassTests.DeinitWithProperties
   [       OK ] ClassTests.DeinitWithProperties (0 ms)
-  Tests passed: 11/11 (8 ms)
+  Tests passed: 11/11 (13 ms)
 
 [ Test Suite ] ComputedPropertiesTests
   [ RUN      ] ComputedPropertiesTests.GetterOnly
@@ -45,7 +45,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] ComputedPropertiesTests.AccessOtherProperties (0 ms)
   [ RUN      ] ComputedPropertiesTests.MultipleInClass
   [       OK ] ComputedPropertiesTests.MultipleInClass (0 ms)
-  Tests passed: 7/7 (4 ms)
+  Tests passed: 7/7 (8 ms)
 
 [ Test Suite ] StructTests
   [ RUN      ] StructTests.BasicStruct
@@ -68,7 +68,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] StructTests.PropertyModification (0 ms)
   [ RUN      ] StructTests.NestedStruct
   [       OK ] StructTests.NestedStruct (0 ms)
-  Tests passed: 10/10 (22 ms)
+  Tests passed: 10/10 (10 ms)
 
 [ Test Suite ] ClosureTests
   [ RUN      ] ClosureTests.BasicClosure
@@ -89,7 +89,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] ClosureTests.ClosureCapturesOuterVariable (0 ms)
   [ RUN      ] ClosureTests.NestedClosureAfterScopeExit
   [       OK ] ClosureTests.NestedClosureAfterScopeExit (0 ms)
-  Tests passed: 9/9 (4 ms)
+  Tests passed: 9/9 (9 ms)
 
 [ Test Suite ] SwitchTests
   [ RUN      ] SwitchTests.BasicSwitch
@@ -100,7 +100,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] SwitchTests.SwitchRange (0 ms)
   [ RUN      ] SwitchTests.SwitchMultiplePatterns
   [       OK ] SwitchTests.SwitchMultiplePatterns (0 ms)
-  Tests passed: 4/4 (1 ms)
+  Tests passed: 4/4 (3 ms)
 
 [ Test Suite ] EnumTests
   [ RUN      ] EnumTests.BasicEnum
@@ -119,7 +119,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] EnumTests.EnumComputedProperties (0 ms)
   [ RUN      ] EnumTests.MultipleEnums
   [       OK ] EnumTests.MultipleEnums (0 ms)
-  Tests passed: 8/8 (4 ms)
+  Tests passed: 8/8 (8 ms)
 
 [ Test Suite ] ProtocolTest
   [ RUN      ] ProtocolTest.BasicProtocolDeclaration
@@ -142,7 +142,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] ProtocolTest.MultipleProtocolConformance (0 ms)
   [ RUN      ] ProtocolTest.ProtocolMethodParameters
   [       OK ] ProtocolTest.ProtocolMethodParameters (0 ms)
-  Tests passed: 10/10 (4 ms)
+  Tests passed: 10/10 (9 ms)
 
 [ Test Suite ] EnumInlineTests
   [ RUN      ] EnumInlineTests.BasicEnumDeclaration
@@ -154,16 +154,16 @@ Starting 18 test suites with 152 tests.
   [ RUN      ] EnumInlineTests.EnumWithMethod
   [       OK ] EnumInlineTests.EnumWithMethod (0 ms)
   [ RUN      ] EnumInlineTests.EnumMethodWithSelfSwitch
-  [       OK ] EnumInlineTests.EnumMethodWithSelfSwitch (0 ms)
+  [       OK ] EnumInlineTests.EnumMethodWithSelfSwitch (1 ms)
   [ RUN      ] EnumInlineTests.EnumInSwitchStatement
   [       OK ] EnumInlineTests.EnumInSwitchStatement (0 ms)
   [ RUN      ] EnumInlineTests.EnumSimpleComputedProperty
   [       OK ] EnumInlineTests.EnumSimpleComputedProperty (0 ms)
-  Tests passed: 7/7 (3 ms)
+  Tests passed: 7/7 (8 ms)
 
 [ Test Suite ] ExtensionTest
   [ RUN      ] ExtensionTest.BasicMethod
-  [       OK ] ExtensionTest.BasicMethod (0 ms)
+  [       OK ] ExtensionTest.BasicMethod (1 ms)
   [ RUN      ] ExtensionTest.ExtensionEnum
   [       OK ] ExtensionTest.ExtensionEnum (0 ms)
   [ RUN      ] ExtensionTest.ComputedProperty
@@ -182,7 +182,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] ExtensionTest.EnumWithSwitch (0 ms)
   [ RUN      ] ExtensionTest.SimpleComputedProperty
   [       OK ] ExtensionTest.SimpleComputedProperty (0 ms)
-  Tests passed: 10/10 (5 ms)
+  Tests passed: 10/10 (10 ms)
 
 [ Test Suite ] Phase1Test
   [ RUN      ] Phase1Test.SelfAssignmentInInit
@@ -251,7 +251,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] Phase1Test.IntegrationStructMutatingStatic (0 ms)
   [ RUN      ] Phase1Test.IntegrationKitchenSink
   [       OK ] Phase1Test.IntegrationKitchenSink (0 ms)
-  Tests passed: 33/33 (20 ms)
+  Tests passed: 33/33 (27 ms)
 
 [ Test Suite ] BitwiseOperatorsTest
   [ RUN      ] BitwiseOperatorsTest.BitwiseAnd
@@ -274,7 +274,7 @@ Starting 18 test suites with 152 tests.
   [       OK ] BitwiseOperatorsTest.Precedence (0 ms)
   [ RUN      ] BitwiseOperatorsTest.PercentEqual
   [       OK ] BitwiseOperatorsTest.PercentEqual (0 ms)
-  Tests passed: 10/10 (4 ms)
+  Tests passed: 10/10 (6 ms)
 
 [ Test Suite ] StaticMembersTest
   [ RUN      ] StaticMembersTest.ClassStaticMethod
@@ -282,12 +282,12 @@ Starting 18 test suites with 152 tests.
   [ RUN      ] StaticMembersTest.ClassStaticProperty
   [       OK ] StaticMembersTest.ClassStaticProperty (0 ms)
   [ RUN      ] StaticMembersTest.StructStaticMethodFull
-  [       OK ] StaticMembersTest.StructStaticMethodFull (0 ms)
+  [       OK ] StaticMembersTest.StructStaticMethodFull (1 ms)
   [ RUN      ] StaticMembersTest.ExtensionStaticMethod
   [       OK ] StaticMembersTest.ExtensionStaticMethod (0 ms)
   [ RUN      ] StaticMembersTest.MixedStaticInstance
   [       OK ] StaticMembersTest.MixedStaticInstance (0 ms)
-  Tests passed: 5/5 (3 ms)
+  Tests passed: 5/5 (5 ms)
 
 [ Test Suite ] LetConstantTest
   [ RUN      ] LetConstantTest.LetReassignmentError
@@ -304,15 +304,15 @@ Starting 18 test suites with 152 tests.
   [       OK ] LetConstantTest.VarStructMutatingOk (0 ms)
   [ RUN      ] LetConstantTest.LetStructNonMutatingOk
   [       OK ] LetConstantTest.LetStructNonMutatingOk (0 ms)
-  Tests passed: 7/7 (4 ms)
+  Tests passed: 7/7 (5 ms)
 
 [ Test Suite ] AccessControlTest
   [ RUN      ] AccessControlTest.PrivatePropertyError
   [       OK ] AccessControlTest.PrivatePropertyError (0 ms)
   [ RUN      ] AccessControlTest.PrivateMethodError
-  [       OK ] AccessControlTest.PrivateMethodError (1 ms)
+  [       OK ] AccessControlTest.PrivateMethodError (0 ms)
   [ RUN      ] AccessControlTest.PrivateAccessWithinClass
-  [       OK ] AccessControlTest.PrivateAccessWithinClass (1 ms)
+  [       OK ] AccessControlTest.PrivateAccessWithinClass (0 ms)
   [ RUN      ] AccessControlTest.PublicAccess
   [       OK ] AccessControlTest.PublicAccess (0 ms)
   [ RUN      ] AccessControlTest.InternalAccess
@@ -320,14 +320,14 @@ Starting 18 test suites with 152 tests.
   [ RUN      ] AccessControlTest.PrivateStructMembers
   [       OK ] AccessControlTest.PrivateStructMembers (0 ms)
   [ RUN      ] AccessControlTest.PrivateStructError
-  [       OK ] AccessControlTest.PrivateStructError (2 ms)
+  [       OK ] AccessControlTest.PrivateStructError (0 ms)
   [ RUN      ] AccessControlTest.ExtensionPrivateAccess
   [       OK ] AccessControlTest.ExtensionPrivateAccess (0 ms)
   [ RUN      ] AccessControlTest.ExtensionPrivateMethod
   [       OK ] AccessControlTest.ExtensionPrivateMethod (0 ms)
   [ RUN      ] AccessControlTest.ExtensionPrivateError
-  [       OK ] AccessControlTest.ExtensionPrivateError (1 ms)
-  Tests passed: 10/10 (18 ms)
+  [       OK ] AccessControlTest.ExtensionPrivateError (0 ms)
+  Tests passed: 10/10 (9 ms)
 
 [ Test Suite ] PatternMatchingTest
   [ RUN      ] PatternMatchingTest.AssociatedValueIntExtraction
@@ -338,18 +338,18 @@ Starting 18 test suites with 152 tests.
   [       OK ] PatternMatchingTest.MultipleAssociatedValues (0 ms)
   [ RUN      ] PatternMatchingTest.AssociatedValuesWithDefault
   [       OK ] PatternMatchingTest.AssociatedValuesWithDefault (0 ms)
-  Tests passed: 4/4 (5 ms)
+  Tests passed: 4/4 (3 ms)
 
 [ Test Suite ] PropertyObserversTest
   [ RUN      ] PropertyObserversTest.WillSetBasic
-  [       OK ] PropertyObserversTest.WillSetBasic (0 ms)
+  [       OK ] PropertyObserversTest.WillSetBasic (1 ms)
   [ RUN      ] PropertyObserversTest.DidSetBasic
   [       OK ] PropertyObserversTest.DidSetBasic (0 ms)
   [ RUN      ] PropertyObserversTest.WillSetAndDidSet
   [       OK ] PropertyObserversTest.WillSetAndDidSet (0 ms)
   [ RUN      ] PropertyObserversTest.ObserversInStruct
   [       OK ] PropertyObserversTest.ObserversInStruct (0 ms)
-  Tests passed: 4/4 (3 ms)
+  Tests passed: 4/4 (4 ms)
 
 [ Test Suite ] LazyPropertiesTest
   [ RUN      ] LazyPropertiesTest.LazyPropertyBasic
@@ -361,16 +361,59 @@ Starting 18 test suites with 152 tests.
   [       OK ] SubscriptTest.SubscriptBasic (0 ms)
   [ RUN      ] SubscriptTest.CustomSubscriptStruct
   [       OK ] SubscriptTest.CustomSubscriptStruct (0 ms)
-  Tests passed: 2/2 (1 ms)
+  Tests passed: 2/2 (0 ms)
+
+[ Test Suite ] GenericsTest
+  [ RUN      ] GenericsTest.IdentityFunction
+  [       OK ] GenericsTest.IdentityFunction (0 ms)
+  [ RUN      ] GenericsTest.GenericStructBox
+  [       OK ] GenericsTest.GenericStructBox (0 ms)
+  [ RUN      ] GenericsTest.GenericMutatingMethod
+  [       OK ] GenericsTest.GenericMutatingMethod (1 ms)
+  [ RUN      ] GenericsTest.GenericPairStruct
+  [       OK ] GenericsTest.GenericPairStruct (0 ms)
+  [ RUN      ] GenericsTest.GenericTripleStruct
+  [       OK ] GenericsTest.GenericTripleStruct (0 ms)
+  [ RUN      ] GenericsTest.MultipleGenericInstances
+  [       OK ] GenericsTest.MultipleGenericInstances (0 ms)
+  [ RUN      ] GenericsTest.GenericMethodReturn
+  [       OK ] GenericsTest.GenericMethodReturn (0 ms)
+  [ RUN      ] GenericsTest.NestedGenericBox
+  [       OK ] GenericsTest.NestedGenericBox (0 ms)
+  [ RUN      ] GenericsTest.NestedGenericPair
+  [       OK ] GenericsTest.NestedGenericPair (0 ms)
+  [ RUN      ] GenericsTest.DoubleNestedGeneric
+  [       OK ] GenericsTest.DoubleNestedGeneric (0 ms)
+  [ RUN      ] GenericsTest.GenericConstraintParsing
+  [       OK ] GenericsTest.GenericConstraintParsing (0 ms)
+  [ RUN      ] GenericsTest.GenericFunctionConstraint
+  [       OK ] GenericsTest.GenericFunctionConstraint (0 ms)
+  [ RUN      ] GenericsTest.GenericConstraintValidation
+  [       OK ] GenericsTest.GenericConstraintValidation (0 ms)
+  [ RUN      ] GenericsTest.MultipleConstraints
+  [       OK ] GenericsTest.MultipleConstraints (0 ms)
+  [ RUN      ] GenericsTest.TypeConformanceValid
+  [       OK ] GenericsTest.TypeConformanceValid (0 ms)
+  [ RUN      ] GenericsTest.TypeConformanceInvalid
+  [       OK ] GenericsTest.TypeConformanceInvalid (0 ms)
+  [ RUN      ] GenericsTest.BuiltinIntComparable
+  [       OK ] GenericsTest.BuiltinIntComparable (0 ms)
+  [ RUN      ] GenericsTest.BuiltinStringComparable
+  [       OK ] GenericsTest.BuiltinStringComparable (0 ms)
+  [ RUN      ] GenericsTest.BuiltinIntHashable
+  [       OK ] GenericsTest.BuiltinIntHashable (0 ms)
+  [ RUN      ] GenericsTest.MultipleBuiltinProtocols
+  [       OK ] GenericsTest.MultipleBuiltinProtocols (0 ms)
+  Tests passed: 20/20 (17 ms)
 
 ========================================
 Test Summary
 ========================================
-Total test suites: 18
-Total tests: 152
-Passed: 152
+Total test suites: 19
+Total tests: 172
+Passed: 172
 Failed: 0
-Elapsed time: 124 ms
+Elapsed time: 166 ms
 ========================================
 
 ALL TESTS PASSED!

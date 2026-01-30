@@ -71,6 +71,9 @@ private:
     std::unordered_set<std::string> let_constants_;  // Track let constants
     std::string current_type_context_;  // Track which type we're currently inside (for access control)
     mutable std::vector<TypeCheckError> errors_;
+    
+    // Generic templates storage
+    std::unordered_map<std::string, const StructDeclStmt*> generic_struct_templates_;
 
     void collect_type_declarations(const std::vector<StmtPtr>& program);
     void add_builtin_types();
@@ -141,6 +144,10 @@ private:
     bool protocol_conforms(const std::string& type_name, const std::string& protocol_name) const;
     bool protocol_inherits(const std::string& protocol_name, const std::string& ancestor) const;
     bool is_subclass_of(const std::string& subclass, const std::string& superclass) const;
+    
+    // Generic specialization helpers
+    std::string mangle_generic_name(const std::string& base_name, const std::vector<TypeAnnotation>& type_args) const;
+    void specialize_generic_struct(const std::string& base_name, const std::vector<TypeAnnotation>& type_args, uint32_t line);
 
     void error(const std::string& message, uint32_t line) const;
     void throw_if_errors();

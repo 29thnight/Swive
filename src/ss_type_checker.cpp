@@ -88,6 +88,7 @@ errors_.clear();
 }
 
 void TypeChecker::add_builtin_types() {
+    // Register builtin types
     known_types_.emplace("Int", TypeKind::Builtin);
     known_types_.emplace("Float", TypeKind::Builtin);
     known_types_.emplace("Bool", TypeKind::Builtin);
@@ -96,6 +97,56 @@ void TypeChecker::add_builtin_types() {
     known_types_.emplace("Dictionary", TypeKind::Builtin);
     known_types_.emplace("Void", TypeKind::Builtin);
     known_types_.emplace("Any", TypeKind::Builtin);
+    
+    // Register standard library protocols
+    add_known_type("Equatable", TypeKind::Protocol, 0);
+    add_known_type("Comparable", TypeKind::Protocol, 0);
+    add_known_type("Hashable", TypeKind::Protocol, 0);
+    add_known_type("Numeric", TypeKind::Protocol, 0);
+    add_known_type("SignedNumeric", TypeKind::Protocol, 0);
+    add_known_type("CustomStringConvertible", TypeKind::Protocol, 0);
+    
+    // Protocol inheritance hierarchy
+    // Comparable inherits from Equatable
+    protocol_inheritance_["Comparable"].insert("Equatable");
+    protocol_descendants_["Equatable"].insert("Comparable");
+    
+    // Hashable inherits from Equatable
+    protocol_inheritance_["Hashable"].insert("Equatable");
+    protocol_descendants_["Equatable"].insert("Hashable");
+    
+    // SignedNumeric inherits from Numeric
+    protocol_inheritance_["SignedNumeric"].insert("Numeric");
+    protocol_descendants_["Numeric"].insert("SignedNumeric");
+    
+    // Register protocol conformances for builtin types
+    
+    // Int conforms to: Comparable, Hashable, Equatable, Numeric, SignedNumeric
+    protocol_conformers_["Equatable"].insert("Int");
+    protocol_conformers_["Comparable"].insert("Int");
+    protocol_conformers_["Hashable"].insert("Int");
+    protocol_conformers_["Numeric"].insert("Int");
+    protocol_conformers_["SignedNumeric"].insert("Int");
+    protocol_conformers_["CustomStringConvertible"].insert("Int");
+    
+    // Float conforms to: Comparable, Hashable, Equatable, Numeric, SignedNumeric
+    protocol_conformers_["Equatable"].insert("Float");
+    protocol_conformers_["Comparable"].insert("Float");
+    protocol_conformers_["Hashable"].insert("Float");
+    protocol_conformers_["Numeric"].insert("Float");
+    protocol_conformers_["SignedNumeric"].insert("Float");
+    protocol_conformers_["CustomStringConvertible"].insert("Float");
+    
+    // Bool conforms to: Equatable, Hashable
+    protocol_conformers_["Equatable"].insert("Bool");
+    protocol_conformers_["Hashable"].insert("Bool");
+    protocol_conformers_["CustomStringConvertible"].insert("Bool");
+    
+    // String conforms to: Comparable, Hashable, Equatable
+    protocol_conformers_["Equatable"].insert("String");
+    protocol_conformers_["Comparable"].insert("String");
+    protocol_conformers_["Hashable"].insert("String");
+    protocol_conformers_["CustomStringConvertible"].insert("String");
 }
 
 void TypeChecker::add_known_type(const std::string& name, TypeKind kind, uint32_t line) {
@@ -187,7 +238,23 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
             case StmtKind::StructDecl: {
                 auto* decl = static_cast<const StructDeclStmt*>(stmt);
                 add_known_type(decl->name, TypeKind::User, decl->line);
+                
+                // Store generic struct templates
+                if (!decl->generic_params.empty()) {
+                    generic_struct_templates_[decl->name] = decl;
+                }
+                
                 enter_generic_params(decl->generic_params);
+                
+                // Validate generic constraints
+                for (const auto& constraint : decl->generic_constraints) {
+                    // Check if the protocol exists
+                    auto it = known_types_.find(constraint.protocol_name);
+                    if (it == known_types_.end() || it->second != TypeKind::Protocol) {
+                        error("Unknown protocol '" + constraint.protocol_name + "' in generic constraint", decl->line);
+                    }
+                }
+                
                 add_protocol_conformance(decl->name, decl->protocol_conformances, decl->line);
                 for (const auto& property : decl->properties) {
                     if (!property || !property->type_annotation.has_value()) {
@@ -650,33 +717,43 @@ void TypeChecker::check_throw_stmt(const ThrowStmt* stmt) {
 }
 
 void TypeChecker::check_func_decl(const FuncDeclStmt* stmt, const std::string& self_type) {
-    enter_generic_params(stmt->generic_params);
-    std::vector<TypeInfo> params;
-    params.reserve(stmt->params.size());
-    for (const auto& param : stmt->params) {
-        params.push_back(type_from_annotation(param.type, stmt->line));
+enter_generic_params(stmt->generic_params);
+    
+// Validate generic constraints
+for (const auto& constraint : stmt->generic_constraints) {
+    // Check if the protocol exists
+    auto it = known_types_.find(constraint.protocol_name);
+    if (it == known_types_.end() || it->second != TypeKind::Protocol) {
+        error("Unknown protocol '" + constraint.protocol_name + "' in generic constraint", stmt->line);
     }
+}
+    
+std::vector<TypeInfo> params;
+params.reserve(stmt->params.size());
+for (const auto& param : stmt->params) {
+    params.push_back(type_from_annotation(param.type, stmt->line));
+}
 
-    TypeInfo return_type = TypeInfo::builtin("Void");
-    if (stmt->return_type.has_value()) {
-        return_type = type_from_annotation(stmt->return_type.value(), stmt->line);
-    }
+TypeInfo return_type = TypeInfo::builtin("Void");
+if (stmt->return_type.has_value()) {
+    return_type = type_from_annotation(stmt->return_type.value(), stmt->line);
+}
 
-    TypeInfo function_type = TypeInfo::function(params, return_type);
-    if (!has_symbol(stmt->name)) {
-        declare_symbol(stmt->name, function_type, stmt->line);
-    }
+TypeInfo function_type = TypeInfo::function(params, return_type);
+if (!has_symbol(stmt->name)) {
+    declare_symbol(stmt->name, function_type, stmt->line);
+}
 
-    enter_scope();
-    if (!self_type.empty()) {
-        TypeInfo self_info = TypeInfo::user(self_type);
-        declare_symbol("self", self_info, stmt->line);
-    }
-    for (size_t i = 0; i < stmt->params.size(); ++i) {
-        declare_symbol(stmt->params[i].internal_name, params[i], stmt->line);
-    }
-    function_stack_.push_back(FunctionContext{return_type});
-    check_block(stmt->body.get());
+enter_scope();
+if (!self_type.empty()) {
+    TypeInfo self_info = TypeInfo::user(self_type);
+    declare_symbol("self", self_info, stmt->line);
+}
+for (size_t i = 0; i < stmt->params.size(); ++i) {
+    declare_symbol(stmt->params[i].internal_name, params[i], stmt->line);
+}
+function_stack_.push_back(FunctionContext{return_type});
+check_block(stmt->body.get());
     function_stack_.pop_back();
     exit_scope();
     exit_generic_params();
@@ -943,6 +1020,19 @@ TypeChecker::TypeInfo TypeChecker::check_literal_expr(const LiteralExpr* expr) {
 }
 
 TypeChecker::TypeInfo TypeChecker::check_identifier_expr(const IdentifierExpr* expr) {
+    // Check for generic type instantiation (e.g., Box<Int>)
+    if (!expr->generic_args.empty()) {
+        // This is a generic type with type arguments
+        specialize_generic_struct(expr->name, expr->generic_args, expr->line);
+        std::string specialized_name = mangle_generic_name(expr->name, expr->generic_args);
+        
+        // Return the specialized type
+        auto it = known_types_.find(specialized_name);
+        if (it != known_types_.end()) {
+            return TypeInfo{specialized_name, false, it->second, {}, nullptr};
+        }
+    }
+    
     return lookup_symbol(expr->name, expr->line);
 }
 
@@ -1572,6 +1662,121 @@ bool TypeChecker::is_subclass_of(const std::string& subclass, const std::string&
         current = superclass_map_.find(current->second);
     }
     return false;
+}
+
+std::string TypeChecker::mangle_generic_name(const std::string& base_name, const std::vector<TypeAnnotation>& type_args) const {
+    std::string mangled = base_name;
+    for (const auto& arg : type_args) {
+        mangled += "_" + arg.name;
+    }
+    return mangled;
+}
+
+void TypeChecker::specialize_generic_struct(const std::string& base_name, const std::vector<TypeAnnotation>& type_args, uint32_t line) {
+// Check if template exists
+auto template_it = generic_struct_templates_.find(base_name);
+if (template_it == generic_struct_templates_.end()) {
+    return; // Not a generic struct
+}
+    
+const StructDeclStmt* template_decl = template_it->second;
+    
+// Check parameter count
+if (template_decl->generic_params.size() != type_args.size()) {
+    error("Generic parameter count mismatch for " + base_name, line);
+    return;
+}
+    
+// Validate generic constraints
+for (size_t i = 0; i < template_decl->generic_params.size(); ++i) {
+    const std::string& param_name = template_decl->generic_params[i];
+    const std::string& actual_type = type_args[i].name;
+        
+    // Find constraints for this parameter
+    for (const auto& constraint : template_decl->generic_constraints) {
+        if (constraint.param_name == param_name) {
+            // Check if actual_type conforms to the required protocol
+            if (!protocol_conforms(actual_type, constraint.protocol_name)) {
+                error("Type '" + actual_type + "' does not conform to protocol '" + 
+                      constraint.protocol_name + "' (required by generic constraint on '" + 
+                      param_name + "')", line);
+            }
+        }
+    }
+}
+    
+// Generate specialized name
+std::string specialized_name = mangle_generic_name(base_name, type_args);
+    
+// Check if already specialized
+if (known_types_.contains(specialized_name)) {
+    return; // Already specialized
+}
+    
+// Create type substitution map
+std::unordered_map<std::string, std::string> type_substitution;
+for (size_t i = 0; i < template_decl->generic_params.size(); ++i) {
+    type_substitution[template_decl->generic_params[i]] = type_args[i].name;
+    }
+    
+    // Register specialized type
+    add_known_type(specialized_name, TypeKind::User, line);
+    
+    // Specialize properties
+    for (const auto& property : template_decl->properties) {
+        if (!property || !property->type_annotation.has_value()) {
+            continue;
+        }
+        
+        TypeAnnotation specialized_type = property->type_annotation.value();
+        // Substitute generic parameters
+        auto sub_it = type_substitution.find(specialized_type.name);
+        if (sub_it != type_substitution.end()) {
+            specialized_type.name = sub_it->second;
+        }
+        
+        type_properties_[specialized_name].emplace(
+            property->name,
+            type_from_annotation(specialized_type, property->line));
+        member_access_levels_[specialized_name][property->name] = property->access_level;
+    }
+    
+    // Specialize methods
+    for (const auto& method : template_decl->methods) {
+        if (!method) {
+            continue;
+        }
+        
+        std::vector<TypeInfo> params;
+        params.reserve(method->params.size());
+        for (const auto& param : method->params) {
+            TypeAnnotation specialized_type = param.type;
+            auto sub_it = type_substitution.find(specialized_type.name);
+            if (sub_it != type_substitution.end()) {
+                specialized_type.name = sub_it->second;
+            }
+            params.push_back(type_from_annotation(specialized_type, line));
+        }
+        
+        TypeInfo return_type = TypeInfo::builtin("Void");
+        if (method->return_type.has_value()) {
+            TypeAnnotation specialized_return = method->return_type.value();
+            auto sub_it = type_substitution.find(specialized_return.name);
+            if (sub_it != type_substitution.end()) {
+                specialized_return.name = sub_it->second;
+            }
+            return_type = type_from_annotation(specialized_return, line);
+        }
+        
+        type_methods_[specialized_name].emplace(
+            method->name,
+            TypeInfo::function(params, return_type));
+        member_access_levels_[specialized_name][method->name] = method->access_level;
+        
+        if (method->is_mutating) {
+            mutating_methods_[specialized_name].insert(method->name);
+        }
+    }
 }
 
 void TypeChecker::error(const std::string& message, uint32_t line) const {

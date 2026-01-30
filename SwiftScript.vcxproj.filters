@@ -212,6 +212,9 @@
     <None Include="test_private.swift" />
     <None Include="test_observers.swift" />
     <None Include="IMPLEMENTATION_STATUS.md" />
+    <None Include="test_generic_workaround.swift" />
+    <None Include="test_generic_simple.swift" />
+    <None Include="test_builtin_protocol.swift" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="test\CMakeLists.txt" />

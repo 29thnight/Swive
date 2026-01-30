@@ -223,9 +223,12 @@
     <None Include="test\README_TESTS.md" />
     <None Include="test\SUMMARY.md" />
     <None Include="test\TEST_FRAMEWORK_README.md" />
+    <None Include="test_builtin_protocol.swift" />
     <None Include="test_computed_ext.ss" />
     <None Include="test_ext1.ss" />
     <None Include="test_extension_simple.ss" />
+    <None Include="test_generic_simple.swift" />
+    <None Include="test_generic_workaround.swift" />
     <None Include="test_mutating.swift" />
     <None Include="test_observers.swift" />
     <None Include="test_private.swift" />

@@ -1,15 +1,15 @@
 ========================================
 SwiftScript Test Results
-Date: 2026-01-29 17:45:46
+Date: 2026-01-30 15:16:57
 ========================================
 
-Starting 9 test suites with 76 tests.
+Starting 10 test suites with 109 tests.
 
 [ Test Suite ] ClassTests
   [ RUN      ] ClassTests.SimpleClassMethod
-  [       OK ] ClassTests.SimpleClassMethod (1309752 ms)
+  [       OK ] ClassTests.SimpleClassMethod (0 ms)
   [ RUN      ] ClassTests.InitializerCalled
-  [       OK ] ClassTests.InitializerCalled (3270 ms)
+  [       OK ] ClassTests.InitializerCalled (0 ms)
   [ RUN      ] ClassTests.StoredPropertyDefaults
   [       OK ] ClassTests.StoredPropertyDefaults (0 ms)
   [ RUN      ] ClassTests.InheritedMethodCall
@@ -28,7 +28,7 @@ Starting 9 test suites with 76 tests.
   [       OK ] ClassTests.DeinitCalled (0 ms)
   [ RUN      ] ClassTests.DeinitWithProperties
   [       OK ] ClassTests.DeinitWithProperties (0 ms)
-  Tests passed: 11/11 (1313030 ms)
+  Tests passed: 11/11 (5 ms)
 
 [ Test Suite ] ComputedPropertiesTests
   [ RUN      ] ComputedPropertiesTests.GetterOnly
@@ -45,7 +45,7 @@ Starting 9 test suites with 76 tests.
   [       OK ] ComputedPropertiesTests.AccessOtherProperties (0 ms)
   [ RUN      ] ComputedPropertiesTests.MultipleInClass
   [       OK ] ComputedPropertiesTests.MultipleInClass (0 ms)
-  Tests passed: 7/7 (5 ms)
+  Tests passed: 7/7 (3 ms)
 
 [ Test Suite ] StructTests
   [ RUN      ] StructTests.BasicStruct
@@ -68,7 +68,7 @@ Starting 9 test suites with 76 tests.
   [       OK ] StructTests.PropertyModification (0 ms)
   [ RUN      ] StructTests.NestedStruct
   [       OK ] StructTests.NestedStruct (0 ms)
-  Tests passed: 10/10 (6 ms)
+  Tests passed: 10/10 (4 ms)
 
 [ Test Suite ] ClosureTests
   [ RUN      ] ClosureTests.BasicClosure
@@ -89,7 +89,7 @@ Starting 9 test suites with 76 tests.
   [       OK ] ClosureTests.ClosureCapturesOuterVariable (0 ms)
   [ RUN      ] ClosureTests.NestedClosureAfterScopeExit
   [       OK ] ClosureTests.NestedClosureAfterScopeExit (0 ms)
-  Tests passed: 9/9 (5 ms)
+  Tests passed: 9/9 (3 ms)
 
 [ Test Suite ] SwitchTests
   [ RUN      ] SwitchTests.BasicSwitch
@@ -184,14 +184,89 @@ Starting 9 test suites with 76 tests.
   [       OK ] ExtensionTest.SimpleComputedProperty (0 ms)
   Tests passed: 10/10 (4 ms)
 
+[ Test Suite ] Phase1Test
+  [ RUN      ] Phase1Test.SelfAssignmentInInit
+  [       OK ] Phase1Test.SelfAssignmentInInit (0 ms)
+  [ RUN      ] Phase1Test.NamedParameters
+  [       OK ] Phase1Test.NamedParameters (0 ms)
+  [ RUN      ] Phase1Test.StaticParsing
+  [       OK ] Phase1Test.StaticParsing (0 ms)
+  [ RUN      ] Phase1Test.StaticMethod
+  [       OK ] Phase1Test.StaticMethod (0 ms)
+  [ RUN      ] Phase1Test.StaticProperty
+  [       OK ] Phase1Test.StaticProperty (0 ms)
+  [ RUN      ] Phase1Test.AccessControlParsing
+  [       OK ] Phase1Test.AccessControlParsing (0 ms)
+  [ RUN      ] Phase1Test.PrivateMembers
+  [       OK ] Phase1Test.PrivateMembers (0 ms)
+  [ RUN      ] Phase1Test.AssociatedValuesCreation
+  [       OK ] Phase1Test.AssociatedValuesCreation (0 ms)
+  [ RUN      ] Phase1Test.AssociatedValuesString
+  [       OK ] Phase1Test.AssociatedValuesString (0 ms)
+  [ RUN      ] Phase1Test.AssociatedValuesPrint
+  [       OK ] Phase1Test.AssociatedValuesPrint (0 ms)
+  [ RUN      ] Phase1Test.TypeCastingParsing
+  [       OK ] Phase1Test.TypeCastingParsing (0 ms)
+  [ RUN      ] Phase1Test.TypeCheckIs
+  [       OK ] Phase1Test.TypeCheckIs (0 ms)
+  [ RUN      ] Phase1Test.TypeCastOptional
+  [       OK ] Phase1Test.TypeCastOptional (0 ms)
+  [ RUN      ] Phase1Test.RepeatWhileBasic
+  [       OK ] Phase1Test.RepeatWhileBasic (0 ms)
+  [ RUN      ] Phase1Test.RepeatWhileOnce
+  [       OK ] Phase1Test.RepeatWhileOnce (0 ms)
+  [ RUN      ] Phase1Test.ForInArray
+  [       OK ] Phase1Test.ForInArray (0 ms)
+  [ RUN      ] Phase1Test.ForInOperations
+  [       OK ] Phase1Test.ForInOperations (0 ms)
+  [ RUN      ] Phase1Test.LazyParsing
+  [       OK ] Phase1Test.LazyParsing (0 ms)
+  [ RUN      ] Phase1Test.LazyBasic
+  [       OK ] Phase1Test.LazyBasic (0 ms)
+  [ RUN      ] Phase1Test.WhereRange
+  [       OK ] Phase1Test.WhereRange (0 ms)
+  [ RUN      ] Phase1Test.WhereArray
+  [       OK ] Phase1Test.WhereArray (0 ms)
+  [ RUN      ] Phase1Test.ObserversParsing
+  [       OK ] Phase1Test.ObserversParsing (0 ms)
+  [ RUN      ] Phase1Test.ErrorHandlingKeywords
+  [       OK ] Phase1Test.ErrorHandlingKeywords (0 ms)
+  [ RUN      ] Phase1Test.ThrowBasic
+  [       OK ] Phase1Test.ThrowBasic (0 ms)
+  [ RUN      ] Phase1Test.IntegrationStaticEnum
+  [       OK ] Phase1Test.IntegrationStaticEnum (0 ms)
+  [ RUN      ] Phase1Test.IntegrationExtensionComputed
+  [       OK ] Phase1Test.IntegrationExtensionComputed (0 ms)
+  [ RUN      ] Phase1Test.IntegrationProtocolExtension
+  [       OK ] Phase1Test.IntegrationProtocolExtension (0 ms)
+  [ RUN      ] Phase1Test.IntegrationClosureLoop
+  [       OK ] Phase1Test.IntegrationClosureLoop (0 ms)
+  [ RUN      ] Phase1Test.IntegrationClassFeatures
+  [       OK ] Phase1Test.IntegrationClassFeatures (0 ms)
+  [ RUN      ] Phase1Test.IntegrationEnumSwitchMethod
+  [       OK ] Phase1Test.IntegrationEnumSwitchMethod (0 ms)
+  [ RUN      ] Phase1Test.IntegrationOptionalTypeCast
+  [       OK ] Phase1Test.IntegrationOptionalTypeCast (0 ms)
+  [ RUN      ] Phase1Test.IntegrationStructMutatingStatic
+  [  FAILED  ] Phase1Test.IntegrationStructMutatingStatic (0 ms)
+    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:722
+    Expected: swiftscript::test::test_integration_struct_mutating_static() doesn't throw an exception.
+  Actual: it throws std::runtime_error with description "Expected to find '1' in output (count should be 1)
+Actual output: 0
+".
+
+  [ RUN      ] Phase1Test.IntegrationKitchenSink
+  [       OK ] Phase1Test.IntegrationKitchenSink (0 ms)
+  Tests passed: 32/33 (12 ms)
+
 ========================================
 Test Summary
 ========================================
-Total test suites: 9
-Total tests: 76
-Passed: 76
-Failed: 0
-Elapsed time: 1313064 ms
+Total test suites: 10
+Total tests: 109
+Passed: 108
+Failed: 1
+Elapsed time: 44 ms
 ========================================
 
-ALL TESTS PASSED!
+SOME TESTS FAILED!

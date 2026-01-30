@@ -211,6 +211,41 @@ void test_extension_with_parameters();
 void test_extension_enum_with_switch();
 void test_extension_simple_computed_property();
 
+// Phase 1 tests
+void test_phase1_2_self_in_init();
+void test_phase1_3_named_parameters();
+void test_phase2_2_static_parsing();
+void test_phase2_2_static_method();
+void test_phase2_2_static_property();
+void test_phase2_1_access_control_parsing();
+void test_phase2_1_private_members();
+void test_phase1_4_associated_values_creation();
+void test_phase1_4_associated_values_string();
+void test_phase1_4_associated_values_print();
+void test_phase2_3_type_casting_parsing();
+void test_phase2_3_type_check_is();
+void test_phase2_3_type_cast_optional();
+void test_phase4_1_repeat_while_basic();
+void test_phase4_1_repeat_while_once();
+void test_phase4_2_for_in_array();
+void test_phase4_2_for_in_operations();
+void test_phase3_2_lazy_parsing();
+void test_phase3_2_lazy_basic();
+void test_phase4_3_where_range();
+void test_phase4_3_where_array();
+void test_phase3_1_observers_parsing();
+void test_phase5_1_keywords_parsing();
+void test_phase5_1_throw_basic();
+void test_integration_static_enum();
+void test_integration_extension_computed();
+void test_integration_protocol_extension();
+void test_integration_closure_loop();
+void test_integration_class_features();
+void test_integration_enum_switch_method();
+void test_integration_optional_type_cast();
+void test_integration_struct_mutating_static();
+void test_integration_kitchen_sink();
+
 } // namespace test
 } // namespace swiftscript
 
@@ -553,6 +588,142 @@ TEST(ExtensionTest, EnumWithSwitch) {
 
 TEST(ExtensionTest, SimpleComputedProperty) {
     EXPECT_NO_THROW(swiftscript::test::test_extension_simple_computed_property());
+}
+
+// ============================================================================
+// Phase 1 Tests
+// ============================================================================
+
+TEST(Phase1Test, SelfAssignmentInInit) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase1_2_self_in_init());
+}
+
+TEST(Phase1Test, NamedParameters) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase1_3_named_parameters());
+}
+
+TEST(Phase1Test, StaticParsing) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase2_2_static_parsing());
+}
+
+TEST(Phase1Test, StaticMethod) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase2_2_static_method());
+}
+
+TEST(Phase1Test, StaticProperty) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase2_2_static_property());
+}
+
+TEST(Phase1Test, AccessControlParsing) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase2_1_access_control_parsing());
+}
+
+TEST(Phase1Test, PrivateMembers) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase2_1_private_members());
+}
+
+TEST(Phase1Test, AssociatedValuesCreation) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase1_4_associated_values_creation());
+}
+
+TEST(Phase1Test, AssociatedValuesString) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase1_4_associated_values_string());
+}
+
+TEST(Phase1Test, AssociatedValuesPrint) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase1_4_associated_values_print());
+}
+
+TEST(Phase1Test, TypeCastingParsing) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase2_3_type_casting_parsing());
+}
+
+TEST(Phase1Test, TypeCheckIs) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase2_3_type_check_is());
+}
+
+TEST(Phase1Test, TypeCastOptional) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase2_3_type_cast_optional());
+}
+
+TEST(Phase1Test, RepeatWhileBasic) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase4_1_repeat_while_basic());
+}
+
+TEST(Phase1Test, RepeatWhileOnce) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase4_1_repeat_while_once());
+}
+
+TEST(Phase1Test, ForInArray) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase4_2_for_in_array());
+}
+
+TEST(Phase1Test, ForInOperations) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase4_2_for_in_operations());
+}
+
+TEST(Phase1Test, LazyParsing) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase3_2_lazy_parsing());
+}
+
+TEST(Phase1Test, LazyBasic) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase3_2_lazy_basic());
+}
+
+TEST(Phase1Test, WhereRange) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase4_3_where_range());
+}
+
+TEST(Phase1Test, WhereArray) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase4_3_where_array());
+}
+
+TEST(Phase1Test, ObserversParsing) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase3_1_observers_parsing());
+}
+
+TEST(Phase1Test, ErrorHandlingKeywords) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase5_1_keywords_parsing());
+}
+
+TEST(Phase1Test, ThrowBasic) {
+    EXPECT_NO_THROW(swiftscript::test::test_phase5_1_throw_basic());
+}
+
+TEST(Phase1Test, IntegrationStaticEnum) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_static_enum());
+}
+
+TEST(Phase1Test, IntegrationExtensionComputed) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_extension_computed());
+}
+
+TEST(Phase1Test, IntegrationProtocolExtension) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_protocol_extension());
+}
+
+TEST(Phase1Test, IntegrationClosureLoop) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_closure_loop());
+}
+
+TEST(Phase1Test, IntegrationClassFeatures) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_class_features());
+}
+
+TEST(Phase1Test, IntegrationEnumSwitchMethod) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_enum_switch_method());
+}
+
+TEST(Phase1Test, IntegrationOptionalTypeCast) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_optional_type_cast());
+}
+
+TEST(Phase1Test, IntegrationStructMutatingStatic) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_struct_mutating_static());
+}
+
+TEST(Phase1Test, IntegrationKitchenSink) {
+    EXPECT_NO_THROW(swiftscript::test::test_integration_kitchen_sink());
 }
 
 // ============================================================================

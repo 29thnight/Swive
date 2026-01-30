@@ -40,11 +40,13 @@ private:
     StmtPtr if_statement();
     StmtPtr guard_statement();
     StmtPtr while_statement();
+    StmtPtr repeat_while_statement();
     StmtPtr for_in_statement();
     StmtPtr switch_statement();
     StmtPtr break_statement();
     StmtPtr continue_statement();
     StmtPtr return_statement();
+    StmtPtr throw_statement();
     StmtPtr print_statement();
     std::unique_ptr<BlockStmt> block();
     StmtPtr expression_statement();
@@ -58,6 +60,7 @@ private:
     ExprPtr and_expr();
     ExprPtr equality();
     ExprPtr comparison();
+    ExprPtr type_check_cast();
     ExprPtr addition();
     ExprPtr multiplication();
     ExprPtr unary();

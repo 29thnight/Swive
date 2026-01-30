@@ -79,11 +79,13 @@ private:
     void visit(IfLetStmt* stmt);
     void visit(GuardLetStmt* stmt);
     void visit(WhileStmt* stmt);
+    void visit(RepeatWhileStmt* stmt);
     void visit(ForInStmt* stmt);
     void visit(BreakStmt* stmt);
     void visit(ContinueStmt* stmt);
     void visit(SwitchStmt* stmt);
     void visit(BlockStmt* stmt);
+    void visit(ThrowStmt* stmt);
     void visit(ClassDeclStmt* stmt);
     void visit(StructDeclStmt* stmt);  // Struct declaration
     void visit(EnumDeclStmt* stmt);    // Enum declaration
@@ -112,6 +114,8 @@ private:
     void visit(SubscriptExpr* expr);
     void visit(TernaryExpr* expr);
     void visit(ClosureExpr* expr);
+    void visit(TypeCastExpr* expr);
+    void visit(TypeCheckExpr* expr);
 
     void begin_scope();
     void end_scope();

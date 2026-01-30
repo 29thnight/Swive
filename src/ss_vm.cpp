@@ -657,7 +657,7 @@ namespace swiftscript {
                     if (type_obj->type == ObjectType::Class) {
                         auto* klass = static_cast<ClassObject*>(type_obj);
 
-                        // Get function prototype to check is_override flag
+                        // Get function prototype to check is_override flag and static
                         FunctionObject* func = nullptr;
                         if (method_val.is_object() && method_val.as_object()) {
                             Object* obj = method_val.as_object();
@@ -668,8 +668,14 @@ namespace swiftscript {
                             }
                         }
 
-                        // Validate override usage
-                        if (func && klass->superclass) {
+                        // Check if static (no 'self' parameter)
+                        bool is_static = false;
+                        if (func && (func->params.empty() || func->params[0] != "self")) {
+                            is_static = true;
+                        }
+
+                        // Validate override usage (only for instance methods)
+                        if (func && klass->superclass && !is_static) {
                             Value parent_method;
                             bool parent_has_method = find_method_on_class(klass->superclass, name, parent_method);
                             
@@ -684,18 +690,45 @@ namespace swiftscript {
                             }
                         }
 
-                        klass->methods[name] = method_val;
+                        if (is_static) {
+                            klass->static_methods[name] = method_val;
+                        } else {
+                            klass->methods[name] = method_val;
+                        }
                     }
                     // Handle EnumObject
                     else if (type_obj->type == ObjectType::Enum) {
                         auto* enum_type = static_cast<EnumObject*>(type_obj);
                         enum_type->methods[name] = method_val;
                     }
-                    // Handle StructObject (for extension)
+                    // Handle StructObject (for extension and static methods)
                     else if (type_obj->type == ObjectType::Struct) {
                         auto* struct_type = static_cast<StructObject*>(type_obj);
-                        struct_type->methods[name] = method_val;
-                        struct_type->mutating_methods[name] = false; // Extension methods are non-mutating by default
+                        
+                        // Determine if this is a static method by checking param count
+                        // Static methods have no 'self' parameter
+                        FunctionObject* func = nullptr;
+                        if (method_val.is_object() && method_val.as_object()) {
+                            Object* obj = method_val.as_object();
+                            if (obj->type == ObjectType::Closure) {
+                                func = static_cast<ClosureObject*>(obj)->function;
+                            } else if (obj->type == ObjectType::Function) {
+                                func = static_cast<FunctionObject*>(obj);
+                            }
+                        }
+                        
+                        // If function has no params or first param is not "self", it's static
+                        bool is_static = false;
+                        if (func && (func->params.empty() || func->params[0] != "self")) {
+                            is_static = true;
+                        }
+                        
+                        if (is_static) {
+                            struct_type->static_methods[name] = method_val;
+                        } else {
+                            struct_type->methods[name] = method_val;
+                            struct_type->mutating_methods[name] = false; // Extension methods are non-mutating by default
+                        }
                     }
                     else {
                         throw std::runtime_error("OP_METHOD expects class, enum, or struct on stack.");
@@ -706,6 +739,7 @@ namespace swiftscript {
                     uint16_t name_idx = read_short();
                     uint8_t flags = read_byte();
                     bool is_let = (flags & 0x1) != 0;
+                    bool is_static = (flags & 0x2) != 0;  // bit 1 = is_static
                     if (stack_.size() < 2) {
                         throw std::runtime_error("Stack underflow on property definition.");
                     }
@@ -722,20 +756,32 @@ namespace swiftscript {
                         throw std::runtime_error("Property name index out of range.");
                     }
                     Object* type_obj = type_val.as_object();
+                    const std::string& prop_name = chunk_->strings[name_idx];
+                    
                     if (type_obj->type == ObjectType::Class) {
                         auto* klass = static_cast<ClassObject*>(type_obj);
-                        ClassObject::PropertyInfo info;
-                        info.name = chunk_->strings[name_idx];
-                        info.default_value = default_value;
-                        info.is_let = is_let;
-                        klass->properties.push_back(std::move(info));
+                        if (is_static) {
+                            // Store in static_properties
+                            klass->static_properties[prop_name] = default_value;
+                        } else {
+                            ClassObject::PropertyInfo info;
+                            info.name = prop_name;
+                            info.default_value = default_value;
+                            info.is_let = is_let;
+                            klass->properties.push_back(std::move(info));
+                        }
                     } else if (type_obj->type == ObjectType::Struct) {
                         auto* struct_type = static_cast<StructObject*>(type_obj);
-                        StructObject::PropertyInfo info;
-                        info.name = chunk_->strings[name_idx];
-                        info.default_value = default_value;
-                        info.is_let = is_let;
-                        struct_type->properties.push_back(std::move(info));
+                        if (is_static) {
+                            // Store in static_properties
+                            struct_type->static_properties[prop_name] = default_value;
+                        } else {
+                            StructObject::PropertyInfo info;
+                            info.name = prop_name;
+                            info.default_value = default_value;
+                            info.is_let = is_let;
+                            struct_type->properties.push_back(std::move(info));
+                        }
                     } else {
                         throw std::runtime_error("OP_DEFINE_PROPERTY expects class or struct on stack.");
                     }
@@ -889,6 +935,34 @@ namespace swiftscript {
                     }
 
                     Object* obj = callee.as_object();
+
+                    // EnumCase call -> create instance with associated values
+                    if (obj->type == ObjectType::EnumCase) {
+                        auto* template_case = static_cast<EnumCaseObject*>(obj);
+                        
+                        // Create a new enum case instance with associated values
+                        auto* new_case = allocate_object<EnumCaseObject>(
+                            template_case->enum_type, 
+                            template_case->case_name
+                        );
+                        new_case->raw_value = template_case->raw_value;
+                        
+                        // Collect associated values from arguments
+                        for (size_t i = 0; i < arg_count; ++i) {
+                            Value arg = stack_[callee_index + 1 + i];
+                            if (arg.is_object() && arg.ref_type() == RefType::Strong && arg.as_object()) {
+                                RC::retain(arg.as_object());
+                            }
+                            new_case->associated_values.push_back(arg);
+                        }
+                        
+                        // Pop arguments and callee, push new instance
+                        while (stack_.size() > callee_index) {
+                            pop();
+                        }
+                        push(Value::from_object(new_case));
+                        break;
+                    }
 
                     // Struct call -> instantiate (value type)
                     if (obj->type == ObjectType::Struct) {
@@ -1659,6 +1733,148 @@ namespace swiftscript {
                     pop();
                     break;
                 }
+                case OpCode::OP_TYPE_CHECK: {
+                    // is operator: value is Type
+                    uint16_t type_name_idx = read_short();
+                    if (type_name_idx >= chunk_->strings.size()) {
+                        throw std::runtime_error("Type name index out of range.");
+                    }
+                    const std::string& type_name = chunk_->strings[type_name_idx];
+                    Value value = pop();
+                    
+                    bool result = false;
+                    if (value.is_object() && value.as_object()) {
+                        Object* obj = value.as_object();
+                        
+                        // Check if object is an instance of the type
+                        if (obj->type == ObjectType::Instance) {
+                            auto* inst = static_cast<InstanceObject*>(obj);
+                            ClassObject* klass = inst->klass;
+                            
+                            // Check class name and superclass chain
+                            while (klass) {
+                                if (klass->name == type_name) {
+                                    result = true;
+                                    break;
+                                }
+                                klass = klass->superclass;
+                            }
+                        }
+                        // Check for struct instances
+                        else if (obj->type == ObjectType::StructInstance) {
+                            auto* struct_inst = static_cast<StructInstanceObject*>(obj);
+                            if (struct_inst->struct_type && struct_inst->struct_type->name == type_name) {
+                                result = true;
+                            }
+                        }
+                        // Check for enum cases
+                        else if (obj->type == ObjectType::EnumCase) {
+                            auto* enum_case = static_cast<EnumCaseObject*>(obj);
+                            if (enum_case->enum_type && enum_case->enum_type->name == type_name) {
+                                result = true;
+                            }
+                        }
+                    }
+                    
+                    push(Value::from_bool(result));
+                    break;
+                }
+                case OpCode::OP_TYPE_CAST: {
+                    // as operator: basic cast (for now, just verify type matches)
+                    uint16_t type_name_idx = read_short();
+                    if (type_name_idx >= chunk_->strings.size()) {
+                        throw std::runtime_error("Type name index out of range.");
+                    }
+                    const std::string& type_name = chunk_->strings[type_name_idx];
+                    Value value = peek(0);  // Keep value on stack
+                    
+                    // For now, basic cast just passes through
+                    // In a full implementation, this would validate the cast
+                    break;
+                }
+                case OpCode::OP_TYPE_CAST_OPTIONAL: {
+                    // as? operator: optional cast (returns nil if fails)
+                    uint16_t type_name_idx = read_short();
+                    if (type_name_idx >= chunk_->strings.size()) {
+                        throw std::runtime_error("Type name index out of range.");
+                    }
+                    const std::string& type_name = chunk_->strings[type_name_idx];
+                    Value value = pop();
+                    
+                    bool is_valid = false;
+                    if (value.is_object() && value.as_object()) {
+                        Object* obj = value.as_object();
+                        
+                        if (obj->type == ObjectType::Instance) {
+                            auto* inst = static_cast<InstanceObject*>(obj);
+                            ClassObject* klass = inst->klass;
+                            while (klass) {
+                                if (klass->name == type_name) {
+                                    is_valid = true;
+                                    break;
+                                }
+                                klass = klass->superclass;
+                            }
+                        }
+                        else if (obj->type == ObjectType::StructInstance) {
+                            auto* struct_inst = static_cast<StructInstanceObject*>(obj);
+                            if (struct_inst->struct_type && struct_inst->struct_type->name == type_name) {
+                                is_valid = true;
+                            }
+                        }
+                    }
+                    
+                    if (is_valid) {
+                        push(value);
+                    } else {
+                        push(Value::null());
+                    }
+                    break;
+                }
+                case OpCode::OP_TYPE_CAST_FORCED: {
+                    // as! operator: forced cast (throws if fails)
+                    uint16_t type_name_idx = read_short();
+                    if (type_name_idx >= chunk_->strings.size()) {
+                        throw std::runtime_error("Type name index out of range.");
+                    }
+                    const std::string& type_name = chunk_->strings[type_name_idx];
+                    Value value = peek(0);
+                    
+                    bool is_valid = false;
+                    if (value.is_object() && value.as_object()) {
+                        Object* obj = value.as_object();
+                        
+                        if (obj->type == ObjectType::Instance) {
+                            auto* inst = static_cast<InstanceObject*>(obj);
+                            ClassObject* klass = inst->klass;
+                            while (klass) {
+                                if (klass->name == type_name) {
+                                    is_valid = true;
+                                    break;
+                                }
+                                klass = klass->superclass;
+                            }
+                        }
+                        else if (obj->type == ObjectType::StructInstance) {
+                            auto* struct_inst = static_cast<StructInstanceObject*>(obj);
+                            if (struct_inst->struct_type && struct_inst->struct_type->name == type_name) {
+                                is_valid = true;
+                            }
+                        }
+                    }
+                    
+                    if (!is_valid) {
+                        throw std::runtime_error("Forced cast (as!) failed: value is not of type '" + type_name + "'");
+                    }
+                    // Value stays on stack
+                    break;
+                }
+                case OpCode::OP_THROW: {
+                    // Throw statement - for now, just throw a runtime error
+                    Value error_value = pop();
+                    std::string error_msg = "Uncaught error: " + error_value.to_string();
+                    throw std::runtime_error(error_msg);
+                }
                 case OpCode::OP_HALT:
                     return stack_.empty() ? Value::null() : pop();
                 default:
@@ -1765,6 +1981,20 @@ namespace swiftscript {
 
         if (obj->type == ObjectType::Class) {
             auto* klass = static_cast<ClassObject*>(obj);
+            
+            // Check static methods first
+            auto static_method_it = klass->static_methods.find(name);
+            if (static_method_it != klass->static_methods.end()) {
+                return static_method_it->second;
+            }
+            
+            // Check static properties
+            auto static_prop_it = klass->static_properties.find(name);
+            if (static_prop_it != klass->static_properties.end()) {
+                return static_prop_it->second;
+            }
+            
+            // Check instance methods
             Value method_value;
             if (find_method_on_class(klass, name, method_value)) {
                 return method_value;
@@ -1793,9 +2023,23 @@ namespace swiftscript {
             return Value::null();
         }
 
-        // Struct type property access (static methods would go here)
+        // Struct type property access (static methods and properties)
         if (obj->type == ObjectType::Struct) {
             auto* struct_type = static_cast<StructObject*>(obj);
+            
+            // Check static methods first
+            auto static_method_it = struct_type->static_methods.find(name);
+            if (static_method_it != struct_type->static_methods.end()) {
+                return static_method_it->second;
+            }
+            
+            // Check static properties
+            auto static_prop_it = struct_type->static_properties.find(name);
+            if (static_prop_it != struct_type->static_properties.end()) {
+                return static_prop_it->second;
+            }
+            
+            // Check instance methods (for compatibility)
             auto method_it = struct_type->methods.find(name);
             if (method_it != struct_type->methods.end()) {
                 return method_it->second;

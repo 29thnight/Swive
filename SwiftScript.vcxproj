@@ -191,6 +191,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="test\test_optional.cpp" />
+    <ClCompile Include="test\test_phase1.cpp" />
     <ClCompile Include="test\test_protocol.cpp" />
     <ClCompile Include="test\test_simple.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
@@ -217,6 +218,7 @@
     <None Include="test_computed_ext.ss" />
     <None Include="test_ext1.ss" />
     <None Include="test_extension_simple.ss" />
+    <None Include="test_struct_prop_assign.ss" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="testlog.txt" />

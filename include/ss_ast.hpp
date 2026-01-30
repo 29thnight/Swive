@@ -10,6 +10,14 @@
 
 namespace swiftscript {
 
+// ---- Access Control ----
+enum class AccessLevel {
+    Public,       // Accessible from anywhere
+    Internal,     // Accessible within the same module (default)
+    Fileprivate,  // Accessible within the same file
+    Private       // Accessible only within the same declaration
+};
+
 // ---- Type annotation ----
 struct TypeAnnotation {
     std::string name;
@@ -53,6 +61,9 @@ enum class ExprKind {
     DictLiteral,     // ["key": value]
     Subscript,       // array[0], dict["key"]
     Closure,         // { (params) -> ReturnType in body }
+    TypeCast,        // as, as?, as!
+    TypeCheck,       // is
+    Try,             // try expression
 };
 
 struct Expr {
@@ -108,6 +119,7 @@ struct AssignExpr : Expr {
 struct CallExpr : Expr {
     ExprPtr callee;
     std::vector<ExprPtr> arguments;
+    std::vector<std::string> argument_names;  // Named parameters (empty string = no name)
     CallExpr() : Expr(ExprKind::Call) {}
 };
 
@@ -172,6 +184,33 @@ struct TernaryExpr : Expr {
           then_expr(std::move(then_e)), else_expr(std::move(else_e)) {}
 };
 
+// Type casting: expr as Type, expr as? Type, expr as! Type
+struct TypeCastExpr : Expr {
+    ExprPtr value;
+    TypeAnnotation target_type;
+    bool is_optional{false};   // as? (returns optional)
+    bool is_forced{false};     // as! (force unwrap, runtime error if fails)
+    
+    TypeCastExpr() : Expr(ExprKind::TypeCast) {}
+};
+
+// Type check: expr is Type
+struct TypeCheckExpr : Expr {
+    ExprPtr value;
+    TypeAnnotation target_type;
+    
+    TypeCheckExpr() : Expr(ExprKind::TypeCheck) {}
+};
+
+// Try expression: try expression
+struct TryExpr : Expr {
+    ExprPtr expression;
+    bool is_optional{false};   // try?
+    bool is_forced{false};     // try!
+    
+    TryExpr() : Expr(ExprKind::Try) {}
+};
+
 // ---- Collection expressions ----
 
 // Array literal: [1, 2, 3]
@@ -229,6 +268,7 @@ enum class StmtKind {
     IfLet,
     GuardLet,
     While,
+    RepeatWhile, // repeat-while loop
     ForIn,      // for-in loop
     Break,
     Continue,
@@ -236,6 +276,8 @@ enum class StmtKind {
     Return,
     FuncDecl,
     Import,     // Import statement
+    Throw,      // throw statement
+    DoCatch,    // do-catch block
 };
 
 struct Stmt {
@@ -268,11 +310,18 @@ struct VarDeclStmt : Stmt {
     std::optional<TypeAnnotation> type_annotation;
     ExprPtr initializer;
     bool is_let{false};
+    bool is_static{false};  // static properties belong to the type
+    bool is_lazy{false};     // lazy properties are initialized on first access
+    AccessLevel access_level{AccessLevel::Internal};  // Default is internal
     
     // Computed property support
     bool is_computed{false};
     std::unique_ptr<BlockStmt> getter_body;
     std::unique_ptr<BlockStmt> setter_body;
+    
+    // Property observers
+    std::unique_ptr<BlockStmt> will_set_body;
+    std::unique_ptr<BlockStmt> did_set_body;
     
     VarDeclStmt() : Stmt(StmtKind::VarDecl) {}
 };
@@ -305,11 +354,18 @@ struct WhileStmt : Stmt {
     WhileStmt() : Stmt(StmtKind::While) {}
 };
 
+struct RepeatWhileStmt : Stmt {
+    StmtPtr body;
+    ExprPtr condition;
+    RepeatWhileStmt() : Stmt(StmtKind::RepeatWhile) {}
+};
+
 // �߰�: For-In ��
 struct ForInStmt : Stmt {
     std::string variable;
     ExprPtr iterable;
     StmtPtr body;
+    ExprPtr where_condition;  // Optional where clause
     
     ForInStmt() : Stmt(StmtKind::ForIn) {}
     ForInStmt(std::string var, ExprPtr iter, StmtPtr b)
@@ -348,12 +404,33 @@ struct ReturnStmt : Stmt {
     explicit ReturnStmt(ExprPtr v) : Stmt(StmtKind::Return), value(std::move(v)) {}
 };
 
+struct ThrowStmt : Stmt {
+    ExprPtr value;  // Error value to throw
+    ThrowStmt() : Stmt(StmtKind::Throw) {}
+    explicit ThrowStmt(ExprPtr v) : Stmt(StmtKind::Throw), value(std::move(v)) {}
+};
+
+struct CatchClause {
+    std::string binding_name;  // Variable name to bind error (default: "error")
+    std::vector<StmtPtr> statements;
+};
+
+struct DoCatchStmt : Stmt {
+    std::unique_ptr<BlockStmt> try_block;
+    std::vector<CatchClause> catch_clauses;
+    
+    DoCatchStmt() : Stmt(StmtKind::DoCatch) {}
+};
+
 struct FuncDeclStmt : Stmt {
     std::string name;
     std::vector<std::pair<std::string, TypeAnnotation>> params;
     std::unique_ptr<BlockStmt> body;
     std::optional<TypeAnnotation> return_type;
     bool is_override{false};
+    bool is_static{false};  // static functions belong to the type
+    bool can_throw{false};  // throws keyword
+    AccessLevel access_level{AccessLevel::Internal};  // Default is internal
     FuncDeclStmt() : Stmt(StmtKind::FuncDecl) {}
 };
 
@@ -375,6 +452,8 @@ struct StructMethodDecl {
     std::optional<TypeAnnotation> return_type;
     bool is_mutating{false};  // mutating methods can modify self
     bool is_computed_property{false};  // true for var name: Type { }, false for func name()
+    bool is_static{false};  // static methods belong to the type, not instances
+    AccessLevel access_level{AccessLevel::Internal};  // Default is internal
 };
 
 // Struct declaration: struct Point { var x: Int; func distance() -> Float { ... } }

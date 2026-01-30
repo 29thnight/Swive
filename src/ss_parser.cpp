@@ -309,45 +309,73 @@ if (match(TokenType::Colon)) {
 }
 
 consume(TokenType::LeftBrace, "Expected '{' after class name.");
-    while (!check(TokenType::RightBrace) && !is_at_end()) {
-        bool is_override = false;
-        if (match(TokenType::Override)) {
-            is_override = true;
-        }
-
-        if (check(TokenType::Deinit)) {
-            if (is_override) {
-                error(previous(), "'override' cannot be used with 'deinit'.");
-            }
-            advance(); // consume 'deinit'
-            if (stmt->deinit_body) {
-                error(previous(), "Class can only have one deinit.");
-            }
-            stmt->deinit_body = block();
-            continue;
-        }
-
-        if (check(TokenType::Func)) {
-            auto method = std::unique_ptr<FuncDeclStmt>(static_cast<FuncDeclStmt*>(func_declaration().release()));
-            method->is_override = is_override;
-            stmt->methods.push_back(std::move(method));
-            continue;
-        } else if (is_override) {
-            error(previous(), "'override' must precede a method declaration.");
-        }
-
-        if (check(TokenType::Var) || check(TokenType::Let)) {
-            bool is_let = check(TokenType::Let);
-            advance();
-            auto property = parse_variable_decl(is_let);
-            match(TokenType::Semicolon);
-            stmt->properties.push_back(std::move(property));
-            continue;
-        }
-
-        error(peek(), "Expected method or property declaration inside class.");
+while (!check(TokenType::RightBrace) && !is_at_end()) {
+    // Check for access control modifiers
+    AccessLevel access_level = AccessLevel::Internal;  // Default
+    if (match(TokenType::Public)) {
+        access_level = AccessLevel::Public;
+    } else if (match(TokenType::Private)) {
+        access_level = AccessLevel::Private;
+    } else if (match(TokenType::Internal)) {
+        access_level = AccessLevel::Internal;
+    } else if (match(TokenType::Fileprivate)) {
+        access_level = AccessLevel::Fileprivate;
     }
-    consume(TokenType::RightBrace, "Expected '}' after class body.");
+        
+    bool is_override = false;
+    if (match(TokenType::Override)) {
+        is_override = true;
+    }
+
+    if (check(TokenType::Deinit)) {
+        if (is_override) {
+            error(previous(), "'override' cannot be used with 'deinit'.");
+        }
+        advance(); // consume 'deinit'
+        if (stmt->deinit_body) {
+            error(previous(), "Class can only have one deinit.");
+        }
+        stmt->deinit_body = block();
+        continue;
+    }
+
+    if (check(TokenType::Func)) {
+        auto method = std::unique_ptr<FuncDeclStmt>(static_cast<FuncDeclStmt*>(func_declaration().release()));
+        method->is_override = is_override;
+        method->access_level = access_level;
+        stmt->methods.push_back(std::move(method));
+        continue;
+    } else if (is_override) {
+        error(previous(), "'override' must precede a method declaration.");
+    }
+
+    // Check for lazy modifier
+    bool is_lazy = false;
+    if (match(TokenType::Lazy)) {
+        is_lazy = true;
+    }
+
+    if (check(TokenType::Var) || check(TokenType::Let)) {
+        bool is_let = check(TokenType::Let);
+        if (is_lazy && is_let) {
+            error(previous(), "'lazy' cannot be used with 'let'.");
+        }
+        advance();
+        auto property = parse_variable_decl(is_let);
+        property->access_level = access_level;
+        property->is_lazy = is_lazy;
+        match(TokenType::Semicolon);
+        stmt->properties.push_back(std::move(property));
+        continue;
+    }
+
+    if (is_lazy) {
+        error(previous(), "'lazy' must precede a variable declaration.");
+    }
+
+    error(peek(), "Expected method or property declaration inside class.");
+}
+consume(TokenType::RightBrace, "Expected '}' after class body.");
     return stmt;
 }
 
@@ -369,25 +397,48 @@ if (match(TokenType::Colon)) {
 
 consume(TokenType::LeftBrace, "Expected '{' after struct name.");
 
-    while (!check(TokenType::RightBrace) && !is_at_end()) {
-        // Check for mutating modifier
-        bool is_mutating = false;
-        if (match(TokenType::Mutating)) {
-            is_mutating = true;
+while (!check(TokenType::RightBrace) && !is_at_end()) {
+    // Check for access control modifiers
+    AccessLevel access_level = AccessLevel::Internal;  // Default
+    if (match(TokenType::Public)) {
+        access_level = AccessLevel::Public;
+    } else if (match(TokenType::Private)) {
+        access_level = AccessLevel::Private;
+    } else if (match(TokenType::Internal)) {
+        access_level = AccessLevel::Internal;
+    } else if (match(TokenType::Fileprivate)) {
+        access_level = AccessLevel::Fileprivate;
+    }
+        
+    // Check for static modifier
+    bool is_static = false;
+    if (match(TokenType::Static)) {
+        is_static = true;
+    }
+        
+    // Check for mutating modifier (cannot be both static and mutating)
+    bool is_mutating = false;
+    if (match(TokenType::Mutating)) {
+        if (is_static) {
+            error(previous(), "Static methods cannot be mutating.");
         }
+        is_mutating = true;
+    }
 
-        // Method declaration: [mutating] func name(...) -> Type { ... }
-        if (check(TokenType::Func)) {
-            advance(); // consume 'func'
-            const Token& method_name = consume(TokenType::Identifier, "Expected method name.");
+    // Method declaration: [access] [static] [mutating] func name(...) -> Type { ... }
+    if (check(TokenType::Func)) {
+        advance(); // consume 'func'
+        const Token& method_name = consume(TokenType::Identifier, "Expected method name.");
 
-            auto method = std::make_unique<StructMethodDecl>();
-            method->name = std::string(method_name.lexeme);
-            method->is_mutating = is_mutating;
+        auto method = std::make_unique<StructMethodDecl>();
+        method->name = std::string(method_name.lexeme);
+        method->is_mutating = is_mutating;
+        method->is_static = is_static;
+        method->access_level = access_level;
 
-            // Parameter list
-            consume(TokenType::LeftParen, "Expected '(' after method name.");
-            if (!check(TokenType::RightParen)) {
+        // Parameter list
+        consume(TokenType::LeftParen, "Expected '(' after method name.");
+        if (!check(TokenType::RightParen)) {
                 do {
                     const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
                     consume(TokenType::Colon, "Expected ':' after parameter name.");
@@ -437,7 +488,7 @@ consume(TokenType::LeftBrace, "Expected '{' after struct name.");
             continue;
         }
 
-        // Property declaration: var/let name: Type [= initializer]
+        // Property declaration: [access] [static] var/let name: Type [= initializer]
         if (check(TokenType::Var) || check(TokenType::Let)) {
             if (is_mutating) {
                 error(previous(), "'mutating' can only be used with methods.");
@@ -445,9 +496,19 @@ consume(TokenType::LeftBrace, "Expected '{' after struct name.");
             bool is_let = check(TokenType::Let);
             advance();
             auto property = parse_variable_decl(is_let);
+            property->is_static = is_static;  // Mark as static if modifier was present
+            property->access_level = access_level;  // Set access level
             match(TokenType::Semicolon);
             stmt->properties.push_back(std::move(property));
             continue;
+        }
+
+        if (is_static) {
+            error(previous(), "'static' must precede a method or property declaration.");
+        }
+        
+        if (access_level != AccessLevel::Internal) {
+            error(previous(), "Access control modifier must precede a declaration.");
         }
 
         if (is_mutating) {
@@ -807,11 +868,13 @@ StmtPtr Parser::statement() {
     if (check(TokenType::If)) return if_statement();
     if (check(TokenType::Guard)) return guard_statement();
     if (check(TokenType::While)) return while_statement();
+    if (check(TokenType::Repeat)) return repeat_while_statement();
     if (check(TokenType::For)) return for_in_statement();
     if (check(TokenType::Switch)) return switch_statement();
     if (check(TokenType::Break)) return break_statement();
     if (check(TokenType::Continue)) return continue_statement();
     if (check(TokenType::Return)) return return_statement();
+    if (check(TokenType::Throw)) return throw_statement();
     if (check(TokenType::LeftBrace)) {
         auto blk = block();
         return blk;
@@ -898,6 +961,19 @@ StmtPtr Parser::while_statement() {
     return stmt;
 }
 
+StmtPtr Parser::repeat_while_statement() {
+    const Token& repeat_tok = advance();  // consume 'repeat'
+    
+    auto stmt = std::make_unique<RepeatWhileStmt>();
+    stmt->line = repeat_tok.line;
+    stmt->body = block();
+    
+    consume(TokenType::While, "Expected 'while' after repeat body.");
+    stmt->condition = expression();
+    
+    return stmt;
+}
+
 StmtPtr Parser::for_in_statement() {
     const Token& for_tok = advance();  // consume 'for'
     const Token& var_tok = consume(TokenType::Identifier, "Expected variable name after 'for'.");
@@ -910,6 +986,12 @@ StmtPtr Parser::for_in_statement() {
     stmt->line = for_tok.line;
     stmt->variable = std::string(var_tok.lexeme);
     stmt->iterable = std::move(iterable);
+    
+    // Optional where clause
+    if (match(TokenType::Where)) {
+        stmt->where_condition = expression();
+    }
+    
     stmt->body = block();
     return stmt;
 }
@@ -945,6 +1027,22 @@ StmtPtr Parser::return_statement() {
         stmt->value = expression();
     }
 
+    match(TokenType::Semicolon);
+    return stmt;
+}
+
+StmtPtr Parser::throw_statement() {
+    const Token& throw_tok = advance();  // consume 'throw'
+    
+    auto stmt = std::make_unique<ThrowStmt>();
+    stmt->line = throw_tok.line;
+    
+    // throw requires a value
+    if (check(TokenType::RightBrace) || check(TokenType::Semicolon) || is_at_end()) {
+        error(throw_tok, "Expected value after 'throw'.");
+    }
+    
+    stmt->value = expression();
     match(TokenType::Semicolon);
     return stmt;
 }
@@ -1165,17 +1263,59 @@ ExprPtr Parser::and_expr() {
 }
 
 ExprPtr Parser::equality() {
-    ExprPtr expr = comparison();
+    ExprPtr expr = type_check_cast();
 
     while (check(TokenType::EqualEqual) || check(TokenType::NotEqual)) {
         TokenType op = peek().type;
         advance();
         uint32_t line = previous().line;
-        ExprPtr right = comparison();
+        ExprPtr right = type_check_cast();
         auto bin = std::make_unique<BinaryExpr>(op, std::move(expr), std::move(right));
         bin->line = line;
         expr = std::move(bin);
     }
+    return expr;
+}
+
+ExprPtr Parser::type_check_cast() {
+    ExprPtr expr = comparison();
+    
+    // Type check: expr is Type
+    if (match(TokenType::Is)) {
+        uint32_t line = previous().line;
+        TypeAnnotation target_type = parse_type_annotation();
+        
+        auto type_check = std::make_unique<TypeCheckExpr>();
+        type_check->value = std::move(expr);
+        type_check->target_type = target_type;
+        type_check->line = line;
+        return type_check;
+    }
+    
+    // Type cast: expr as Type, expr as? Type, expr as! Type
+    if (match(TokenType::As)) {
+        uint32_t line = previous().line;
+        bool is_optional = false;
+        bool is_forced = false;
+        
+        // Check for as? or as!
+        if (match(TokenType::Question)) {
+            is_optional = true;
+        } else if (match(TokenType::Not)) {
+            is_forced = true;
+        }
+        
+        TypeAnnotation target_type = parse_type_annotation();
+        
+        auto type_cast = std::make_unique<TypeCastExpr>();
+        type_cast->value = std::move(expr);
+        type_cast->target_type = target_type;
+        type_cast->is_optional = is_optional;
+        type_cast->is_forced = is_forced;
+        type_cast->line = line;
+        return type_cast;
+    }
+    
     return expr;
 }
 
@@ -1275,7 +1415,7 @@ ExprPtr Parser::postfix() {
             mem->line = line;
             expr = std::move(mem);
         } else if (match(TokenType::LeftParen)) {
-            // Function call: expr(args...)
+            // Function call: expr(args...) or expr(name: value, ...)
             uint32_t line = previous().line;
             auto call = std::make_unique<CallExpr>();
             call->line = line;
@@ -1283,7 +1423,26 @@ ExprPtr Parser::postfix() {
 
             if (!check(TokenType::RightParen)) {
                 do {
-                    call->arguments.push_back(expression());
+                    // Check for named parameter: identifier:
+                    if (check(TokenType::Identifier)) {
+                        size_t saved_pos = current_;
+                        Token potential_name = advance();
+                        
+                        if (match(TokenType::Colon)) {
+                            // This is a named parameter
+                            call->argument_names.push_back(std::string(potential_name.lexeme));
+                            call->arguments.push_back(expression());
+                        } else {
+                            // Not a named parameter, restore position and parse as expression
+                            current_ = saved_pos;
+                            call->argument_names.push_back("");  // Empty name = positional
+                            call->arguments.push_back(expression());
+                        }
+                    } else {
+                        // Not an identifier, parse as expression
+                        call->argument_names.push_back("");  // Empty name = positional
+                        call->arguments.push_back(expression());
+                    }
                 } while (match(TokenType::Comma));
             }
             consume(TokenType::RightParen, "Expected ')' after arguments.");

@@ -53,6 +53,7 @@ enum class TokenType {
     Public,
     Private,
     Internal,
+    Fileprivate,  // fileprivate keyword
     Static,
     Override,
     Init,
@@ -62,6 +63,17 @@ enum class TokenType {
     Mutating,    // mutating keyword for struct methods
     Get,         // get keyword for computed properties
     Set,         // set keyword for computed properties
+    WillSet,     // willSet keyword for property observers
+    DidSet,      // didSet keyword for property observers
+    Lazy,        // lazy keyword for lazy properties
+    As,          // as keyword for type casting
+    Is,          // is keyword for type checking
+    Where,       // where keyword for filtering
+    Try,         // try keyword for error handling
+    Catch,       // catch keyword for error handling
+    Throw,       // throw keyword for error handling
+    Throws,      // throws keyword for function declaration
+    Do,          // do keyword for try-catch blocks
     
     // Operators
     Plus,           // +

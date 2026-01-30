@@ -141,6 +141,15 @@ struct Protocol {
         OP_PROTOCOL,           // Create protocol object
         OP_DEFINE_GLOBAL,      // Define global variable
 
+        // Type operations
+        OP_TYPE_CHECK,         // is operator: check if value is of type
+        OP_TYPE_CAST,          // as operator: cast value to type
+        OP_TYPE_CAST_OPTIONAL, // as? operator: optional cast
+        OP_TYPE_CAST_FORCED,   // as! operator: forced cast
+
+        // Error handling
+        OP_THROW,              // throw error
+
         // Misc
         OP_PRINT,
         OP_HALT,

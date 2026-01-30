@@ -238,6 +238,8 @@ class ClassObject : public Object {
 public:
     std::string name;
     std::unordered_map<std::string, Value> methods; // closures
+    std::unordered_map<std::string, Value> static_methods;  // static methods
+    std::unordered_map<std::string, Value> static_properties;  // static properties
     struct PropertyInfo {
         std::string name;
         Value default_value;
@@ -262,6 +264,14 @@ public:
     size_t memory_size() const override {
         size_t total = sizeof(ClassObject) + name.capacity();
         for (const auto& [k, v] : methods) {
+            total += k.capacity();
+            total += sizeof(Value);
+        }
+        for (const auto& [k, v] : static_methods) {
+            total += k.capacity();
+            total += sizeof(Value);
+        }
+        for (const auto& [k, v] : static_properties) {
             total += k.capacity();
             total += sizeof(Value);
         }
@@ -341,6 +351,8 @@ class StructObject : public Object {
 public:
     std::string name;
     std::unordered_map<std::string, Value> methods;  // closures (may include mutating flag info)
+    std::unordered_map<std::string, Value> static_methods;  // static methods
+    std::unordered_map<std::string, Value> static_properties;  // static properties
     struct PropertyInfo {
         std::string name;
         Value default_value;
@@ -365,6 +377,14 @@ public:
     size_t memory_size() const override {
         size_t total = sizeof(StructObject) + name.capacity();
         for (const auto& [k, v] : methods) {
+            total += k.capacity();
+            total += sizeof(Value);
+        }
+        for (const auto& [k, v] : static_methods) {
+            total += k.capacity();
+            total += sizeof(Value);
+        }
+        for (const auto& [k, v] : static_properties) {
             total += k.capacity();
             total += sizeof(Value);
         }
@@ -457,10 +477,24 @@ public:
         : Object(ObjectType::EnumCase), enum_type(e), case_name(std::move(name)), raw_value(Value::null()) {}
 
     std::string to_string() const override {
+        std::string result;
         if (enum_type) {
-            return enum_type->name + "." + case_name;
+            result = enum_type->name + "." + case_name;
+        } else {
+            result = case_name;
         }
-        return case_name;
+        
+        // Include associated values if present
+        if (!associated_values.empty()) {
+            result += "(";
+            for (size_t i = 0; i < associated_values.size(); ++i) {
+                if (i > 0) result += ", ";
+                result += associated_values[i].to_string();
+            }
+            result += ")";
+        }
+        
+        return result;
     }
 
     size_t memory_size() const override {

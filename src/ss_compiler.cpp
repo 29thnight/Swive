@@ -50,6 +50,9 @@ void Compiler::compile_stmt(Stmt* stmt) {
         case StmtKind::While:
             visit(static_cast<WhileStmt*>(stmt));
             break;
+        case StmtKind::RepeatWhile:
+            visit(static_cast<RepeatWhileStmt*>(stmt));
+            break;
         case StmtKind::Block:
             visit(static_cast<BlockStmt*>(stmt));
             break;
@@ -64,6 +67,9 @@ void Compiler::compile_stmt(Stmt* stmt) {
             break;
         case StmtKind::Return:
             visit(static_cast<ReturnStmt*>(stmt));
+            break;
+        case StmtKind::Throw:
+            visit(static_cast<ThrowStmt*>(stmt));
             break;
         case StmtKind::FuncDecl:
             visit(static_cast<FuncDeclStmt*>(stmt));
@@ -385,6 +391,12 @@ void Compiler::visit(StructDeclStmt* stmt) {
 
     // Define stored properties
     for (const auto& property : stmt->properties) {
+        if (property->is_static) {
+            // Static properties are handled differently - skip for now in OP_DEFINE_PROPERTY
+            // They will be initialized and stored in static_properties map
+            continue;
+        }
+        
         if (property->initializer) {
             compile_expr(property->initializer.get());
         } else {
@@ -398,11 +410,96 @@ void Compiler::visit(StructDeclStmt* stmt) {
 
         emit_op(OpCode::OP_DEFINE_PROPERTY, property->line);
         emit_short(static_cast<uint16_t>(property_name_idx), property->line);
-        emit_byte(property->is_let ? 1 : 0, property->line);
+        uint8_t flags = property->is_let ? 1 : 0;
+        emit_byte(flags, property->line);
+    }
+    
+    // Define static properties
+    for (const auto& property : stmt->properties) {
+        if (!property->is_static) continue;
+        
+        // Compile initializer
+        if (property->initializer) {
+            compile_expr(property->initializer.get());
+        } else {
+            emit_op(OpCode::OP_NIL, property->line);
+        }
+        
+        size_t property_name_idx = identifier_constant(property->name);
+        if (property_name_idx > std::numeric_limits<uint16_t>::max()) {
+            throw CompilerError("Too many property identifiers", property->line);
+        }
+        
+        // Store in static_properties using OP_SET_PROPERTY-like approach
+        // For now, emit OP_DEFINE_PROPERTY with static flag
+        emit_op(OpCode::OP_DEFINE_PROPERTY, property->line);
+        emit_short(static_cast<uint16_t>(property_name_idx), property->line);
+        uint8_t flags = (property->is_let ? 1 : 0) | (1 << 1); // bit 1 = is_static
+        emit_byte(flags, property->line);
     }
 
-    // Compile methods
+    // Compile methods (separate static and instance methods)
     for (const auto& method : stmt->methods) {
+        if (method->is_static) {
+            // Static method: no 'self' parameter
+            FunctionPrototype proto;
+            proto.name = method->name;
+            proto.params.reserve(method->params.size());
+            for (const auto& [param_name, param_type] : method->params) {
+                proto.params.push_back(param_name);
+            }
+            proto.is_initializer = false;
+            proto.is_override = false;
+
+            Compiler method_compiler;
+            method_compiler.enclosing_ = this;
+            method_compiler.chunk_ = Chunk{};
+            method_compiler.locals_.clear();
+            method_compiler.scope_depth_ = 1;
+            method_compiler.recursion_depth_ = 0;
+
+            // No 'self' for static methods
+            for (const auto& [param_name, param_type] : method->params) {
+                method_compiler.declare_local(param_name, param_type.is_optional);
+                method_compiler.mark_local_initialized();
+            }
+
+            if (method->body) {
+                for (const auto& statement : method->body->statements) {
+                    method_compiler.compile_stmt(statement.get());
+                }
+            }
+
+            method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
+            method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
+
+            proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+            proto.upvalues.reserve(method_compiler.upvalues_.size());
+            for (const auto& uv : method_compiler.upvalues_) {
+                proto.upvalues.push_back({uv.index, uv.is_local});
+            }
+
+            size_t function_index = chunk_.add_function(std::move(proto));
+            if (function_index > std::numeric_limits<uint16_t>::max()) {
+                throw CompilerError("Too many functions in chunk", stmt->line);
+            }
+
+            bool has_captures = !method_compiler.upvalues_.empty();
+            emit_op(has_captures ? OpCode::OP_CLOSURE : OpCode::OP_FUNCTION, stmt->line);
+            emit_short(static_cast<uint16_t>(function_index), stmt->line);
+
+            size_t method_name_idx = identifier_constant(method->name);
+            if (method_name_idx > std::numeric_limits<uint16_t>::max()) {
+                throw CompilerError("Too many method identifiers", stmt->line);
+            }
+
+            // Use OP_METHOD with is_static flag
+            emit_op(OpCode::OP_METHOD, stmt->line);
+            emit_short(static_cast<uint16_t>(method_name_idx), stmt->line);
+            continue;
+        }
+        
+        // Instance method (original code)
         FunctionPrototype proto;
         proto.name = method->name;
         proto.params.reserve(method->params.size() + 1);
@@ -782,10 +879,17 @@ void Compiler::compile_expr(Expr* expr) {
         case ExprKind::Closure:
             visit(static_cast<ClosureExpr*>(expr));
             break;
+        case ExprKind::TypeCast:
+            visit(static_cast<TypeCastExpr*>(expr));
+            break;
+        case ExprKind::TypeCheck:
+            visit(static_cast<TypeCheckExpr*>(expr));
+            break;
         default:
             throw CompilerError("Unknown expression kind", expr->line);
     }
 }
+
 
 void Compiler::visit(VarDeclStmt* stmt) {
     if (scope_depth_ > 0) {
@@ -916,6 +1020,41 @@ void Compiler::visit(WhileStmt* stmt) {
     loop_stack_.pop_back();
 }
 
+void Compiler::visit(RepeatWhileStmt* stmt) {
+    // repeat-while: body executes at least once, then checks condition
+    loop_stack_.push_back({});
+    size_t loop_start = chunk_.code.size();
+    loop_stack_.back().loop_start = loop_start;
+    loop_stack_.back().scope_depth_at_start = scope_depth_;
+    
+    // Execute body first
+    compile_stmt(stmt->body.get());
+    
+    // continue jumps come here (before condition check)
+    for (size_t jump : loop_stack_.back().continue_jumps) {
+        patch_jump(jump);
+    }
+    
+    // Check condition
+    compile_expr(stmt->condition.get());
+    
+    // If true, loop back to start
+    size_t exit_jump = emit_jump(OpCode::OP_JUMP_IF_FALSE, stmt->line);
+    emit_op(OpCode::OP_POP, stmt->line);
+    emit_loop(loop_start, stmt->line);
+    
+    // If false, exit
+    patch_jump(exit_jump);
+    emit_op(OpCode::OP_POP, stmt->line);
+    
+    // Patch break jumps
+    for (size_t jump : loop_stack_.back().break_jumps) {
+        patch_jump(jump);
+    }
+    
+    loop_stack_.pop_back();
+}
+
 void Compiler::visit(ForInStmt* stmt) {
     // Check if iterable is a Range expression
     if (stmt->iterable->kind == ExprKind::Range) {
@@ -950,12 +1089,28 @@ void Compiler::visit(ForInStmt* stmt) {
         emit_op(OpCode::OP_GET_LOCAL, stmt->line);
         emit_short(static_cast<uint16_t>(end_var_idx), stmt->line);
         
+        
         emit_op(range->inclusive ? OpCode::OP_LESS_EQUAL : OpCode::OP_LESS, stmt->line);
         
         size_t exit_jump = emit_jump(OpCode::OP_JUMP_IF_FALSE, stmt->line);
         emit_op(OpCode::OP_POP, stmt->line);
         
+        // where clause filtering
+        size_t where_skip_jump = 0;
+        if (stmt->where_condition) {
+            compile_expr(stmt->where_condition.get());
+            where_skip_jump = emit_jump(OpCode::OP_JUMP_IF_FALSE, stmt->line);
+            emit_op(OpCode::OP_POP, stmt->line);
+        }
+        
         compile_stmt(stmt->body.get());
+        
+        // Skip to increment if where condition was false
+        if (stmt->where_condition) {
+            patch_jump(where_skip_jump);
+            emit_op(OpCode::OP_POP, stmt->line);
+        }
+        
         
         // Patch continue jumps
         for (size_t jump : loop_stack_.back().continue_jumps) {
@@ -1050,8 +1205,22 @@ void Compiler::visit(ForInStmt* stmt) {
         emit_short(static_cast<uint16_t>(loop_var_idx), stmt->line);
         emit_op(OpCode::OP_POP, stmt->line);
         
+        // where clause filtering
+        size_t where_skip_jump = 0;
+        if (stmt->where_condition) {
+            compile_expr(stmt->where_condition.get());
+            where_skip_jump = emit_jump(OpCode::OP_JUMP_IF_FALSE, stmt->line);
+            emit_op(OpCode::OP_POP, stmt->line);
+        }
+        
         // Execute loop body
         compile_stmt(stmt->body.get());
+        
+        // Skip to increment if where condition was false
+        if (stmt->where_condition) {
+            patch_jump(where_skip_jump);
+            emit_op(OpCode::OP_POP, stmt->line);
+        }
         
         // Patch continue jumps
         for (size_t jump : loop_stack_.back().continue_jumps) {
@@ -1456,6 +1625,19 @@ void Compiler::visit(ReturnStmt* stmt) {
         emit_op(OpCode::OP_NIL, stmt->line);
     }
     emit_op(OpCode::OP_RETURN, stmt->line);
+}
+
+void Compiler::visit(ThrowStmt* stmt) {
+    // Compile the error value
+    if (stmt->value) {
+        compile_expr(stmt->value.get());
+    } else {
+        emit_op(OpCode::OP_NIL, stmt->line);
+    }
+    
+    // For now, throw just causes a runtime error
+    // In a full implementation, this would unwind the stack to the nearest catch
+    emit_op(OpCode::OP_THROW, stmt->line);
 }
 
 void Compiler::visit(FuncDeclStmt* stmt) {
@@ -1928,6 +2110,41 @@ void Compiler::visit(ClosureExpr* expr) {
 
     emit_op(OpCode::OP_CLOSURE, expr->line);
     emit_short(static_cast<uint16_t>(function_index), expr->line);
+}
+
+void Compiler::visit(TypeCastExpr* expr) {
+    // Compile the value expression
+    compile_expr(expr->value.get());
+    
+    // Store the target type name
+    size_t type_name_idx = identifier_constant(expr->target_type.name);
+    if (type_name_idx > std::numeric_limits<uint16_t>::max()) {
+        throw CompilerError("Type name index out of range", expr->line);
+    }
+    
+    // Emit appropriate opcode
+    if (expr->is_optional) {
+        emit_op(OpCode::OP_TYPE_CAST_OPTIONAL, expr->line);
+    } else if (expr->is_forced) {
+        emit_op(OpCode::OP_TYPE_CAST_FORCED, expr->line);
+    } else {
+        emit_op(OpCode::OP_TYPE_CAST, expr->line);
+    }
+    emit_short(static_cast<uint16_t>(type_name_idx), expr->line);
+}
+
+void Compiler::visit(TypeCheckExpr* expr) {
+    // Compile the value expression
+    compile_expr(expr->value.get());
+    
+    // Store the target type name
+    size_t type_name_idx = identifier_constant(expr->target_type.name);
+    if (type_name_idx > std::numeric_limits<uint16_t>::max()) {
+        throw CompilerError("Type name index out of range", expr->line);
+    }
+    
+    emit_op(OpCode::OP_TYPE_CHECK, expr->line);
+    emit_short(static_cast<uint16_t>(type_name_idx), expr->line);
 }
 
 void Compiler::begin_scope() {

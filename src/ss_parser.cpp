@@ -248,15 +248,7 @@ StmtPtr Parser::func_declaration() {
 
     // Parameter list
     consume(TokenType::LeftParen, "Expected '(' after function name.");
-    if (!check(TokenType::RightParen)) {
-        do {
-            const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
-            consume(TokenType::Colon, "Expected ':' after parameter name.");
-            TypeAnnotation param_type = parse_type_annotation();
-            stmt->params.emplace_back(std::string(param_name.lexeme), param_type);
-        } while (match(TokenType::Comma));
-    }
-    consume(TokenType::RightParen, "Expected ')' after parameters.");
+    stmt->params = parse_param_list(true);
 
     // Optional return type: -> Type
     if (match(TokenType::Arrow)) {
@@ -459,15 +451,7 @@ while (!check(TokenType::RightBrace) && !is_at_end()) {
 
         // Parameter list
         consume(TokenType::LeftParen, "Expected '(' after method name.");
-        if (!check(TokenType::RightParen)) {
-                do {
-                    const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
-                    consume(TokenType::Colon, "Expected ':' after parameter name.");
-                    TypeAnnotation param_type = parse_type_annotation();
-                    method->params.emplace_back(std::string(param_name.lexeme), param_type);
-                } while (match(TokenType::Comma));
-            }
-            consume(TokenType::RightParen, "Expected ')' after parameters.");
+        method->params = parse_param_list(true);
 
             // Optional return type: -> Type
             if (match(TokenType::Arrow)) {
@@ -493,15 +477,7 @@ while (!check(TokenType::RightBrace) && !is_at_end()) {
 
             // Parameter list
             consume(TokenType::LeftParen, "Expected '(' after 'init'.");
-            if (!check(TokenType::RightParen)) {
-                do {
-                    const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
-                    consume(TokenType::Colon, "Expected ':' after parameter name.");
-                    TypeAnnotation param_type = parse_type_annotation();
-                    init_method->params.emplace_back(std::string(param_name.lexeme), param_type);
-                } while (match(TokenType::Comma));
-            }
-            consume(TokenType::RightParen, "Expected ')' after parameters.");
+            init_method->params = parse_param_list(true);
 
             // Body
             init_method->body = block();
@@ -608,15 +584,7 @@ StmtPtr Parser::enum_declaration() {
 
             // Parameter list
             consume(TokenType::LeftParen, "Expected '(' after method name.");
-            if (!check(TokenType::RightParen)) {
-                do {
-                    const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
-                    consume(TokenType::Colon, "Expected ':' after parameter name.");
-                    TypeAnnotation param_type = parse_type_annotation();
-                    method->params.emplace_back(std::string(param_name.lexeme), param_type);
-                } while (match(TokenType::Comma));
-            }
-            consume(TokenType::RightParen, "Expected ')' after parameters.");
+            method->params = parse_param_list(true);
 
             // Optional return type: -> Type
             if (match(TokenType::Arrow)) {
@@ -695,15 +663,7 @@ StmtPtr Parser::protocol_declaration() {
 
             // Parameter list
             consume(TokenType::LeftParen, "Expected '(' after method name.");
-            if (!check(TokenType::RightParen)) {
-                do {
-                    const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
-                    consume(TokenType::Colon, "Expected ':' after parameter name.");
-                    TypeAnnotation param_type = parse_type_annotation();
-                    method_req.params.emplace_back(std::string(param_name.lexeme), param_type);
-                } while (match(TokenType::Comma));
-            }
-            consume(TokenType::RightParen, "Expected ')' after parameters.");
+            method_req.params = parse_param_list(false);
 
             // Optional return type: -> Type
             if (match(TokenType::Arrow)) {
@@ -765,15 +725,7 @@ StmtPtr Parser::protocol_declaration() {
 
             // Parameter list
             consume(TokenType::LeftParen, "Expected '(' after method name.");
-            if (!check(TokenType::RightParen)) {
-                do {
-                    const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
-                    consume(TokenType::Colon, "Expected ':' after parameter name.");
-                    TypeAnnotation param_type = parse_type_annotation();
-                    method_req.params.emplace_back(std::string(param_name.lexeme), param_type);
-                } while (match(TokenType::Comma));
-            }
-            consume(TokenType::RightParen, "Expected ')' after parameters.");
+            method_req.params = parse_param_list(false);
 
             // Optional return type: -> Type
             if (match(TokenType::Arrow)) {
@@ -838,15 +790,7 @@ StmtPtr Parser::extension_declaration() {
 
             // Parameter list
             consume(TokenType::LeftParen, "Expected '(' after method name.");
-            if (!check(TokenType::RightParen)) {
-                do {
-                    const Token& param_name = consume(TokenType::Identifier, "Expected parameter name.");
-                    consume(TokenType::Colon, "Expected ':' after parameter name.");
-                    TypeAnnotation param_type = parse_type_annotation();
-                    method->params.emplace_back(std::string(param_name.lexeme), param_type);
-                } while (match(TokenType::Comma));
-            }
-            consume(TokenType::RightParen, "Expected ')' after parameters.");
+            method->params = parse_param_list(true);
 
             // Optional return type: -> Type
             if (match(TokenType::Arrow)) {
@@ -1101,7 +1045,7 @@ StmtPtr Parser::switch_statement() {
         if (match(TokenType::Case)) {
             // Parse case patterns: case 1, 2, 3:
             do {
-                clause.patterns.push_back(expression());
+                clause.patterns.push_back(parse_pattern());
             } while (match(TokenType::Comma));
             
             consume(TokenType::Colon, "Expected ':' after case pattern.");
@@ -1755,6 +1699,76 @@ ExprPtr Parser::closure_expression() {
     consume(TokenType::RightBrace, "Expected '}' at end of closure.");
     
     return closure;
+}
+
+ParamDecl Parser::parse_param(bool allow_default) {
+    const Token& first_name = consume(TokenType::Identifier, "Expected parameter name.");
+    std::string external_name(first_name.lexeme);
+    std::string internal_name = external_name;
+
+    if (check(TokenType::Identifier)) {
+        const Token& second_name = advance();
+        internal_name = std::string(second_name.lexeme);
+    }
+
+    if (external_name == "_") {
+        external_name.clear();
+    }
+
+    consume(TokenType::Colon, "Expected ':' after parameter name.");
+    TypeAnnotation param_type = parse_type_annotation();
+
+    ExprPtr default_value;
+    if (allow_default && match(TokenType::Equal)) {
+        default_value = expression();
+    }
+
+    ParamDecl param;
+    param.external_name = std::move(external_name);
+    param.internal_name = std::move(internal_name);
+    param.type = param_type;
+    param.default_value = std::move(default_value);
+    return param;
+}
+
+std::vector<ParamDecl> Parser::parse_param_list(bool allow_default) {
+    std::vector<ParamDecl> params;
+    if (!check(TokenType::RightParen)) {
+        do {
+            params.push_back(parse_param(allow_default));
+        } while (match(TokenType::Comma));
+    }
+    consume(TokenType::RightParen, "Expected ')' after parameters.");
+    return params;
+}
+
+PatternPtr Parser::parse_pattern() {
+    if (match(TokenType::Dot)) {
+        auto pattern = std::make_unique<EnumCasePattern>();
+        pattern->line = previous().line;
+        const Token& case_name = consume(TokenType::Identifier, "Expected enum case name.");
+        pattern->case_name = std::string(case_name.lexeme);
+
+        if (match(TokenType::LeftParen)) {
+            if (!check(TokenType::RightParen)) {
+                do {
+                    if (match(TokenType::Let) || match(TokenType::Var)) {
+                        // Binding modifier, ignore for now.
+                    }
+                    const Token& binding = consume(TokenType::Identifier, "Expected binding name.");
+                    pattern->bindings.push_back(std::string(binding.lexeme));
+                } while (match(TokenType::Comma));
+            }
+            consume(TokenType::RightParen, "Expected ')' after enum case bindings.");
+        }
+
+        return pattern;
+    }
+
+    auto expr_pattern = std::make_unique<ExpressionPattern>();
+    expr_pattern->expression = expression();
+    expr_pattern->line = expr_pattern->expression->line;
+    return expr_pattern;
 }
 
 } // namespace swiftscript

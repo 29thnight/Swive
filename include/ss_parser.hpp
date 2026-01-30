@@ -71,6 +71,9 @@ private:
     ExprPtr postfix();
     ExprPtr primary();
     ExprPtr closure_expression();
+    ParamDecl parse_param(bool allow_default);
+    std::vector<ParamDecl> parse_param_list(bool allow_default);
+    PatternPtr parse_pattern();
 
     // ---- Type annotation ----
     TypeAnnotation parse_type_annotation();

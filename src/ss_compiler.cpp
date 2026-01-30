@@ -154,6 +154,8 @@ void Compiler::visit(ClassDeclStmt* stmt) {
             FunctionPrototype getter_proto;
             getter_proto.name = "get:" + property->name;
             getter_proto.params.push_back("self");
+            getter_proto.param_labels.push_back("");
+            getter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
             getter_proto.chunk = std::make_shared<Chunk>();
             
             Compiler getter_compiler;
@@ -187,6 +189,10 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 setter_proto.name = "set:" + property->name;
                 setter_proto.params.push_back("self");
                 setter_proto.params.push_back("newValue");
+                setter_proto.param_labels.push_back("");
+                setter_proto.param_labels.push_back("");
+                setter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
+                setter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
                 setter_proto.chunk = std::make_shared<Chunk>();
                 
                 Compiler setter_compiler;
@@ -258,12 +264,20 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         // Static methods don't have implicit 'self' parameter
         if (!method->is_static) {
             proto.params.reserve(method->params.size() + 1);
+            proto.param_labels.reserve(method->params.size() + 1);
+            proto.param_defaults.reserve(method->params.size() + 1);
             proto.params.push_back("self");
+            proto.param_labels.push_back("");
+            proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
         } else {
             proto.params.reserve(method->params.size());
+            proto.param_labels.reserve(method->params.size());
+            proto.param_defaults.reserve(method->params.size());
         }
-        for (const auto& [param_name, param_type] : method->params) {
-            proto.params.push_back(param_name);
+        for (const auto& param : method->params) {
+            proto.params.push_back(param.internal_name);
+            proto.param_labels.push_back(param.external_name);
+            proto.param_defaults.push_back(build_param_default(param));
         }
         proto.is_initializer = (method->name == "init");
         proto.is_override = method->is_override;
@@ -286,8 +300,8 @@ void Compiler::visit(ClassDeclStmt* stmt) {
             method_compiler.allow_implicit_self_property_ = false;
         }
 
-        for (const auto& [param_name, param_type] : method->params) {
-            method_compiler.declare_local(param_name, param_type.is_optional);
+        for (const auto& param : method->params) {
+            method_compiler.declare_local(param.internal_name, param.type.is_optional);
             method_compiler.mark_local_initialized();
         }
 
@@ -464,8 +478,12 @@ void Compiler::visit(StructDeclStmt* stmt) {
             FunctionPrototype proto;
             proto.name = method->name;
             proto.params.reserve(method->params.size());
-            for (const auto& [param_name, param_type] : method->params) {
-                proto.params.push_back(param_name);
+            proto.param_labels.reserve(method->params.size());
+            proto.param_defaults.reserve(method->params.size());
+            for (const auto& param : method->params) {
+                proto.params.push_back(param.internal_name);
+                proto.param_labels.push_back(param.external_name);
+                proto.param_defaults.push_back(build_param_default(param));
             }
             proto.is_initializer = false;
             proto.is_override = false;
@@ -478,8 +496,8 @@ void Compiler::visit(StructDeclStmt* stmt) {
             method_compiler.recursion_depth_ = 0;
 
             // No 'self' for static methods
-            for (const auto& [param_name, param_type] : method->params) {
-                method_compiler.declare_local(param_name, param_type.is_optional);
+            for (const auto& param : method->params) {
+                method_compiler.declare_local(param.internal_name, param.type.is_optional);
                 method_compiler.mark_local_initialized();
             }
 
@@ -522,9 +540,15 @@ void Compiler::visit(StructDeclStmt* stmt) {
         FunctionPrototype proto;
         proto.name = method->name;
         proto.params.reserve(method->params.size() + 1);
+        proto.param_labels.reserve(method->params.size() + 1);
+        proto.param_defaults.reserve(method->params.size() + 1);
         proto.params.push_back("self");  // Implicit self parameter
-        for (const auto& [param_name, param_type] : method->params) {
-            proto.params.push_back(param_name);
+        proto.param_labels.push_back("");
+        proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
+        for (const auto& param : method->params) {
+            proto.params.push_back(param.internal_name);
+            proto.param_labels.push_back(param.external_name);
+            proto.param_defaults.push_back(build_param_default(param));
         }
         proto.is_initializer = false;
         proto.is_override = false;
@@ -544,8 +568,8 @@ void Compiler::visit(StructDeclStmt* stmt) {
         method_compiler.declare_local("self", false);
         method_compiler.mark_local_initialized();
 
-        for (const auto& [param_name, param_type] : method->params) {
-            method_compiler.declare_local(param_name, param_type.is_optional);
+        for (const auto& param : method->params) {
+            method_compiler.declare_local(param.internal_name, param.type.is_optional);
             method_compiler.mark_local_initialized();
         }
 
@@ -589,9 +613,15 @@ void Compiler::visit(StructDeclStmt* stmt) {
         FunctionPrototype proto;
         proto.name = "init";
         proto.params.reserve(init_method->params.size() + 1);
+        proto.param_labels.reserve(init_method->params.size() + 1);
+        proto.param_defaults.reserve(init_method->params.size() + 1);
         proto.params.push_back("self");
-        for (const auto& [param_name, param_type] : init_method->params) {
-            proto.params.push_back(param_name);
+        proto.param_labels.push_back("");
+        proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
+        for (const auto& param : init_method->params) {
+            proto.params.push_back(param.internal_name);
+            proto.param_labels.push_back(param.external_name);
+            proto.param_defaults.push_back(build_param_default(param));
         }
         proto.is_initializer = true;
         proto.is_override = false;
@@ -611,8 +641,8 @@ void Compiler::visit(StructDeclStmt* stmt) {
         init_compiler.declare_local("self", false);
         init_compiler.mark_local_initialized();
 
-        for (const auto& [param_name, param_type] : init_method->params) {
-            init_compiler.declare_local(param_name, param_type.is_optional);
+        for (const auto& param : init_method->params) {
+            init_compiler.declare_local(param.internal_name, param.type.is_optional);
             init_compiler.mark_local_initialized();
         }
 
@@ -696,6 +726,17 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         
         // For associated values (if any), store their count
         emit_byte(static_cast<uint8_t>(case_decl.associated_values.size()), stmt->line);
+        for (const auto& [assoc_name, assoc_type] : case_decl.associated_values) {
+            if (assoc_name == "_") {
+                emit_short(std::numeric_limits<uint16_t>::max(), stmt->line);
+                continue;
+            }
+            size_t label_idx = identifier_constant(assoc_name);
+            if (label_idx > std::numeric_limits<uint16_t>::max()) {
+                throw CompilerError("Too many associated value identifiers", stmt->line);
+            }
+            emit_short(static_cast<uint16_t>(label_idx), stmt->line);
+        }
     }
 
     // Collect property names for implicit self access (for methods)
@@ -715,6 +756,8 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         FunctionPrototype getter_proto;
         getter_proto.name = "get:" + method->name;
         getter_proto.params.push_back("self");
+        getter_proto.param_labels.push_back("");
+        getter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
         
         Compiler getter_compiler;
         getter_compiler.enclosing_ = this;
@@ -766,9 +809,15 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         FunctionPrototype proto;
         proto.name = method->name;
         proto.params.reserve(method->params.size() + 1);
+        proto.param_labels.reserve(method->params.size() + 1);
+        proto.param_defaults.reserve(method->params.size() + 1);
         proto.params.push_back("self");  // Implicit self parameter
-        for (const auto& [param_name, param_type] : method->params) {
-            proto.params.push_back(param_name);
+        proto.param_labels.push_back("");
+        proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
+        for (const auto& param : method->params) {
+            proto.params.push_back(param.internal_name);
+            proto.param_labels.push_back(param.external_name);
+            proto.param_defaults.push_back(build_param_default(param));
         }
         proto.is_initializer = false;
         proto.is_override = false;
@@ -786,8 +835,8 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         method_compiler.declare_local("self", false);
         method_compiler.mark_local_initialized();
 
-        for (const auto& [param_name, param_type] : method->params) {
-            method_compiler.declare_local(param_name, param_type.is_optional);
+        for (const auto& param : method->params) {
+            method_compiler.declare_local(param.internal_name, param.type.is_optional);
             method_compiler.mark_local_initialized();
         }
 
@@ -920,6 +969,7 @@ void Compiler::visit(VarDeclStmt* stmt) {
     } else {
         emit_op(OpCode::OP_NIL, stmt->line);
     }
+    emit_op(OpCode::OP_COPY_VALUE, stmt->line);
 
     if (scope_depth_ == 0) {
         size_t name_idx = identifier_constant(stmt->name);
@@ -1330,6 +1380,7 @@ void Compiler::visit(SwitchStmt* stmt) {
         // For multiple patterns, we need OR logic:
         // if pattern1 matches OR pattern2 matches OR ... then execute body
         std::vector<size_t> match_jumps;  // Jump to body if matched
+        const EnumCasePattern* binding_pattern = nullptr;
         
         for (size_t i = 0; i < case_clause.patterns.size(); ++i) {
             const auto& pattern = case_clause.patterns[i];
@@ -1338,31 +1389,49 @@ void Compiler::visit(SwitchStmt* stmt) {
             emit_op(OpCode::OP_GET_LOCAL, stmt->line);
             emit_short(static_cast<uint16_t>(switch_var), stmt->line);
             
-            // Check if pattern is a range
-            if (pattern->kind == ExprKind::Range) {
-                auto* range = static_cast<RangeExpr*>(pattern.get());
-                
-                // value >= start
-                emit_op(OpCode::OP_GET_LOCAL, stmt->line);
-                emit_short(static_cast<uint16_t>(switch_var), stmt->line);
-                compile_expr(range->start.get());
-                emit_op(OpCode::OP_GREATER_EQUAL, stmt->line);
-                
-                // value <= end (or < for exclusive)
-                emit_op(OpCode::OP_GET_LOCAL, stmt->line);
-                emit_short(static_cast<uint16_t>(switch_var), stmt->line);
-                compile_expr(range->end.get());
-                emit_op(range->inclusive ? OpCode::OP_LESS_EQUAL : OpCode::OP_LESS, stmt->line);
-                
-                // Both must be true
-                emit_op(OpCode::OP_AND, stmt->line);
-                
-                // Pop the extra switch value we loaded
-                // (we loaded it twice but only need once for the final check)
+            if (pattern->kind == PatternKind::EnumCase) {
+                auto* enum_pattern = static_cast<EnumCasePattern*>(pattern.get());
+                if (!enum_pattern->bindings.empty()) {
+                    if (binding_pattern && binding_pattern != enum_pattern) {
+                        throw CompilerError("Multiple enum case patterns with bindings in one case are not supported.", stmt->line);
+                    }
+                    binding_pattern = enum_pattern;
+                }
+
+                size_t case_name_idx = identifier_constant(enum_pattern->case_name);
+                if (case_name_idx > std::numeric_limits<uint16_t>::max()) {
+                    throw CompilerError("Too many enum case identifiers", stmt->line);
+                }
+                emit_op(OpCode::OP_MATCH_ENUM_CASE, stmt->line);
+                emit_short(static_cast<uint16_t>(case_name_idx), stmt->line);
             } else {
-                // Simple value comparison
-                compile_expr(pattern.get());
-                emit_op(OpCode::OP_EQUAL, stmt->line);
+                auto* expr_pattern = static_cast<ExpressionPattern*>(pattern.get());
+                // Check if pattern is a range
+                if (expr_pattern->expression->kind == ExprKind::Range) {
+                    auto* range = static_cast<RangeExpr*>(expr_pattern->expression.get());
+                
+                    // value >= start
+                    emit_op(OpCode::OP_GET_LOCAL, stmt->line);
+                    emit_short(static_cast<uint16_t>(switch_var), stmt->line);
+                    compile_expr(range->start.get());
+                    emit_op(OpCode::OP_GREATER_EQUAL, stmt->line);
+                    
+                    // value <= end (or < for exclusive)
+                    emit_op(OpCode::OP_GET_LOCAL, stmt->line);
+                    emit_short(static_cast<uint16_t>(switch_var), stmt->line);
+                    compile_expr(range->end.get());
+                    emit_op(range->inclusive ? OpCode::OP_LESS_EQUAL : OpCode::OP_LESS, stmt->line);
+                    
+                    // Both must be true
+                    emit_op(OpCode::OP_AND, stmt->line);
+                    
+                    // Pop the extra switch value we loaded
+                    // (we loaded it twice but only need once for the final check)
+                } else {
+                    // Simple value comparison
+                    compile_expr(expr_pattern->expression.get());
+                    emit_op(OpCode::OP_EQUAL, stmt->line);
+                }
             }
             
             // If matched, remember to jump to body
@@ -1385,10 +1454,33 @@ void Compiler::visit(SwitchStmt* stmt) {
         for (size_t jump : match_jumps) {
             patch_jump(jump);
         }
+
+        bool has_binding_scope = false;
+        if (binding_pattern && !binding_pattern->bindings.empty()) {
+            if (case_clause.patterns.size() > 1) {
+                throw CompilerError("Enum case bindings require a single pattern per case.", stmt->line);
+            }
+            begin_scope();
+            has_binding_scope = true;
+
+            for (size_t i = 0; i < binding_pattern->bindings.size(); ++i) {
+                const std::string& binding_name = binding_pattern->bindings[i];
+                declare_local(binding_name, false);
+                emit_op(OpCode::OP_GET_LOCAL, stmt->line);
+                emit_short(static_cast<uint16_t>(switch_var), stmt->line);
+                emit_op(OpCode::OP_GET_ASSOCIATED, stmt->line);
+                emit_short(static_cast<uint16_t>(i), stmt->line);
+                mark_local_initialized();
+            }
+        }
         
         // Execute case body
         for (const auto& case_stmt : case_clause.statements) {
             compile_stmt(case_stmt.get());
+        }
+
+        if (has_binding_scope) {
+            end_scope();
         }
         
         // Jump to end (no fall-through)
@@ -1477,8 +1569,8 @@ void Compiler::visit(ProtocolDeclStmt* stmt) {
         ProtocolMethodReq req;
         req.name = method_req.name;
         req.is_mutating = method_req.is_mutating;
-        for (const auto& [param_name, param_type] : method_req.params) {
-            req.param_names.push_back(param_name);
+        for (const auto& param : method_req.params) {
+            req.param_names.push_back(param.internal_name);
         }
         protocol->method_requirements.push_back(req);
     }
@@ -1535,6 +1627,8 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             getter_proto.name = getter_name;
             getter_proto.is_override = false;
             getter_proto.params.push_back("self");
+            getter_proto.param_labels.push_back("");
+            getter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
             
             Compiler method_compiler;
             method_compiler.enclosing_ = this;
@@ -1584,15 +1678,19 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
                 method_compiler.declare_local("self", false);
                 method_compiler.mark_local_initialized();
                 func_proto.params.push_back("self");
+                func_proto.param_labels.push_back("");
+                func_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
             } else {
                 method_compiler.allow_implicit_self_property_ = false;
             }
 
             // Add method parameters
-            for (const auto& [param_name, param_type] : method->params) {
-                method_compiler.declare_local(param_name, param_type.is_optional);
+            for (const auto& param : method->params) {
+                method_compiler.declare_local(param.internal_name, param.type.is_optional);
                 method_compiler.mark_local_initialized();
-                func_proto.params.push_back(param_name);
+                func_proto.params.push_back(param.internal_name);
+                func_proto.param_labels.push_back(param.external_name);
+                func_proto.param_defaults.push_back(build_param_default(param));
             }
 
             // Compile body
@@ -1668,8 +1766,12 @@ void Compiler::visit(FuncDeclStmt* stmt) {
     FunctionPrototype proto;
     proto.name = stmt->name;
     proto.params.reserve(stmt->params.size());
-    for (const auto& [param_name, param_type] : stmt->params) {
-        proto.params.push_back(param_name);
+    proto.param_labels.reserve(stmt->params.size());
+    proto.param_defaults.reserve(stmt->params.size());
+    for (const auto& param : stmt->params) {
+        proto.params.push_back(param.internal_name);
+        proto.param_labels.push_back(param.external_name);
+        proto.param_defaults.push_back(build_param_default(param));
     }
 
     Compiler function_compiler;
@@ -1679,8 +1781,8 @@ void Compiler::visit(FuncDeclStmt* stmt) {
     function_compiler.scope_depth_ = 1;
     function_compiler.recursion_depth_ = 0;
 
-    for (const auto& [param_name, param_type] : stmt->params) {
-        function_compiler.declare_local(param_name, param_type.is_optional);
+    for (const auto& param : stmt->params) {
+        function_compiler.declare_local(param.internal_name, param.type.is_optional);
         function_compiler.mark_local_initialized();
     }
 
@@ -1797,6 +1899,7 @@ void Compiler::visit(BinaryExpr* expr) {
         
         // Compile value
         compile_expr(expr->right.get());
+        emit_op(OpCode::OP_COPY_VALUE, expr->line);
         
         // Emit SET_PROPERTY
         size_t name_idx = identifier_constant(member->member);
@@ -1923,6 +2026,7 @@ void Compiler::visit(AssignExpr* expr) {
                     throw CompilerError("Unsupported compound assignment", expr->line);
             }
 
+            emit_op(OpCode::OP_COPY_VALUE, expr->line);
             emit_op(OpCode::OP_SET_PROPERTY, expr->line);
             emit_short(static_cast<uint16_t>(name_idx), expr->line);
             return;
@@ -1985,17 +2089,20 @@ void Compiler::visit(AssignExpr* expr) {
             default:
                 throw CompilerError("Unsupported compound assignment", expr->line);
         }
+        emit_op(OpCode::OP_COPY_VALUE, expr->line);
     } else {
         // 일반 할당
         if (is_property) {
             size_t name_idx = identifier_constant(expr->name);
             emit_load_self(expr->line);
             compile_expr(expr->value.get());
+            emit_op(OpCode::OP_COPY_VALUE, expr->line);
             emit_op(OpCode::OP_SET_PROPERTY, expr->line);
             emit_short(static_cast<uint16_t>(name_idx), expr->line);
             return;
         }
         compile_expr(expr->value.get());
+        emit_op(OpCode::OP_COPY_VALUE, expr->line);
     }
 
     // ��� ����
@@ -2079,12 +2186,33 @@ void Compiler::visit(CallExpr* expr) {
         throw CompilerError("Too many arguments in function call", expr->line);
     }
 
-    for (const auto& arg : expr->arguments) {
-        compile_expr(arg.get());
+    bool has_named_args = false;
+    for (size_t i = 0; i < expr->arguments.size(); ++i) {
+        compile_expr(expr->arguments[i].get());
+        emit_op(OpCode::OP_COPY_VALUE, expr->line);
+        if (!expr->argument_names[i].empty()) {
+            has_named_args = true;
+        }
     }
 
-    emit_op(OpCode::OP_CALL, expr->line);
-    emit_short(static_cast<uint16_t>(expr->arguments.size()), expr->line);
+    if (has_named_args) {
+        emit_op(OpCode::OP_CALL_NAMED, expr->line);
+        emit_short(static_cast<uint16_t>(expr->arguments.size()), expr->line);
+        for (const auto& arg_name : expr->argument_names) {
+            if (arg_name.empty()) {
+                emit_short(std::numeric_limits<uint16_t>::max(), expr->line);
+            } else {
+                size_t name_idx = identifier_constant(arg_name);
+                if (name_idx > std::numeric_limits<uint16_t>::max()) {
+                    throw CompilerError("Too many argument name identifiers", expr->line);
+                }
+                emit_short(static_cast<uint16_t>(name_idx), expr->line);
+            }
+        }
+    } else {
+        emit_op(OpCode::OP_CALL, expr->line);
+        emit_short(static_cast<uint16_t>(expr->arguments.size()), expr->line);
+    }
 }
 
 void Compiler::visit(RangeExpr* expr) {
@@ -2149,8 +2277,12 @@ void Compiler::visit(ClosureExpr* expr) {
     FunctionPrototype proto;
     proto.name = "<closure>";
     proto.params.reserve(expr->params.size());
+    proto.param_labels.reserve(expr->params.size());
+    proto.param_defaults.reserve(expr->params.size());
     for (const auto& [param_name, param_type] : expr->params) {
         proto.params.push_back(param_name);
+        proto.param_labels.push_back("");
+        proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
     }
 
     Compiler closure_compiler;
@@ -2413,6 +2545,43 @@ void Compiler::emit_variable_get(const std::string& name, uint32_t line) {
     emit_short(static_cast<uint16_t>(name_idx), line);
 }
 
+FunctionPrototype::ParamDefaultValue Compiler::build_param_default(const ParamDecl& param) {
+    FunctionPrototype::ParamDefaultValue def;
+    if (!param.default_value) {
+        return def;
+    }
+
+    def.has_default = true;
+    Expr* expr = param.default_value.get();
+
+    if (expr->kind == ExprKind::Literal) {
+        auto* literal = static_cast<LiteralExpr*>(expr);
+        if (literal->string_value) {
+            def.string_value = *literal->string_value;
+            return def;
+        }
+        def.value = literal->value;
+        return def;
+    }
+
+    if (expr->kind == ExprKind::Unary) {
+        auto* unary = static_cast<UnaryExpr*>(expr);
+        if (unary->op == TokenType::Minus && unary->operand->kind == ExprKind::Literal) {
+            auto* literal = static_cast<LiteralExpr*>(unary->operand.get());
+            if (literal->value.is_int()) {
+                def.value = Value::from_int(-literal->value.as_int());
+                return def;
+            }
+            if (literal->value.is_float()) {
+                def.value = Value::from_float(-literal->value.as_float());
+                return def;
+            }
+        }
+    }
+
+    throw CompilerError("Default parameter values must be literal constants", expr->line);
+}
+
 void Compiler::emit_op(OpCode op, uint32_t line) {
     chunk_.write_op(op, line);
 }
@@ -2477,8 +2646,8 @@ Chunk Compiler::compile_function_body(const FuncDeclStmt& stmt) {
     function_compiler.scope_depth_ = 1;
     function_compiler.recursion_depth_ = 0;
 
-    for (const auto& [param_name, param_type] : stmt.params) {
-        function_compiler.declare_local(param_name, param_type.is_optional);
+    for (const auto& param : stmt.params) {
+        function_compiler.declare_local(param.internal_name, param.type.is_optional);
         function_compiler.mark_local_initialized();
     }
 
@@ -2506,8 +2675,8 @@ Chunk Compiler::compile_struct_method_body(const StructMethodDecl& method, bool 
     method_compiler.declare_local("self", false);
     method_compiler.mark_local_initialized();
 
-    for (const auto& [param_name, param_type] : method.params) {
-        method_compiler.declare_local(param_name, param_type.is_optional);
+    for (const auto& param : method.params) {
+        method_compiler.declare_local(param.internal_name, param.type.is_optional);
         method_compiler.mark_local_initialized();
     }
 

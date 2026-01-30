@@ -55,8 +55,8 @@ void TypeChecker::check(const std::vector<StmtPtr>& program) {
             const auto* func = static_cast<const FuncDeclStmt*>(stmt.get());
             std::vector<TypeInfo> params;
             params.reserve(func->params.size());
-            for (const auto& [_, annotation] : func->params) {
-                params.push_back(type_from_annotation(annotation, func->line));
+            for (const auto& param : func->params) {
+                params.push_back(type_from_annotation(param.type, func->line));
             }
             TypeInfo return_type = TypeInfo::builtin("Void");
             if (func->return_type.has_value()) {
@@ -150,8 +150,8 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                     }
                     std::vector<TypeInfo> params;
                     params.reserve(method->params.size());
-                    for (const auto& [_, annotation] : method->params) {
-                        params.push_back(type_from_annotation(annotation, method->line));
+                    for (const auto& param : method->params) {
+                        params.push_back(type_from_annotation(param.type, method->line));
                     }
                     TypeInfo return_type = TypeInfo::builtin("Void");
                     if (method->return_type.has_value()) {
@@ -181,8 +181,8 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                     }
                     std::vector<TypeInfo> params;
                     params.reserve(method->params.size());
-                    for (const auto& [_, annotation] : method->params) {
-                        params.push_back(type_from_annotation(annotation, method->line));
+                    for (const auto& param : method->params) {
+                        params.push_back(type_from_annotation(param.type, method->line));
                     }
                     TypeInfo return_type = TypeInfo::builtin("Void");
                     if (method->return_type.has_value()) {
@@ -206,8 +206,8 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                     }
                     std::vector<TypeInfo> params;
                     params.reserve(method->params.size());
-                    for (const auto& [_, annotation] : method->params) {
-                        params.push_back(type_from_annotation(annotation, method->line));
+                    for (const auto& param : method->params) {
+                        params.push_back(type_from_annotation(param.type, method->line));
                     }
                     TypeInfo return_type = TypeInfo::builtin("Void");
                     if (method->return_type.has_value()) {
@@ -235,8 +235,8 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                         }
                         std::vector<TypeInfo> params;
                         params.reserve(method->params.size());
-                        for (const auto& [_, annotation] : method->params) {
-                            params.push_back(type_from_annotation(annotation, method->line));
+                        for (const auto& param : method->params) {
+                            params.push_back(type_from_annotation(param.type, method->line));
                         }
                         TypeInfo return_type = TypeInfo::builtin("Void");
                         if (method->return_type.has_value()) {
@@ -521,8 +521,19 @@ void TypeChecker::check_switch_stmt(const SwitchStmt* stmt) {
     for (const auto& case_clause : stmt->cases) {
         enter_scope();
         for (const auto& pattern : case_clause.patterns) {
-            if (pattern) {
-                check_expr(pattern.get());
+            if (!pattern) {
+                continue;
+            }
+            if (pattern->kind == PatternKind::Expression) {
+                auto* expr_pattern = static_cast<const ExpressionPattern*>(pattern.get());
+                if (expr_pattern->expression) {
+                    check_expr(expr_pattern->expression.get());
+                }
+            } else if (pattern->kind == PatternKind::EnumCase) {
+                auto* enum_pattern = static_cast<const EnumCasePattern*>(pattern.get());
+                for (const auto& binding : enum_pattern->bindings) {
+                    declare_symbol(binding, TypeInfo::builtin("Any"), stmt->line);
+                }
             }
         }
         for (const auto& statement : case_clause.statements) {
@@ -560,8 +571,8 @@ void TypeChecker::check_throw_stmt(const ThrowStmt* stmt) {
 void TypeChecker::check_func_decl(const FuncDeclStmt* stmt, const std::string& self_type) {
     std::vector<TypeInfo> params;
     params.reserve(stmt->params.size());
-    for (const auto& [name, annotation] : stmt->params) {
-        params.push_back(type_from_annotation(annotation, stmt->line));
+    for (const auto& param : stmt->params) {
+        params.push_back(type_from_annotation(param.type, stmt->line));
     }
 
     TypeInfo return_type = TypeInfo::builtin("Void");
@@ -580,7 +591,7 @@ void TypeChecker::check_func_decl(const FuncDeclStmt* stmt, const std::string& s
         declare_symbol("self", self_info, stmt->line);
     }
     for (size_t i = 0; i < stmt->params.size(); ++i) {
-        declare_symbol(stmt->params[i].first, params[i], stmt->line);
+        declare_symbol(stmt->params[i].internal_name, params[i], stmt->line);
     }
     function_stack_.push_back(FunctionContext{return_type});
     check_block(stmt->body.get());
@@ -632,10 +643,10 @@ void TypeChecker::check_struct_decl(const StructDeclStmt* stmt) {
         declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
         std::vector<TypeInfo> params;
         params.reserve(method->params.size());
-        for (const auto& [param_name, annotation] : method->params) {
-            TypeInfo param_type = type_from_annotation(annotation, stmt->line);
+        for (const auto& param : method->params) {
+            TypeInfo param_type = type_from_annotation(param.type, stmt->line);
             params.push_back(param_type);
-            declare_symbol(param_name, param_type, stmt->line);
+            declare_symbol(param.internal_name, param_type, stmt->line);
         }
         TypeInfo return_type = TypeInfo::builtin("Void");
         if (method->return_type.has_value()) {
@@ -658,12 +669,6 @@ void TypeChecker::check_enum_decl(const EnumDeclStmt* stmt) {
     enter_scope();
     declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
 
-    for (const auto& enum_case : stmt->cases) {
-        if (!enum_case.associated_values.empty()) {
-            error("Enum associated values are not supported for case '" + enum_case.name + "'", stmt->line);
-        }
-    }
-
     for (const auto& method : stmt->methods) {
         if (!method) {
             continue;
@@ -672,10 +677,10 @@ void TypeChecker::check_enum_decl(const EnumDeclStmt* stmt) {
         declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
         std::vector<TypeInfo> params;
         params.reserve(method->params.size());
-        for (const auto& [param_name, annotation] : method->params) {
-            TypeInfo param_type = type_from_annotation(annotation, stmt->line);
+        for (const auto& param : method->params) {
+            TypeInfo param_type = type_from_annotation(param.type, stmt->line);
             params.push_back(param_type);
-            declare_symbol(param_name, param_type, stmt->line);
+            declare_symbol(param.internal_name, param_type, stmt->line);
         }
         TypeInfo return_type = TypeInfo::builtin("Void");
         if (method->return_type.has_value()) {
@@ -692,8 +697,8 @@ void TypeChecker::check_enum_decl(const EnumDeclStmt* stmt) {
 
 void TypeChecker::check_protocol_decl(const ProtocolDeclStmt* stmt) {
     for (const auto& requirement : stmt->method_requirements) {
-        for (const auto& [_, annotation] : requirement.params) {
-            type_from_annotation(annotation, stmt->line);
+        for (const auto& param : requirement.params) {
+            type_from_annotation(param.type, stmt->line);
         }
         if (requirement.return_type.has_value()) {
             type_from_annotation(requirement.return_type.value(), stmt->line);
@@ -721,10 +726,10 @@ void TypeChecker::check_extension_decl(const ExtensionDeclStmt* stmt) {
         declare_symbol("self", TypeInfo::user(stmt->extended_type), stmt->line);
         std::vector<TypeInfo> params;
         params.reserve(method->params.size());
-        for (const auto& [param_name, annotation] : method->params) {
-            TypeInfo param_type = type_from_annotation(annotation, stmt->line);
+        for (const auto& param : method->params) {
+            TypeInfo param_type = type_from_annotation(param.type, stmt->line);
             params.push_back(param_type);
-            declare_symbol(param_name, param_type, stmt->line);
+            declare_symbol(param.internal_name, param_type, stmt->line);
         }
         TypeInfo return_type = TypeInfo::builtin("Void");
         if (method->return_type.has_value()) {

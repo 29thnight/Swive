@@ -131,6 +131,7 @@ private:
     void emit_self_property_set(const std::string& name, uint32_t line);
     void emit_load_self(uint32_t line);
     void emit_variable_get(const std::string& name, uint32_t line);
+    FunctionPrototype::ParamDefaultValue build_param_default(const ParamDecl& param);
 
     void emit_op(OpCode op, uint32_t line);
     void emit_byte(uint8_t byte, uint32_t line);

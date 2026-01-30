@@ -3,6 +3,7 @@
 #include "ss_value.hpp"
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include <stdexcept>
@@ -20,6 +21,13 @@ struct UpvalueInfo {
 struct FunctionPrototype {
     std::string name;
     std::vector<std::string> params;
+    std::vector<std::string> param_labels;
+    struct ParamDefaultValue {
+        bool has_default{false};
+        Value value;
+        std::optional<std::string> string_value;
+    };
+    std::vector<ParamDefaultValue> param_defaults;
     std::shared_ptr<Chunk> chunk;
     std::vector<UpvalueInfo> upvalues;  // Captured variables info
     bool is_initializer{false};
@@ -108,6 +116,7 @@ struct Protocol {
         OP_DEFINE_COMPUTED_PROPERTY, // Register computed property with getter/setter
         OP_INHERIT,            // Link subclass to superclass
         OP_CALL,
+        OP_CALL_NAMED,
         OP_RETURN,
 
         // Upvalues (for closures)
@@ -143,6 +152,8 @@ struct Protocol {
         // Enum operations
         OP_ENUM,               // Create enum type object
         OP_ENUM_CASE,          // Define enum case
+        OP_MATCH_ENUM_CASE,    // Check enum case name against a value
+        OP_GET_ASSOCIATED,     // Get associated value by index
 
         // Protocol operations
         OP_PROTOCOL,           // Create protocol object

@@ -220,12 +220,18 @@ class FunctionObject : public Object {
 public:
     std::string name;
     std::vector<std::string> params;
+    std::vector<std::string> param_labels;
+    std::vector<Value> param_defaults;
+    std::vector<bool> param_has_default;
     std::shared_ptr<Chunk> chunk;
     bool is_initializer{false};
     bool is_override{false};
 
     FunctionObject(std::string function_name,
                    std::vector<std::string> function_params,
+                   std::vector<std::string> function_param_labels,
+                   std::vector<Value> function_param_defaults,
+                   std::vector<bool> function_param_has_default,
                    std::shared_ptr<Chunk> function_chunk,
                    bool initializer,
                    bool override_flag = false);
@@ -474,6 +480,7 @@ public:
     std::string case_name;
     Value raw_value;  // Optional raw value (Int, String, etc.)
     std::vector<Value> associated_values;  // For associated values
+    std::vector<std::string> associated_labels;  // Labels for associated values
 
     EnumCaseObject(EnumObject* e, std::string name)
         : Object(ObjectType::EnumCase), enum_type(e), case_name(std::move(name)), raw_value(Value::null()) {}
@@ -502,6 +509,9 @@ public:
     size_t memory_size() const override {
         size_t total = sizeof(EnumCaseObject) + case_name.capacity();
         total += associated_values.capacity() * sizeof(Value);
+        for (const auto& label : associated_labels) {
+            total += label.capacity();
+        }
         return total;
     }
 };

@@ -250,6 +250,13 @@ struct ClosureExpr : Expr {
     ClosureExpr() : Expr(ExprKind::Closure) {}
 };
 
+struct ParamDecl {
+    std::string external_name;
+    std::string internal_name;
+    TypeAnnotation type;
+    ExprPtr default_value;
+};
+
 // ============================================================
 //  Statements
 // ============================================================
@@ -384,8 +391,35 @@ struct ContinueStmt : Stmt {
 };
 
 // Switch case clause
+enum class PatternKind {
+    Expression,
+    EnumCase,
+};
+
+struct Pattern {
+    PatternKind kind;
+    uint32_t line{0};
+    virtual ~Pattern() = default;
+protected:
+    explicit Pattern(PatternKind k) : kind(k) {}
+};
+
+struct ExpressionPattern : Pattern {
+    ExprPtr expression;
+    ExpressionPattern() : Pattern(PatternKind::Expression) {}
+};
+
+struct EnumCasePattern : Pattern {
+    std::string case_name;
+    std::vector<std::string> bindings;
+    EnumCasePattern() : Pattern(PatternKind::EnumCase) {}
+};
+
+using PatternPtr = std::unique_ptr<Pattern>;
+
+// Switch case clause
 struct CaseClause {
-    std::vector<ExprPtr> patterns;  // Can be values or ranges
+    std::vector<PatternPtr> patterns;  // Can be values, ranges, or enum patterns
     std::vector<StmtPtr> statements;
     bool is_default{false};
 };
@@ -424,7 +458,7 @@ struct DoCatchStmt : Stmt {
 
 struct FuncDeclStmt : Stmt {
     std::string name;
-    std::vector<std::pair<std::string, TypeAnnotation>> params;
+    std::vector<ParamDecl> params;
     std::unique_ptr<BlockStmt> body;
     std::optional<TypeAnnotation> return_type;
     bool is_override{false};
@@ -447,7 +481,7 @@ struct ClassDeclStmt : Stmt {
 // Struct method declaration with mutating flag
 struct StructMethodDecl {
     std::string name;
-    std::vector<std::pair<std::string, TypeAnnotation>> params;
+    std::vector<ParamDecl> params;
     std::unique_ptr<BlockStmt> body;
     std::optional<TypeAnnotation> return_type;
     bool is_mutating{false};  // mutating methods can modify self
@@ -497,7 +531,7 @@ struct ImportStmt : Stmt {
 // Protocol method requirement
 struct ProtocolMethodRequirement {
     std::string name;
-    std::vector<std::pair<std::string, TypeAnnotation>> params;
+    std::vector<ParamDecl> params;
     std::optional<TypeAnnotation> return_type;
     bool is_mutating{false};
 };
@@ -530,4 +564,3 @@ struct ExtensionDeclStmt : Stmt {
 };
 
 } // namespace swiftscript
-

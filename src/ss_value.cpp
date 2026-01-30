@@ -139,12 +139,18 @@ void MapObject::insert(VM& vm, std::string key, Value value) {
 
 FunctionObject::FunctionObject(std::string function_name,
                            std::vector<std::string> function_params,
+                           std::vector<std::string> function_param_labels,
+                           std::vector<Value> function_param_defaults,
+                           std::vector<bool> function_param_has_default,
                            std::shared_ptr<Chunk> function_chunk,
                            bool initializer,
                            bool override_flag)
 : Object(ObjectType::Function),
   name(std::move(function_name)),
   params(std::move(function_params)),
+  param_labels(std::move(function_param_labels)),
+  param_defaults(std::move(function_param_defaults)),
+  param_has_default(std::move(function_param_has_default)),
   chunk(std::move(function_chunk)),
   is_initializer(initializer),
   is_override(override_flag) {}
@@ -162,6 +168,11 @@ size_t FunctionObject::memory_size() const {
     for (const auto& param : params) {
         total += param.capacity();
     }
+    for (const auto& label : param_labels) {
+        total += label.capacity();
+    }
+    total += param_defaults.capacity() * sizeof(Value);
+    total += param_has_default.capacity() * sizeof(bool);
     if (chunk) {
         total += chunk->code.capacity() * sizeof(uint8_t);
         total += chunk->constants.capacity() * sizeof(Value);

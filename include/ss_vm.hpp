@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <optional>
 
 namespace swiftscript {
 
@@ -108,6 +109,17 @@ namespace swiftscript {
         bool is_truthy(const Value& value) const;
         Value get_property(const Value& object, const std::string& name);
         bool find_method_on_class(ClassObject* klass, const std::string& name, Value& out_method) const;
+        void build_param_defaults(const FunctionPrototype& proto,
+                                  std::vector<Value>& defaults,
+                                  std::vector<bool>& has_defaults);
+        void apply_positional_defaults(uint16_t& arg_count,
+                                       FunctionObject* func,
+                                       bool has_receiver);
+        void apply_named_arguments(size_t callee_index,
+                                   uint16_t& arg_count,
+                                   FunctionObject* func,
+                                   bool has_receiver,
+                                   const std::vector<std::optional<std::string>>& arg_names);
 
         UpvalueObject* capture_upvalue(Value* local);
         void close_upvalues(Value* last);

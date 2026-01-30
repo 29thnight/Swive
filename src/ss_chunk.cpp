@@ -150,6 +150,12 @@ size_t Chunk::disassemble_instruction(size_t offset) const {
             return simple_instruction("OP_INHERIT", offset);
         case OpCode::OP_CALL:
             return short_instruction("OP_CALL", offset);
+        case OpCode::OP_CALL_NAMED: {
+            uint16_t arg_count = (code[offset + 1] << 8) | code[offset + 2];
+            std::cout << std::setw(16) << std::left << "OP_CALL_NAMED" << " "
+                      << std::setw(4) << arg_count << "\n";
+            return offset + 3 + arg_count * 2;
+        }
         case OpCode::OP_RETURN:
             return simple_instruction("OP_RETURN", offset);
         case OpCode::OP_GET_PROPERTY:
@@ -201,7 +207,17 @@ size_t Chunk::disassemble_instruction(size_t offset) const {
         case OpCode::OP_ENUM:
             return string_instruction("OP_ENUM", offset);
         case OpCode::OP_ENUM_CASE:
-            return string_instruction("OP_ENUM_CASE", offset);
+        {
+            uint16_t str_idx = (code[offset + 1] << 8) | code[offset + 2];
+            uint8_t assoc_count = code[offset + 3];
+            std::cout << std::setw(16) << std::left << "OP_ENUM_CASE" << " "
+                      << std::setw(4) << str_idx << " (assoc " << static_cast<int>(assoc_count) << ")\n";
+            return offset + 4 + assoc_count * 2;
+        }
+        case OpCode::OP_MATCH_ENUM_CASE:
+            return string_instruction("OP_MATCH_ENUM_CASE", offset);
+        case OpCode::OP_GET_ASSOCIATED:
+            return short_instruction("OP_GET_ASSOCIATED", offset);
         case OpCode::OP_PROTOCOL:
             return short_instruction("OP_PROTOCOL", offset);
         case OpCode::OP_DEFINE_GLOBAL:

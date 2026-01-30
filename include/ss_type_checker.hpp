@@ -53,12 +53,17 @@ private:
     };
 
     std::unordered_map<std::string, TypeKind> known_types_;
+    std::unordered_map<std::string, std::unordered_map<std::string, TypeInfo>> type_properties_;
+    std::unordered_map<std::string, std::unordered_map<std::string, TypeInfo>> type_methods_;
+    std::unordered_map<std::string, std::unordered_set<std::string>> enum_cases_;
+    std::unordered_map<std::string, std::string> superclass_map_;
     std::unordered_map<std::string, std::unordered_set<std::string>> protocol_conformers_;
     std::unordered_map<std::string, std::unordered_set<std::string>> protocol_inheritance_;
     std::unordered_map<std::string, std::unordered_set<std::string>> protocol_descendants_;
 
     std::vector<std::unordered_map<std::string, TypeInfo>> scopes_;
     std::vector<FunctionContext> function_stack_;
+    mutable std::vector<TypeCheckError> errors_;
 
     void collect_type_declarations(const std::vector<StmtPtr>& program);
     void add_builtin_types();
@@ -125,8 +130,10 @@ private:
     TypeInfo base_type(const TypeInfo& type) const;
     bool protocol_conforms(const std::string& type_name, const std::string& protocol_name) const;
     bool protocol_inherits(const std::string& protocol_name, const std::string& ancestor) const;
+    bool is_subclass_of(const std::string& subclass, const std::string& superclass) const;
 
-    [[noreturn]] void error(const std::string& message, uint32_t line) const;
+    void error(const std::string& message, uint32_t line) const;
+    void throw_if_errors();
 };
 
 } // namespace swiftscript

@@ -29,11 +29,16 @@ TypeChecker::TypeInfo TypeChecker::TypeInfo::function(std::vector<TypeInfo> para
 
 void TypeChecker::check(const std::vector<StmtPtr>& program) {
     known_types_.clear();
+    type_properties_.clear();
+    type_methods_.clear();
+    enum_cases_.clear();
+    superclass_map_.clear();
     protocol_conformers_.clear();
     protocol_inheritance_.clear();
     protocol_descendants_.clear();
     scopes_.clear();
     function_stack_.clear();
+    errors_.clear();
 
     add_builtin_types();
     collect_type_declarations(program);
@@ -63,10 +68,12 @@ void TypeChecker::check(const std::vector<StmtPtr>& program) {
     for (const auto& stmt : program) {
         if (!stmt) {
             error("Null statement in program", 0);
+            continue;
         }
         check_stmt(stmt.get());
     }
     exit_scope();
+    throw_if_errors();
 }
 
 void TypeChecker::add_builtin_types() {
@@ -74,6 +81,8 @@ void TypeChecker::add_builtin_types() {
     known_types_.emplace("Float", TypeKind::Builtin);
     known_types_.emplace("Bool", TypeKind::Builtin);
     known_types_.emplace("String", TypeKind::Builtin);
+    known_types_.emplace("Array", TypeKind::Builtin);
+    known_types_.emplace("Dictionary", TypeKind::Builtin);
     known_types_.emplace("Void", TypeKind::Builtin);
     known_types_.emplace("Any", TypeKind::Builtin);
 }
@@ -83,6 +92,9 @@ void TypeChecker::add_known_type(const std::string& name, TypeKind kind, uint32_
         return;
     }
     known_types_.emplace(name, kind);
+    type_properties_.emplace(name, std::unordered_map<std::string, TypeInfo>{});
+    type_methods_.emplace(name, std::unordered_map<std::string, TypeInfo>{});
+    enum_cases_.emplace(name, std::unordered_set<std::string>{});
     if (kind == TypeKind::Protocol) {
         protocol_conformers_.emplace(name, std::unordered_set<std::string>{});
         protocol_inheritance_.emplace(name, std::unordered_set<std::string>{});
@@ -104,6 +116,7 @@ void TypeChecker::add_protocol_conformance(const std::string& type_name, const s
         auto it = known_types_.find(protocol_name);
         if (it == known_types_.end() || it->second != TypeKind::Protocol) {
             error("Unknown protocol type '" + protocol_name + "'", line);
+            continue;
         }
         protocol_conformers_[protocol_name].insert(type_name);
     }
@@ -119,18 +132,91 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
             case StmtKind::ClassDecl: {
                 auto* decl = static_cast<const ClassDeclStmt*>(stmt);
                 add_known_type(decl->name, TypeKind::User, decl->line);
+                if (decl->superclass_name.has_value()) {
+                    superclass_map_[decl->name] = decl->superclass_name.value();
+                }
                 add_protocol_conformance(decl->name, decl->protocol_conformances, decl->line);
+                for (const auto& property : decl->properties) {
+                    if (!property || !property->type_annotation.has_value()) {
+                        continue;
+                    }
+                    type_properties_[decl->name].emplace(
+                        property->name,
+                        type_from_annotation(property->type_annotation.value(), property->line));
+                }
+                for (const auto& method : decl->methods) {
+                    if (!method) {
+                        continue;
+                    }
+                    std::vector<TypeInfo> params;
+                    params.reserve(method->params.size());
+                    for (const auto& [_, annotation] : method->params) {
+                        params.push_back(type_from_annotation(annotation, method->line));
+                    }
+                    TypeInfo return_type = TypeInfo::builtin("Void");
+                    if (method->return_type.has_value()) {
+                        return_type = type_from_annotation(method->return_type.value(), method->line);
+                    }
+                    type_methods_[decl->name].emplace(
+                        method->name,
+                        TypeInfo::function(params, return_type));
+                }
                 break;
             }
             case StmtKind::StructDecl: {
                 auto* decl = static_cast<const StructDeclStmt*>(stmt);
                 add_known_type(decl->name, TypeKind::User, decl->line);
                 add_protocol_conformance(decl->name, decl->protocol_conformances, decl->line);
+                for (const auto& property : decl->properties) {
+                    if (!property || !property->type_annotation.has_value()) {
+                        continue;
+                    }
+                    type_properties_[decl->name].emplace(
+                        property->name,
+                        type_from_annotation(property->type_annotation.value(), property->line));
+                }
+                for (const auto& method : decl->methods) {
+                    if (!method) {
+                        continue;
+                    }
+                    std::vector<TypeInfo> params;
+                    params.reserve(method->params.size());
+                    for (const auto& [_, annotation] : method->params) {
+                        params.push_back(type_from_annotation(annotation, method->line));
+                    }
+                    TypeInfo return_type = TypeInfo::builtin("Void");
+                    if (method->return_type.has_value()) {
+                        return_type = type_from_annotation(method->return_type.value(), method->line);
+                    }
+                    type_methods_[decl->name].emplace(
+                        method->name,
+                        TypeInfo::function(params, return_type));
+                }
                 break;
             }
             case StmtKind::EnumDecl: {
                 auto* decl = static_cast<const EnumDeclStmt*>(stmt);
                 add_known_type(decl->name, TypeKind::User, decl->line);
+                for (const auto& enum_case : decl->cases) {
+                    enum_cases_[decl->name].insert(enum_case.name);
+                }
+                for (const auto& method : decl->methods) {
+                    if (!method) {
+                        continue;
+                    }
+                    std::vector<TypeInfo> params;
+                    params.reserve(method->params.size());
+                    for (const auto& [_, annotation] : method->params) {
+                        params.push_back(type_from_annotation(annotation, method->line));
+                    }
+                    TypeInfo return_type = TypeInfo::builtin("Void");
+                    if (method->return_type.has_value()) {
+                        return_type = type_from_annotation(method->return_type.value(), method->line);
+                    }
+                    type_methods_[decl->name].emplace(
+                        method->name,
+                        TypeInfo::function(params, return_type));
+                }
                 break;
             }
             case StmtKind::ProtocolDecl: {
@@ -142,6 +228,25 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
             case StmtKind::ExtensionDecl: {
                 auto* decl = static_cast<const ExtensionDeclStmt*>(stmt);
                 add_protocol_conformance(decl->extended_type, decl->protocol_conformances, decl->line);
+                if (known_types_.contains(decl->extended_type)) {
+                    for (const auto& method : decl->methods) {
+                        if (!method) {
+                            continue;
+                        }
+                        std::vector<TypeInfo> params;
+                        params.reserve(method->params.size());
+                        for (const auto& [_, annotation] : method->params) {
+                            params.push_back(type_from_annotation(annotation, method->line));
+                        }
+                        TypeInfo return_type = TypeInfo::builtin("Void");
+                        if (method->return_type.has_value()) {
+                            return_type = type_from_annotation(method->return_type.value(), method->line);
+                        }
+                        type_methods_[decl->extended_type].emplace(
+                            method->name,
+                            TypeInfo::function(params, return_type));
+                    }
+                }
                 break;
             }
             default:
@@ -213,6 +318,7 @@ TypeChecker::TypeInfo TypeChecker::lookup_symbol(const std::string& name, uint32
         }
     }
     error("Undefined symbol '" + name + "'", line);
+    return TypeInfo::unknown();
 }
 
 bool TypeChecker::has_symbol(const std::string& name) const {
@@ -483,6 +589,14 @@ void TypeChecker::check_func_decl(const FuncDeclStmt* stmt, const std::string& s
 }
 
 void TypeChecker::check_class_decl(const ClassDeclStmt* stmt) {
+    if (stmt->superclass_name.has_value()) {
+        const std::string& superclass = stmt->superclass_name.value();
+        auto it = known_types_.find(superclass);
+        if (it == known_types_.end() || it->second != TypeKind::User) {
+            error("Unknown superclass '" + superclass + "'", stmt->line);
+        }
+    }
+
     enter_scope();
     declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
 
@@ -543,6 +657,12 @@ void TypeChecker::check_struct_decl(const StructDeclStmt* stmt) {
 void TypeChecker::check_enum_decl(const EnumDeclStmt* stmt) {
     enter_scope();
     declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
+
+    for (const auto& enum_case : stmt->cases) {
+        if (!enum_case.associated_values.empty()) {
+            error("Enum associated values are not supported for case '" + enum_case.name + "'", stmt->line);
+        }
+    }
 
     for (const auto& method : stmt->methods) {
         if (!method) {
@@ -788,6 +908,18 @@ TypeChecker::TypeInfo TypeChecker::check_binary_expr(const BinaryExpr* expr) {
                 error("Logical operator requires Bool right operand", expr->line);
             }
             return TypeInfo::builtin("Bool");
+        case TokenType::BitwiseAnd:
+        case TokenType::BitwiseOr:
+        case TokenType::BitwiseXor:
+        case TokenType::LeftShift:
+        case TokenType::RightShift:
+            if (!is_unknown(left) && left.name != "Int") {
+                error("Bitwise operator requires Int left operand", expr->line);
+            }
+            if (!is_unknown(right) && right.name != "Int") {
+                error("Bitwise operator requires Int right operand", expr->line);
+            }
+            return TypeInfo::builtin("Int");
         default:
             return TypeInfo::unknown();
     }
@@ -807,16 +939,18 @@ TypeChecker::TypeInfo TypeChecker::check_assign_expr(const AssignExpr* expr) {
 
 TypeChecker::TypeInfo TypeChecker::check_call_expr(const CallExpr* expr) {
     TypeInfo callee = check_expr(expr->callee.get());
+    std::vector<TypeInfo> arg_types;
+    arg_types.reserve(expr->arguments.size());
     for (const auto& arg : expr->arguments) {
-        check_expr(arg.get());
+        arg_types.push_back(check_expr(arg.get()));
     }
     if (callee.kind == TypeKind::Function) {
         if (callee.param_types.size() != expr->arguments.size()) {
             error("Function argument count mismatch", expr->line);
         }
-        for (size_t i = 0; i < callee.param_types.size(); ++i) {
-            TypeInfo arg_type = check_expr(expr->arguments[i].get());
-            if (!is_assignable(callee.param_types[i], arg_type)) {
+        size_t param_count = std::min(callee.param_types.size(), arg_types.size());
+        for (size_t i = 0; i < param_count; ++i) {
+            if (!is_assignable(callee.param_types[i], arg_types[i])) {
                 error("Function argument type mismatch", expr->line);
             }
         }
@@ -830,6 +964,45 @@ TypeChecker::TypeInfo TypeChecker::check_member_expr(const MemberExpr* expr) {
     if (!is_unknown(object) && object.is_optional) {
         error("Use optional chaining to access members on optional", expr->line);
     }
+    if (is_unknown(object)) {
+        return TypeInfo::unknown();
+    }
+
+    auto lookup_member = [&](const std::string& type_name) -> std::optional<TypeInfo> {
+        std::string current = type_name;
+        while (!current.empty()) {
+            auto prop_it = type_properties_.find(current);
+            if (prop_it != type_properties_.end()) {
+                auto member_it = prop_it->second.find(expr->member);
+                if (member_it != prop_it->second.end()) {
+                    return member_it->second;
+                }
+            }
+            auto method_it = type_methods_.find(current);
+            if (method_it != type_methods_.end()) {
+                auto found = method_it->second.find(expr->member);
+                if (found != method_it->second.end()) {
+                    return found->second;
+                }
+            }
+            auto parent_it = superclass_map_.find(current);
+            if (parent_it == superclass_map_.end()) {
+                break;
+            }
+            current = parent_it->second;
+        }
+        return std::nullopt;
+    };
+
+    if (enum_cases_.contains(object.name) && enum_cases_.at(object.name).contains(expr->member)) {
+        return TypeInfo::user(object.name);
+    }
+
+    if (auto member = lookup_member(object.name)) {
+        return *member;
+    }
+
+    error("Unknown member '" + expr->member + "' on type '" + object.name + "'", expr->line);
     return TypeInfo::unknown();
 }
 
@@ -838,7 +1011,42 @@ TypeChecker::TypeInfo TypeChecker::check_optional_chain_expr(const OptionalChain
     if (!is_unknown(object) && !object.is_optional) {
         error("Optional chaining requires optional base", expr->line);
     }
+    TypeInfo base = base_type(object);
     TypeInfo member = TypeInfo::unknown();
+    if (!is_unknown(base)) {
+        auto lookup_member = [&](const std::string& type_name) -> std::optional<TypeInfo> {
+            std::string current = type_name;
+            while (!current.empty()) {
+                auto prop_it = type_properties_.find(current);
+                if (prop_it != type_properties_.end()) {
+                    auto member_it = prop_it->second.find(expr->member);
+                    if (member_it != prop_it->second.end()) {
+                        return member_it->second;
+                    }
+                }
+                auto method_it = type_methods_.find(current);
+                if (method_it != type_methods_.end()) {
+                    auto found = method_it->second.find(expr->member);
+                    if (found != method_it->second.end()) {
+                        return found->second;
+                    }
+                }
+                auto parent_it = superclass_map_.find(current);
+                if (parent_it == superclass_map_.end()) {
+                    break;
+                }
+                current = parent_it->second;
+            }
+            return std::nullopt;
+        };
+        if (enum_cases_.contains(base.name) && enum_cases_.at(base.name).contains(expr->member)) {
+            member = TypeInfo::user(base.name);
+        } else if (auto found = lookup_member(base.name)) {
+            member = *found;
+        } else {
+            error("Unknown member '" + expr->member + "' on type '" + base.name + "'", expr->line);
+        }
+    }
     return make_optional(member);
 }
 
@@ -870,18 +1078,36 @@ TypeChecker::TypeInfo TypeChecker::check_range_expr(const RangeExpr* expr) {
 }
 
 TypeChecker::TypeInfo TypeChecker::check_array_literal_expr(const ArrayLiteralExpr* expr) {
+    TypeInfo element_type = TypeInfo::unknown();
     for (const auto& elem : expr->elements) {
-        check_expr(elem.get());
+        TypeInfo current = check_expr(elem.get());
+        if (is_unknown(element_type)) {
+            element_type = current;
+        } else if (!is_unknown(current) && !is_assignable(element_type, current)) {
+            error("Array literal elements must have compatible types", expr->line);
+        }
     }
-    return TypeInfo::unknown();
+    return TypeInfo::builtin("Array");
 }
 
 TypeChecker::TypeInfo TypeChecker::check_dict_literal_expr(const DictLiteralExpr* expr) {
+    TypeInfo key_type = TypeInfo::unknown();
+    TypeInfo value_type = TypeInfo::unknown();
     for (const auto& [key, value] : expr->entries) {
-        check_expr(key.get());
-        check_expr(value.get());
+        TypeInfo current_key = check_expr(key.get());
+        TypeInfo current_value = check_expr(value.get());
+        if (is_unknown(key_type)) {
+            key_type = current_key;
+        } else if (!is_unknown(current_key) && !is_assignable(key_type, current_key)) {
+            error("Dictionary literal keys must have compatible types", expr->line);
+        }
+        if (is_unknown(value_type)) {
+            value_type = current_value;
+        } else if (!is_unknown(current_value) && !is_assignable(value_type, current_value)) {
+            error("Dictionary literal values must have compatible types", expr->line);
+        }
     }
-    return TypeInfo::unknown();
+    return TypeInfo::builtin("Dictionary");
 }
 
 TypeChecker::TypeInfo TypeChecker::check_subscript_expr(const SubscriptExpr* expr) {
@@ -967,6 +1193,7 @@ TypeChecker::TypeInfo TypeChecker::type_from_annotation(const TypeAnnotation& an
     auto it = known_types_.find(annotation.name);
     if (it == known_types_.end()) {
         error("Unknown type '" + annotation.name + "'", line);
+        return TypeInfo::unknown();
     }
 
     TypeInfo info;
@@ -1005,6 +1232,10 @@ bool TypeChecker::is_assignable(const TypeInfo& expected, const TypeInfo& actual
 
     if (expected.name == actual.name) {
         return true;
+    }
+
+    if (expected.kind == TypeKind::User && actual.kind == TypeKind::User) {
+        return is_subclass_of(actual.name, expected.name);
     }
 
     if (expected.kind == TypeKind::Function && actual.kind == TypeKind::Function) {
@@ -1073,8 +1304,38 @@ bool TypeChecker::protocol_inherits(const std::string& protocol_name, const std:
     return it->second.contains(ancestor);
 }
 
-[[noreturn]] void TypeChecker::error(const std::string& message, uint32_t line) const {
-    throw TypeCheckError(message, line);
+bool TypeChecker::is_subclass_of(const std::string& subclass, const std::string& superclass) const {
+    if (subclass == superclass) {
+        return true;
+    }
+    auto current = superclass_map_.find(subclass);
+    while (current != superclass_map_.end()) {
+        if (current->second == superclass) {
+            return true;
+        }
+        current = superclass_map_.find(current->second);
+    }
+    return false;
+}
+
+void TypeChecker::error(const std::string& message, uint32_t line) const {
+    errors_.emplace_back(message, line);
+}
+
+void TypeChecker::throw_if_errors() {
+    if (errors_.empty()) {
+        return;
+    }
+    std::ostringstream oss;
+    for (size_t i = 0; i < errors_.size(); ++i) {
+        if (i > 0) {
+            oss << '\n';
+        }
+        oss << errors_[i].what();
+    }
+    uint32_t line = errors_.front().line();
+    errors_.clear();
+    throw TypeCheckError(oss.str(), line);
 }
 
 } // namespace swiftscript

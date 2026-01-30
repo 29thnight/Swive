@@ -178,7 +178,8 @@ Token Lexer::next_token() {
         case ';': return make_token(TokenType::Semicolon);
         case ':': return make_token(TokenType::Colon);
         case '~': return make_token(TokenType::BitwiseNot);
-        case '^': return make_token(TokenType::BitwiseXor);
+        case '^':
+            return make_token(match('=') ? TokenType::XorEqual : TokenType::BitwiseXor);
 
         case '.':
             if (match('.')) {
@@ -203,7 +204,7 @@ Token Lexer::next_token() {
         case '/':
             return make_token(match('=') ? TokenType::SlashEqual : TokenType::Slash);
         case '%':
-            return make_token(TokenType::Percent);
+            return make_token(match('=') ? TokenType::PercentEqual : TokenType::Percent);
 
         case '=':
             return make_token(match('=') ? TokenType::EqualEqual : TokenType::Equal);
@@ -211,16 +212,22 @@ Token Lexer::next_token() {
             return make_token(match('=') ? TokenType::NotEqual : TokenType::Not);
 
         case '<':
-            if (match('<')) return make_token(TokenType::LeftShift);
+            if (match('<')) {
+                return make_token(match('=') ? TokenType::LeftShiftEqual : TokenType::LeftShift);
+            }
             return make_token(match('=') ? TokenType::LessEqual : TokenType::Less);
         case '>':
-            if (match('>')) return make_token(TokenType::RightShift);
+            if (match('>')) {
+                return make_token(match('=') ? TokenType::RightShiftEqual : TokenType::RightShift);
+            }
             return make_token(match('=') ? TokenType::GreaterEqual : TokenType::Greater);
 
         case '&':
-            return make_token(match('&') ? TokenType::And : TokenType::BitwiseAnd);
+            if (match('&')) return make_token(TokenType::And);
+            return make_token(match('=') ? TokenType::AndEqual : TokenType::BitwiseAnd);
         case '|':
-            return make_token(match('|') ? TokenType::Or : TokenType::BitwiseOr);
+            if (match('|')) return make_token(TokenType::Or);
+            return make_token(match('=') ? TokenType::OrEqual : TokenType::BitwiseOr);
 
         case '?':
             if (match('?')) return make_token(TokenType::NilCoalesce);

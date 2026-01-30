@@ -1,9 +1,9 @@
 ========================================
 SwiftScript Test Results
-Date: 2026-01-30 15:16:57
+Date: 2026-01-30 15:44:08
 ========================================
 
-Starting 10 test suites with 109 tests.
+Starting 12 test suites with 124 tests.
 
 [ Test Suite ] ClassTests
   [ RUN      ] ClassTests.SimpleClassMethod
@@ -28,7 +28,7 @@ Starting 10 test suites with 109 tests.
   [       OK ] ClassTests.DeinitCalled (0 ms)
   [ RUN      ] ClassTests.DeinitWithProperties
   [       OK ] ClassTests.DeinitWithProperties (0 ms)
-  Tests passed: 11/11 (5 ms)
+  Tests passed: 11/11 (6 ms)
 
 [ Test Suite ] ComputedPropertiesTests
   [ RUN      ] ComputedPropertiesTests.GetterOnly
@@ -68,7 +68,7 @@ Starting 10 test suites with 109 tests.
   [       OK ] StructTests.PropertyModification (0 ms)
   [ RUN      ] StructTests.NestedStruct
   [       OK ] StructTests.NestedStruct (0 ms)
-  Tests passed: 10/10 (4 ms)
+  Tests passed: 10/10 (3 ms)
 
 [ Test Suite ] ClosureTests
   [ RUN      ] ClosureTests.BasicClosure
@@ -106,20 +106,20 @@ Starting 10 test suites with 109 tests.
   [ RUN      ] EnumTests.BasicEnum
   [       OK ] EnumTests.BasicEnum (0 ms)
   [ RUN      ] EnumTests.EnumRawValues
-  [       OK ] EnumTests.EnumRawValues (0 ms)
+  [       OK ] EnumTests.EnumRawValues (1 ms)
   [ RUN      ] EnumTests.EnumSwitch
   [       OK ] EnumTests.EnumSwitch (0 ms)
   [ RUN      ] EnumTests.EnumAssociatedValues
-  [       OK ] EnumTests.EnumAssociatedValues (0 ms)
+  [       OK ] EnumTests.EnumAssociatedValues (1 ms)
   [ RUN      ] EnumTests.EnumComparison
-  [       OK ] EnumTests.EnumComparison (0 ms)
+  [       OK ] EnumTests.EnumComparison (1 ms)
   [ RUN      ] EnumTests.EnumMethods
   [       OK ] EnumTests.EnumMethods (0 ms)
   [ RUN      ] EnumTests.EnumComputedProperties
   [       OK ] EnumTests.EnumComputedProperties (0 ms)
   [ RUN      ] EnumTests.MultipleEnums
   [       OK ] EnumTests.MultipleEnums (0 ms)
-  Tests passed: 8/8 (3 ms)
+  Tests passed: 8/8 (103 ms)
 
 [ Test Suite ] ProtocolTest
   [ RUN      ] ProtocolTest.BasicProtocolDeclaration
@@ -159,7 +159,7 @@ Starting 10 test suites with 109 tests.
   [       OK ] EnumInlineTests.EnumInSwitchStatement (0 ms)
   [ RUN      ] EnumInlineTests.EnumSimpleComputedProperty
   [       OK ] EnumInlineTests.EnumSimpleComputedProperty (0 ms)
-  Tests passed: 7/7 (2 ms)
+  Tests passed: 7/7 (3 ms)
 
 [ Test Suite ] ExtensionTest
   [ RUN      ] ExtensionTest.BasicMethod
@@ -249,7 +249,7 @@ Starting 10 test suites with 109 tests.
   [       OK ] Phase1Test.IntegrationOptionalTypeCast (0 ms)
   [ RUN      ] Phase1Test.IntegrationStructMutatingStatic
   [  FAILED  ] Phase1Test.IntegrationStructMutatingStatic (0 ms)
-    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:722
+    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:741
     Expected: swiftscript::test::test_integration_struct_mutating_static() doesn't throw an exception.
   Actual: it throws std::runtime_error with description "Expected to find '1' in output (count should be 1)
 Actual output: 0
@@ -259,14 +259,50 @@ Actual output: 0
   [       OK ] Phase1Test.IntegrationKitchenSink (0 ms)
   Tests passed: 32/33 (12 ms)
 
+[ Test Suite ] BitwiseOperatorsTest
+  [ RUN      ] BitwiseOperatorsTest.BitwiseAnd
+  [       OK ] BitwiseOperatorsTest.BitwiseAnd (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.BitwiseOr
+  [       OK ] BitwiseOperatorsTest.BitwiseOr (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.BitwiseXor
+  [       OK ] BitwiseOperatorsTest.BitwiseXor (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.BitwiseNot
+  [       OK ] BitwiseOperatorsTest.BitwiseNot (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.LeftShift
+  [       OK ] BitwiseOperatorsTest.LeftShift (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.RightShift
+  [       OK ] BitwiseOperatorsTest.RightShift (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.Combined
+  [       OK ] BitwiseOperatorsTest.Combined (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.CompoundAssignment
+  [       OK ] BitwiseOperatorsTest.CompoundAssignment (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.Precedence
+  [       OK ] BitwiseOperatorsTest.Precedence (0 ms)
+  [ RUN      ] BitwiseOperatorsTest.PercentEqual
+  [       OK ] BitwiseOperatorsTest.PercentEqual (0 ms)
+  Tests passed: 10/10 (2 ms)
+
+[ Test Suite ] StaticMembersTest
+  [ RUN      ] StaticMembersTest.ClassStaticMethod
+  [       OK ] StaticMembersTest.ClassStaticMethod (0 ms)
+  [ RUN      ] StaticMembersTest.ClassStaticProperty
+  [       OK ] StaticMembersTest.ClassStaticProperty (0 ms)
+  [ RUN      ] StaticMembersTest.StructStaticMethodFull
+  [       OK ] StaticMembersTest.StructStaticMethodFull (0 ms)
+  [ RUN      ] StaticMembersTest.ExtensionStaticMethod
+  [       OK ] StaticMembersTest.ExtensionStaticMethod (0 ms)
+  [ RUN      ] StaticMembersTest.MixedStaticInstance
+  [       OK ] StaticMembersTest.MixedStaticInstance (0 ms)
+  Tests passed: 5/5 (2 ms)
+
 ========================================
 Test Summary
 ========================================
-Total test suites: 10
-Total tests: 109
-Passed: 108
+Total test suites: 12
+Total tests: 124
+Passed: 123
 Failed: 1
-Elapsed time: 44 ms
+Elapsed time: 150 ms
 ========================================
 
 SOME TESTS FAILED!

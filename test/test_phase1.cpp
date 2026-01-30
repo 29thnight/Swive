@@ -744,5 +744,313 @@ void test_integration_kitchen_sink() {
     }
 }
 
+// ============================================================================
+// Bitwise Operators Tests
+// ============================================================================
+
+// Test: Bitwise AND operator
+void test_bitwise_and() {
+    std::string source = R"(
+        var a = 12
+        var b = 10
+        var result = a & b
+        print(result)
+    )";
+
+    std::string out = run_code(source);
+    // 12 = 1100, 10 = 1010, 12 & 10 = 1000 = 8
+    AssertHelper::assert_contains(out, "8", "12 & 10 should be 8");
+    std::cout << "[PASS] Bitwise AND operator works!\n";
+}
+
+// Test: Bitwise OR operator
+void test_bitwise_or() {
+    std::string source = R"(
+        var a = 12
+        var b = 10
+        var result = a | b
+        print(result)
+    )";
+
+    std::string out = run_code(source);
+    // 12 = 1100, 10 = 1010, 12 | 10 = 1110 = 14
+    AssertHelper::assert_contains(out, "14", "12 | 10 should be 14");
+    std::cout << "[PASS] Bitwise OR operator works!\n";
+}
+
+// Test: Bitwise XOR operator
+void test_bitwise_xor() {
+    std::string source = R"(
+        var a = 12
+        var b = 10
+        var result = a ^ b
+        print(result)
+    )";
+
+    std::string out = run_code(source);
+    // 12 = 1100, 10 = 1010, 12 ^ 10 = 0110 = 6
+    AssertHelper::assert_contains(out, "6", "12 ^ 10 should be 6");
+    std::cout << "[PASS] Bitwise XOR operator works!\n";
+}
+
+// Test: Bitwise NOT operator
+void test_bitwise_not() {
+    std::string source = R"(
+        var a = 0
+        var result = ~a
+        print(result)
+    )";
+
+    std::string out = run_code(source);
+    // ~0 = -1 (two's complement)
+    AssertHelper::assert_contains(out, "-1", "~0 should be -1");
+    std::cout << "[PASS] Bitwise NOT operator works!\n";
+}
+
+// Test: Left shift operator
+void test_left_shift() {
+    std::string source = R"(
+        var a = 5
+        var result = a << 2
+        print(result)
+    )";
+
+    std::string out = run_code(source);
+    // 5 << 2 = 20
+    AssertHelper::assert_contains(out, "20", "5 << 2 should be 20");
+    std::cout << "[PASS] Left shift operator works!\n";
+}
+
+// Test: Right shift operator
+void test_right_shift() {
+    std::string source = R"(
+        var a = 20
+        var result = a >> 2
+        print(result)
+    )";
+
+    std::string out = run_code(source);
+    // 20 >> 2 = 5
+    AssertHelper::assert_contains(out, "5", "20 >> 2 should be 5");
+    std::cout << "[PASS] Right shift operator works!\n";
+}
+
+// Test: Combined bitwise operations
+void test_bitwise_combined() {
+    std::string source = R"(
+        var a = 15
+        var b = 9
+        var and_result = a & b
+        var or_result = a | b
+        var xor_result = a ^ b
+        print(and_result)
+        print(or_result)
+        print(xor_result)
+    )";
+
+    std::string out = run_code(source);
+    // 15 = 1111, 9 = 1001
+    // 15 & 9 = 1001 = 9
+    // 15 | 9 = 1111 = 15
+    // 15 ^ 9 = 0110 = 6
+    AssertHelper::assert_contains(out, "9", "15 & 9 should be 9");
+    AssertHelper::assert_contains(out, "15", "15 | 9 should be 15");
+    AssertHelper::assert_contains(out, "6", "15 ^ 9 should be 6");
+    std::cout << "[PASS] Combined bitwise operations work!\n";
+}
+
+// Test: Bitwise compound assignment operators
+void test_bitwise_compound_assignment() {
+    std::string source = R"(
+        var a = 12
+        a &= 10
+        print(a)
+
+        var b = 12
+        b |= 10
+        print(b)
+
+        var c = 12
+        c ^= 10
+        print(c)
+
+        var d = 5
+        d <<= 2
+        print(d)
+
+        var e = 20
+        e >>= 2
+        print(e)
+    )";
+
+    std::string out = run_code(source);
+    AssertHelper::assert_contains(out, "8", "a &= 10 should be 8");
+    AssertHelper::assert_contains(out, "14", "b |= 10 should be 14");
+    AssertHelper::assert_contains(out, "6", "c ^= 10 should be 6");
+    AssertHelper::assert_contains(out, "20", "d <<= 2 should be 20");
+    AssertHelper::assert_contains(out, "5", "e >>= 2 should be 5");
+    std::cout << "[PASS] Bitwise compound assignment operators work!\n";
+}
+
+// Test: Bitwise operator precedence
+void test_bitwise_precedence() {
+    std::string source = R"(
+        var result1 = 1 | 2 & 3
+        print(result1)
+
+        var result2 = 4 ^ 2 | 1
+        print(result2)
+
+        var result3 = 8 >> 1 & 7
+        print(result3)
+    )";
+
+    std::string out = run_code(source);
+    // & has higher precedence than |
+    // 1 | (2 & 3) = 1 | 2 = 3
+    AssertHelper::assert_contains(out, "3", "1 | 2 & 3 should be 3");
+    // ^ has higher precedence than |
+    // (4 ^ 2) | 1 = 6 | 1 = 7
+    AssertHelper::assert_contains(out, "7", "4 ^ 2 | 1 should be 7");
+    std::cout << "[PASS] Bitwise operator precedence works!\n";
+}
+
+// Test: Percent equal compound assignment
+void test_percent_equal() {
+    std::string source = R"(
+        var a = 17
+        a %= 5
+        print(a)
+    )";
+
+    std::string out = run_code(source);
+    // 17 % 5 = 2
+    AssertHelper::assert_contains(out, "2", "17 %= 5 should be 2");
+    std::cout << "[PASS] Percent equal operator works!\n";
+}
+
+// ============================================================================
+// Static Members Tests (Phase 2)
+// ============================================================================
+
+// Test: Class static method
+void test_class_static_method() {
+    std::string source = R"(
+        class Calculator {
+            static func add(a: Int, b: Int) -> Int {
+                return a + b
+            }
+
+            static func multiply(a: Int, b: Int) -> Int {
+                return a * b
+            }
+        }
+        var sum = Calculator.add(a: 10, b: 20)
+        var product = Calculator.multiply(a: 5, b: 6)
+        print(sum)
+        print(product)
+    )";
+
+    std::string out = run_code(source);
+    AssertHelper::assert_contains(out, "30", "Calculator.add should return 30");
+    AssertHelper::assert_contains(out, "30", "Calculator.multiply should return 30");
+    std::cout << "[PASS] Class static method works!\n";
+}
+
+// Test: Class static property
+void test_class_static_property() {
+    std::string source = R"(
+        class Config {
+            static var maxRetries: Int = 3
+            static var timeout: Int = 30
+        }
+        print(Config.maxRetries)
+        print(Config.timeout)
+    )";
+
+    std::string out = run_code(source);
+    AssertHelper::assert_contains(out, "3", "Config.maxRetries should be 3");
+    AssertHelper::assert_contains(out, "30", "Config.timeout should be 30");
+    std::cout << "[PASS] Class static property works!\n";
+}
+
+// Test: Struct static method (already works, verification)
+void test_struct_static_method_full() {
+    std::string source = R"(
+        struct Math {
+            static func square(x: Int) -> Int {
+                return x * x
+            }
+
+            static func cube(x: Int) -> Int {
+                return x * x * x
+            }
+        }
+        print(Math.square(x: 4))
+        print(Math.cube(x: 3))
+    )";
+
+    std::string out = run_code(source);
+    AssertHelper::assert_contains(out, "16", "Math.square(4) should be 16");
+    AssertHelper::assert_contains(out, "27", "Math.cube(3) should be 27");
+    std::cout << "[PASS] Struct static method works!\n";
+}
+
+// Test: Extension static method
+void test_extension_static_method() {
+    std::string source = R"(
+        struct MathUtils {
+            var value: Int
+        }
+
+        extension MathUtils {
+            static func double(x: Int) -> Int {
+                return x * 2
+            }
+
+            static func triple(x: Int) -> Int {
+                return x * 3
+            }
+        }
+
+        print(MathUtils.double(x: 5))
+        print(MathUtils.triple(x: 4))
+    )";
+
+    std::string out = run_code(source);
+    AssertHelper::assert_contains(out, "10", "MathUtils.double(5) should be 10");
+    AssertHelper::assert_contains(out, "12", "MathUtils.triple(4) should be 12");
+    std::cout << "[PASS] Extension static method works!\n";
+}
+
+// Test: Mixed static and instance members
+void test_mixed_static_instance() {
+    std::string source = R"(
+        class Counter {
+            static var instanceCount: Int = 0
+            var value: Int = 0
+
+            func increment() {
+                self.value = self.value + 1
+            }
+
+            static func getInstanceCount() -> Int {
+                return 0
+            }
+        }
+
+        var c1 = Counter()
+        c1.increment()
+        c1.increment()
+        print(c1.value)
+        print(Counter.instanceCount)
+    )";
+
+    std::string out = run_code(source);
+    AssertHelper::assert_contains(out, "2", "c1.value should be 2");
+    AssertHelper::assert_contains(out, "0", "Counter.instanceCount should be 0");
+    std::cout << "[PASS] Mixed static and instance members work!\n";
+}
+
 } // namespace test
 } // namespace swiftscript

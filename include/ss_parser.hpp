@@ -58,9 +58,13 @@ private:
     ExprPtr nil_coalesce();
     ExprPtr or_expr();
     ExprPtr and_expr();
+    ExprPtr bitwise_or();
+    ExprPtr bitwise_xor();
+    ExprPtr bitwise_and();
     ExprPtr equality();
     ExprPtr comparison();
     ExprPtr type_check_cast();
+    ExprPtr shift();
     ExprPtr addition();
     ExprPtr multiplication();
     ExprPtr unary();

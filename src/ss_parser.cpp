@@ -322,14 +322,26 @@ while (!check(TokenType::RightBrace) && !is_at_end()) {
         access_level = AccessLevel::Fileprivate;
     }
         
+    // Check for static modifier
+    bool is_static = false;
+    if (match(TokenType::Static)) {
+        is_static = true;
+    }
+
     bool is_override = false;
     if (match(TokenType::Override)) {
         is_override = true;
+        if (is_static) {
+            error(previous(), "'static' cannot be combined with 'override'.");
+        }
     }
 
     if (check(TokenType::Deinit)) {
         if (is_override) {
             error(previous(), "'override' cannot be used with 'deinit'.");
+        }
+        if (is_static) {
+            error(previous(), "'static' cannot be used with 'deinit'.");
         }
         advance(); // consume 'deinit'
         if (stmt->deinit_body) {
@@ -342,6 +354,7 @@ while (!check(TokenType::RightBrace) && !is_at_end()) {
     if (check(TokenType::Func)) {
         auto method = std::unique_ptr<FuncDeclStmt>(static_cast<FuncDeclStmt*>(func_declaration().release()));
         method->is_override = is_override;
+        method->is_static = is_static;
         method->access_level = access_level;
         stmt->methods.push_back(std::move(method));
         continue;
@@ -353,6 +366,9 @@ while (!check(TokenType::RightBrace) && !is_at_end()) {
     bool is_lazy = false;
     if (match(TokenType::Lazy)) {
         is_lazy = true;
+        if (is_static) {
+            error(previous(), "'static' cannot be combined with 'lazy'.");
+        }
     }
 
     if (check(TokenType::Var) || check(TokenType::Let)) {
@@ -364,6 +380,7 @@ while (!check(TokenType::RightBrace) && !is_at_end()) {
         auto property = parse_variable_decl(is_let);
         property->access_level = access_level;
         property->is_lazy = is_lazy;
+        property->is_static = is_static;
         match(TokenType::Semicolon);
         stmt->properties.push_back(std::move(property));
         continue;
@@ -371,6 +388,10 @@ while (!check(TokenType::RightBrace) && !is_at_end()) {
 
     if (is_lazy) {
         error(previous(), "'lazy' must precede a variable declaration.");
+    }
+
+    if (is_static) {
+        error(previous(), "'static' must precede a method or property declaration.");
     }
 
     error(peek(), "Expected method or property declaration inside class.");
@@ -790,13 +811,22 @@ StmtPtr Parser::extension_declaration() {
     consume(TokenType::LeftBrace, "Expected '{' after extension declaration.");
 
     while (!check(TokenType::RightBrace) && !is_at_end()) {
+        // Check for static modifier
+        bool is_static = false;
+        if (match(TokenType::Static)) {
+            is_static = true;
+        }
+
         // Check for mutating modifier
         bool is_mutating = false;
         if (match(TokenType::Mutating)) {
             is_mutating = true;
+            if (is_static) {
+                error(previous(), "Static methods cannot be mutating.");
+            }
         }
 
-        // Method declaration: [mutating] func name(...) -> Type { ... }
+        // Method declaration: [static] [mutating] func name(...) -> Type { ... }
         if (check(TokenType::Func)) {
             advance(); // consume 'func'
             const Token& method_name = consume(TokenType::Identifier, "Expected method name.");
@@ -804,6 +834,7 @@ StmtPtr Parser::extension_declaration() {
             auto method = std::make_unique<StructMethodDecl>();
             method->name = std::string(method_name.lexeme);
             method->is_mutating = is_mutating;
+            method->is_static = is_static;
 
             // Parameter list
             consume(TokenType::LeftParen, "Expected '(' after method name.");
@@ -828,7 +859,7 @@ StmtPtr Parser::extension_declaration() {
             continue;
         }
 
-        // Computed property: var description: String { ... }
+        // Computed property: [static] var description: String { ... }
         if (check(TokenType::Var) || check(TokenType::Let)) {
             if (is_mutating) {
                 error(previous(), "'mutating' can only be used with methods.");
@@ -836,10 +867,11 @@ StmtPtr Parser::extension_declaration() {
             bool is_let = check(TokenType::Let);
             advance(); // consume 'var' or 'let'
             const Token& prop_name = consume(TokenType::Identifier, "Expected property name.");
-            
+
             auto computed_prop = std::make_unique<StructMethodDecl>();
             computed_prop->name = std::string(prop_name.lexeme);
             computed_prop->is_computed_property = true;
+            computed_prop->is_static = is_static;
 
             // Type annotation
             if (match(TokenType::Colon)) {
@@ -855,6 +887,10 @@ StmtPtr Parser::extension_declaration() {
 
         if (is_mutating) {
             error(previous(), "'mutating' must precede a method declaration.");
+        }
+
+        if (is_static) {
+            error(previous(), "'static' must precede a method or property declaration.");
         }
 
         error(peek(), "Expected method or computed property declaration inside extension.");
@@ -1139,9 +1175,12 @@ ExprPtr Parser::expression() {
 ExprPtr Parser::assignment() {
     ExprPtr expr = ternary();
 
-    // Handle compound assignment operators: +=, -=, *=, /=
+    // Handle compound assignment operators: +=, -=, *=, /=, %=, &=, |=, ^=, <<=, >>=
     if (check(TokenType::PlusEqual) || check(TokenType::MinusEqual) ||
-        check(TokenType::StarEqual) || check(TokenType::SlashEqual)) {
+        check(TokenType::StarEqual) || check(TokenType::SlashEqual) ||
+        check(TokenType::PercentEqual) || check(TokenType::AndEqual) ||
+        check(TokenType::OrEqual) || check(TokenType::XorEqual) ||
+        check(TokenType::LeftShiftEqual) || check(TokenType::RightShiftEqual)) {
         TokenType op = peek().type;
         uint32_t op_line = peek().line;
         advance();
@@ -1149,7 +1188,7 @@ ExprPtr Parser::assignment() {
 
         if (expr->kind == ExprKind::Identifier) {
             auto* ident = static_cast<IdentifierExpr*>(expr.get());
-            
+
             // Desugar: x += 5 becomes x = x + 5
             TokenType binop;
             switch (op) {
@@ -1157,17 +1196,23 @@ ExprPtr Parser::assignment() {
                 case TokenType::MinusEqual: binop = TokenType::Minus; break;
                 case TokenType::StarEqual: binop = TokenType::Star; break;
                 case TokenType::SlashEqual: binop = TokenType::Slash; break;
+                case TokenType::PercentEqual: binop = TokenType::Percent; break;
+                case TokenType::AndEqual: binop = TokenType::BitwiseAnd; break;
+                case TokenType::OrEqual: binop = TokenType::BitwiseOr; break;
+                case TokenType::XorEqual: binop = TokenType::BitwiseXor; break;
+                case TokenType::LeftShiftEqual: binop = TokenType::LeftShift; break;
+                case TokenType::RightShiftEqual: binop = TokenType::RightShift; break;
                 default: error(previous(), "Invalid compound assignment operator.");
             }
-            
+
             // Create a copy of the identifier for the right side
             auto ident_copy = std::make_unique<IdentifierExpr>(ident->name);
             ident_copy->line = ident->line;
-            
+
             // Create binary expression: x + value
             auto bin_expr = std::make_unique<BinaryExpr>(binop, std::move(ident_copy), std::move(value));
             bin_expr->line = op_line;
-            
+
             // Create assignment: x = (x + value)
             auto assign = std::make_unique<AssignExpr>(ident->name, std::move(bin_expr));
             assign->line = ident->line;
@@ -1250,12 +1295,51 @@ ExprPtr Parser::or_expr() {
 }
 
 ExprPtr Parser::and_expr() {
-    ExprPtr expr = equality();
+    ExprPtr expr = bitwise_or();
 
     while (match(TokenType::And)) {
         uint32_t line = previous().line;
-        ExprPtr right = equality();
+        ExprPtr right = bitwise_or();
         auto bin = std::make_unique<BinaryExpr>(TokenType::And, std::move(expr), std::move(right));
+        bin->line = line;
+        expr = std::move(bin);
+    }
+    return expr;
+}
+
+ExprPtr Parser::bitwise_or() {
+    ExprPtr expr = bitwise_xor();
+
+    while (match(TokenType::BitwiseOr)) {
+        uint32_t line = previous().line;
+        ExprPtr right = bitwise_xor();
+        auto bin = std::make_unique<BinaryExpr>(TokenType::BitwiseOr, std::move(expr), std::move(right));
+        bin->line = line;
+        expr = std::move(bin);
+    }
+    return expr;
+}
+
+ExprPtr Parser::bitwise_xor() {
+    ExprPtr expr = bitwise_and();
+
+    while (match(TokenType::BitwiseXor)) {
+        uint32_t line = previous().line;
+        ExprPtr right = bitwise_and();
+        auto bin = std::make_unique<BinaryExpr>(TokenType::BitwiseXor, std::move(expr), std::move(right));
+        bin->line = line;
+        expr = std::move(bin);
+    }
+    return expr;
+}
+
+ExprPtr Parser::bitwise_and() {
+    ExprPtr expr = equality();
+
+    while (match(TokenType::BitwiseAnd)) {
+        uint32_t line = previous().line;
+        ExprPtr right = equality();
+        auto bin = std::make_unique<BinaryExpr>(TokenType::BitwiseAnd, std::move(expr), std::move(right));
         bin->line = line;
         expr = std::move(bin);
     }
@@ -1320,10 +1404,25 @@ ExprPtr Parser::type_check_cast() {
 }
 
 ExprPtr Parser::comparison() {
-    ExprPtr expr = addition();
+    ExprPtr expr = shift();
 
     while (check(TokenType::Less) || check(TokenType::Greater) ||
            check(TokenType::LessEqual) || check(TokenType::GreaterEqual)) {
+        TokenType op = peek().type;
+        advance();
+        uint32_t line = previous().line;
+        ExprPtr right = shift();
+        auto bin = std::make_unique<BinaryExpr>(op, std::move(expr), std::move(right));
+        bin->line = line;
+        expr = std::move(bin);
+    }
+    return expr;
+}
+
+ExprPtr Parser::shift() {
+    ExprPtr expr = addition();
+
+    while (check(TokenType::LeftShift) || check(TokenType::RightShift)) {
         TokenType op = peek().type;
         advance();
         uint32_t line = previous().line;

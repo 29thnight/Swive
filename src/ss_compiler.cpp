@@ -233,7 +233,9 @@ void Compiler::visit(ClassDeclStmt* stmt) {
 
             emit_op(OpCode::OP_DEFINE_PROPERTY, property->line);
             emit_short(static_cast<uint16_t>(property_name_idx), property->line);
-            emit_byte(property->is_let ? 1 : 0, property->line);
+            // flags: bit 0 = is_let, bit 1 = is_static
+            uint8_t flags = (property->is_let ? 0x1 : 0x0) | (property->is_static ? 0x2 : 0x0);
+            emit_byte(flags, property->line);
         }
     }
 
@@ -242,10 +244,20 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         if (method->is_override && !has_superclass) {
             throw CompilerError("'override' used in class without superclass", method->line);
         }
+        if (method->is_static && method->name == "init") {
+            throw CompilerError("'init' cannot be static", method->line);
+        }
+
         FunctionPrototype proto;
         proto.name = method->name;
-        proto.params.reserve(method->params.size() + 1);
-        proto.params.push_back("self");
+
+        // Static methods don't have implicit 'self' parameter
+        if (!method->is_static) {
+            proto.params.reserve(method->params.size() + 1);
+            proto.params.push_back("self");
+        } else {
+            proto.params.reserve(method->params.size());
+        }
         for (const auto& [param_name, param_type] : method->params) {
             proto.params.push_back(param_name);
         }
@@ -259,12 +271,16 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         method_compiler.scope_depth_ = 1;
         method_compiler.recursion_depth_ = 0;
         method_compiler.current_class_properties_ = &property_lookup;
-        method_compiler.allow_implicit_self_property_ = true;
         method_compiler.current_class_has_super_ = has_superclass;
 
-        // Implicit self
-        method_compiler.declare_local("self", false);
-        method_compiler.mark_local_initialized();
+        // Static methods don't have 'self' access
+        if (!method->is_static) {
+            method_compiler.allow_implicit_self_property_ = true;
+            method_compiler.declare_local("self", false);
+            method_compiler.mark_local_initialized();
+        } else {
+            method_compiler.allow_implicit_self_property_ = false;
+        }
 
         for (const auto& [param_name, param_type] : method->params) {
             method_compiler.declare_local(param_name, param_type.is_optional);
@@ -294,7 +310,6 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         bool has_captures = !method_compiler.upvalues_.empty();
         emit_op(has_captures ? OpCode::OP_CLOSURE : OpCode::OP_FUNCTION, method->line);
         emit_short(static_cast<uint16_t>(function_index), method->line);
-
 
         size_t method_name_idx = identifier_constant(method->name);
         if (method_name_idx > std::numeric_limits<uint16_t>::max()) {
@@ -1546,46 +1561,51 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
         } else {
             // Regular method
             size_t method_name_idx = identifier_constant(method->name);
-            
+
             FunctionPrototype func_proto;
             func_proto.name = method->name;
             func_proto.is_override = false;
-            
+
             // Compile method body
             Compiler method_compiler;
             method_compiler.enclosing_ = this;
             method_compiler.in_struct_method_ = method->is_mutating;
             method_compiler.in_mutating_method_ = method->is_mutating;
-            method_compiler.allow_implicit_self_property_ = true;
-            
-            // Add 'self' parameter
-            method_compiler.begin_scope();
-            method_compiler.declare_local("self", false);
-            method_compiler.mark_local_initialized();
 
-            func_proto.params.push_back("self");
+            method_compiler.begin_scope();
+
+            // Static methods don't have 'self' parameter
+            if (!method->is_static) {
+                method_compiler.allow_implicit_self_property_ = true;
+                method_compiler.declare_local("self", false);
+                method_compiler.mark_local_initialized();
+                func_proto.params.push_back("self");
+            } else {
+                method_compiler.allow_implicit_self_property_ = false;
+            }
+
             // Add method parameters
             for (const auto& [param_name, param_type] : method->params) {
                 method_compiler.declare_local(param_name, param_type.is_optional);
                 method_compiler.mark_local_initialized();
                 func_proto.params.push_back(param_name);
             }
-            
+
             // Compile body
             for (const auto& body_stmt : method->body->statements) {
                 method_compiler.compile_stmt(body_stmt.get());
             }
-            
+
             // Implicit return nil if no explicit return
             method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
-            
+
             func_proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
             size_t func_idx = chunk_.add_function(std::move(func_proto));
-            
+
             emit_op(OpCode::OP_FUNCTION, stmt->line);
             emit_short(static_cast<uint16_t>(func_idx), stmt->line);
-            
+
             // Attach method to type (works for class, struct, and enum)
             if (method->is_mutating) {
                 emit_op(OpCode::OP_STRUCT_METHOD, stmt->line);
@@ -1827,6 +1847,21 @@ void Compiler::visit(BinaryExpr* expr) {
         case TokenType::Or:
             emit_op(OpCode::OP_OR, expr->line);
             break;
+        case TokenType::BitwiseAnd:
+            emit_op(OpCode::OP_BITWISE_AND, expr->line);
+            break;
+        case TokenType::BitwiseOr:
+            emit_op(OpCode::OP_BITWISE_OR, expr->line);
+            break;
+        case TokenType::BitwiseXor:
+            emit_op(OpCode::OP_BITWISE_XOR, expr->line);
+            break;
+        case TokenType::LeftShift:
+            emit_op(OpCode::OP_LEFT_SHIFT, expr->line);
+            break;
+        case TokenType::RightShift:
+            emit_op(OpCode::OP_RIGHT_SHIFT, expr->line);
+            break;
         default:
             throw CompilerError("Unsupported binary operator", expr->line);
     }
@@ -1862,6 +1897,24 @@ void Compiler::visit(AssignExpr* expr) {
                 case TokenType::SlashEqual:
                     emit_op(OpCode::OP_DIVIDE, expr->line);
                     break;
+                case TokenType::PercentEqual:
+                    emit_op(OpCode::OP_MODULO, expr->line);
+                    break;
+                case TokenType::AndEqual:
+                    emit_op(OpCode::OP_BITWISE_AND, expr->line);
+                    break;
+                case TokenType::OrEqual:
+                    emit_op(OpCode::OP_BITWISE_OR, expr->line);
+                    break;
+                case TokenType::XorEqual:
+                    emit_op(OpCode::OP_BITWISE_XOR, expr->line);
+                    break;
+                case TokenType::LeftShiftEqual:
+                    emit_op(OpCode::OP_LEFT_SHIFT, expr->line);
+                    break;
+                case TokenType::RightShiftEqual:
+                    emit_op(OpCode::OP_RIGHT_SHIFT, expr->line);
+                    break;
                 default:
                     throw CompilerError("Unsupported compound assignment", expr->line);
             }
@@ -1892,7 +1945,7 @@ void Compiler::visit(AssignExpr* expr) {
         
         // 오른쪽 값 컴파일
         compile_expr(expr->value.get());
-        
+
         // 연산 실행
         switch (expr->op) {
             case TokenType::PlusEqual:
@@ -1906,6 +1959,24 @@ void Compiler::visit(AssignExpr* expr) {
                 break;
             case TokenType::SlashEqual:
                 emit_op(OpCode::OP_DIVIDE, expr->line);
+                break;
+            case TokenType::PercentEqual:
+                emit_op(OpCode::OP_MODULO, expr->line);
+                break;
+            case TokenType::AndEqual:
+                emit_op(OpCode::OP_BITWISE_AND, expr->line);
+                break;
+            case TokenType::OrEqual:
+                emit_op(OpCode::OP_BITWISE_OR, expr->line);
+                break;
+            case TokenType::XorEqual:
+                emit_op(OpCode::OP_BITWISE_XOR, expr->line);
+                break;
+            case TokenType::LeftShiftEqual:
+                emit_op(OpCode::OP_LEFT_SHIFT, expr->line);
+                break;
+            case TokenType::RightShiftEqual:
+                emit_op(OpCode::OP_RIGHT_SHIFT, expr->line);
                 break;
             default:
                 throw CompilerError("Unsupported compound assignment", expr->line);

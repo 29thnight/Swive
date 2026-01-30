@@ -86,6 +86,12 @@ enum class TokenType {
     MinusEqual,     // -=
     StarEqual,      // *=
     SlashEqual,     // /=
+    PercentEqual,   // %=
+    AndEqual,       // &=
+    OrEqual,        // |=
+    XorEqual,       // ^=
+    LeftShiftEqual, // <<=
+    RightShiftEqual,// >>=
     EqualEqual,     // ==
     NotEqual,       // !=
     Less,           // <

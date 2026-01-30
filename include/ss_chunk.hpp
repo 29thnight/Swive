@@ -65,7 +65,14 @@ struct Protocol {
         OP_DIVIDE,
         OP_MODULO,
         OP_NEGATE,
+
+        // Bitwise operations
         OP_BITWISE_NOT,
+        OP_BITWISE_AND,
+        OP_BITWISE_OR,
+        OP_BITWISE_XOR,
+        OP_LEFT_SHIFT,
+        OP_RIGHT_SHIFT,
 
         // Comparison
         OP_EQUAL,

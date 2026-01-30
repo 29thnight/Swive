@@ -246,6 +246,25 @@ void test_integration_optional_type_cast();
 void test_integration_struct_mutating_static();
 void test_integration_kitchen_sink();
 
+// Bitwise operators tests
+void test_bitwise_and();
+void test_bitwise_or();
+void test_bitwise_xor();
+void test_bitwise_not();
+void test_left_shift();
+void test_right_shift();
+void test_bitwise_combined();
+void test_bitwise_compound_assignment();
+void test_bitwise_precedence();
+void test_percent_equal();
+
+// Static members tests (Phase 2)
+void test_class_static_method();
+void test_class_static_property();
+void test_struct_static_method_full();
+void test_extension_static_method();
+void test_mixed_static_instance();
+
 } // namespace test
 } // namespace swiftscript
 
@@ -724,6 +743,74 @@ TEST(Phase1Test, IntegrationStructMutatingStatic) {
 
 TEST(Phase1Test, IntegrationKitchenSink) {
     EXPECT_NO_THROW(swiftscript::test::test_integration_kitchen_sink());
+}
+
+// ============================================================================
+// Bitwise Operators Tests
+// ============================================================================
+
+TEST(BitwiseOperatorsTest, BitwiseAnd) {
+    EXPECT_NO_THROW(swiftscript::test::test_bitwise_and());
+}
+
+TEST(BitwiseOperatorsTest, BitwiseOr) {
+    EXPECT_NO_THROW(swiftscript::test::test_bitwise_or());
+}
+
+TEST(BitwiseOperatorsTest, BitwiseXor) {
+    EXPECT_NO_THROW(swiftscript::test::test_bitwise_xor());
+}
+
+TEST(BitwiseOperatorsTest, BitwiseNot) {
+    EXPECT_NO_THROW(swiftscript::test::test_bitwise_not());
+}
+
+TEST(BitwiseOperatorsTest, LeftShift) {
+    EXPECT_NO_THROW(swiftscript::test::test_left_shift());
+}
+
+TEST(BitwiseOperatorsTest, RightShift) {
+    EXPECT_NO_THROW(swiftscript::test::test_right_shift());
+}
+
+TEST(BitwiseOperatorsTest, Combined) {
+    EXPECT_NO_THROW(swiftscript::test::test_bitwise_combined());
+}
+
+TEST(BitwiseOperatorsTest, CompoundAssignment) {
+    EXPECT_NO_THROW(swiftscript::test::test_bitwise_compound_assignment());
+}
+
+TEST(BitwiseOperatorsTest, Precedence) {
+    EXPECT_NO_THROW(swiftscript::test::test_bitwise_precedence());
+}
+
+TEST(BitwiseOperatorsTest, PercentEqual) {
+    EXPECT_NO_THROW(swiftscript::test::test_percent_equal());
+}
+
+// ============================================================================
+// Static Members Tests (Phase 2)
+// ============================================================================
+
+TEST(StaticMembersTest, ClassStaticMethod) {
+    EXPECT_NO_THROW(swiftscript::test::test_class_static_method());
+}
+
+TEST(StaticMembersTest, ClassStaticProperty) {
+    EXPECT_NO_THROW(swiftscript::test::test_class_static_property());
+}
+
+TEST(StaticMembersTest, StructStaticMethodFull) {
+    EXPECT_NO_THROW(swiftscript::test::test_struct_static_method_full());
+}
+
+TEST(StaticMembersTest, ExtensionStaticMethod) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_static_method());
+}
+
+TEST(StaticMembersTest, MixedStaticInstance) {
+    EXPECT_NO_THROW(swiftscript::test::test_mixed_static_instance());
 }
 
 // ============================================================================

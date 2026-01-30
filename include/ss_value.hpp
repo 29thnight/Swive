@@ -244,6 +244,8 @@ public:
         std::string name;
         Value default_value;
         bool is_let{false};
+        bool is_lazy{false};
+        Value lazy_initializer;  // Closure to call on first access (if is_lazy)
     };
     struct ComputedPropertyInfo {
         std::string name;

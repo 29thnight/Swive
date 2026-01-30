@@ -195,7 +195,13 @@ bool TokenUtils::is_assignment_operator(TokenType type) {
            type == TokenType::PlusEqual ||
            type == TokenType::MinusEqual ||
            type == TokenType::StarEqual ||
-           type == TokenType::SlashEqual;
+           type == TokenType::SlashEqual ||
+           type == TokenType::PercentEqual ||
+           type == TokenType::AndEqual ||
+           type == TokenType::OrEqual ||
+           type == TokenType::XorEqual ||
+           type == TokenType::LeftShiftEqual ||
+           type == TokenType::RightShiftEqual;
 }
 
 bool TokenUtils::is_comparison_operator(TokenType type) {
@@ -269,6 +275,12 @@ int TokenUtils::operator_precedence(TokenType type) {
         case TokenType::MinusEqual:
         case TokenType::StarEqual:
         case TokenType::SlashEqual:
+        case TokenType::PercentEqual:
+        case TokenType::AndEqual:
+        case TokenType::OrEqual:
+        case TokenType::XorEqual:
+        case TokenType::LeftShiftEqual:
+        case TokenType::RightShiftEqual:
             return 1;
             
         default:

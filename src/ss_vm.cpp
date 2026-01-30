@@ -444,6 +444,51 @@ namespace swiftscript {
                     push(Value::from_int(~a.as_int()));
                     break;
                 }
+                case OpCode::OP_BITWISE_AND: {
+                    Value b = pop();
+                    Value a = pop();
+                    if (!a.is_int() || !b.is_int()) {
+                        throw std::runtime_error("Operands must be integers for bitwise and.");
+                    }
+                    push(Value::from_int(a.as_int() & b.as_int()));
+                    break;
+                }
+                case OpCode::OP_BITWISE_OR: {
+                    Value b = pop();
+                    Value a = pop();
+                    if (!a.is_int() || !b.is_int()) {
+                        throw std::runtime_error("Operands must be integers for bitwise or.");
+                    }
+                    push(Value::from_int(a.as_int() | b.as_int()));
+                    break;
+                }
+                case OpCode::OP_BITWISE_XOR: {
+                    Value b = pop();
+                    Value a = pop();
+                    if (!a.is_int() || !b.is_int()) {
+                        throw std::runtime_error("Operands must be integers for bitwise xor.");
+                    }
+                    push(Value::from_int(a.as_int() ^ b.as_int()));
+                    break;
+                }
+                case OpCode::OP_LEFT_SHIFT: {
+                    Value b = pop();
+                    Value a = pop();
+                    if (!a.is_int() || !b.is_int()) {
+                        throw std::runtime_error("Operands must be integers for left shift.");
+                    }
+                    push(Value::from_int(a.as_int() << b.as_int()));
+                    break;
+                }
+                case OpCode::OP_RIGHT_SHIFT: {
+                    Value b = pop();
+                    Value a = pop();
+                    if (!a.is_int() || !b.is_int()) {
+                        throw std::runtime_error("Operands must be integers for right shift.");
+                    }
+                    push(Value::from_int(a.as_int() >> b.as_int()));
+                    break;
+                }
                 case OpCode::OP_EQUAL: {
                     Value b = pop();
                     Value a = pop();

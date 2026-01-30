@@ -28,17 +28,21 @@ TypeChecker::TypeInfo TypeChecker::TypeInfo::function(std::vector<TypeInfo> para
 }
 
 void TypeChecker::check(const std::vector<StmtPtr>& program) {
-    known_types_.clear();
-    type_properties_.clear();
-    type_methods_.clear();
-    enum_cases_.clear();
-    superclass_map_.clear();
-    protocol_conformers_.clear();
-    protocol_inheritance_.clear();
-    protocol_descendants_.clear();
-    scopes_.clear();
-    function_stack_.clear();
-    errors_.clear();
+known_types_.clear();
+type_properties_.clear();
+type_methods_.clear();
+member_access_levels_.clear();
+mutating_methods_.clear();
+enum_cases_.clear();
+superclass_map_.clear();
+protocol_conformers_.clear();
+protocol_inheritance_.clear();
+protocol_descendants_.clear();
+scopes_.clear();
+function_stack_.clear();
+let_constants_.clear();
+current_type_context_.clear();
+errors_.clear();
 
     add_builtin_types();
     collect_type_declarations(program);
@@ -94,6 +98,8 @@ void TypeChecker::add_known_type(const std::string& name, TypeKind kind, uint32_
     known_types_.emplace(name, kind);
     type_properties_.emplace(name, std::unordered_map<std::string, TypeInfo>{});
     type_methods_.emplace(name, std::unordered_map<std::string, TypeInfo>{});
+    member_access_levels_.emplace(name, std::unordered_map<std::string, AccessLevel>{});
+    mutating_methods_.emplace(name, std::unordered_set<std::string>{});
     enum_cases_.emplace(name, std::unordered_set<std::string>{});
     if (kind == TypeKind::Protocol) {
         protocol_conformers_.emplace(name, std::unordered_set<std::string>{});
@@ -143,6 +149,8 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                     type_properties_[decl->name].emplace(
                         property->name,
                         type_from_annotation(property->type_annotation.value(), property->line));
+                    // Track access level
+                    member_access_levels_[decl->name][property->name] = property->access_level;
                 }
                 for (const auto& method : decl->methods) {
                     if (!method) {
@@ -160,6 +168,8 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                     type_methods_[decl->name].emplace(
                         method->name,
                         TypeInfo::function(params, return_type));
+                    // Track access level
+                    member_access_levels_[decl->name][method->name] = method->access_level;
                 }
                 break;
             }
@@ -174,6 +184,8 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                     type_properties_[decl->name].emplace(
                         property->name,
                         type_from_annotation(property->type_annotation.value(), property->line));
+                    // Track access level
+                    member_access_levels_[decl->name][property->name] = property->access_level;
                 }
                 for (const auto& method : decl->methods) {
                     if (!method) {
@@ -191,6 +203,12 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                     type_methods_[decl->name].emplace(
                         method->name,
                         TypeInfo::function(params, return_type));
+                    // Track access level
+                    member_access_levels_[decl->name][method->name] = method->access_level;
+                    // Track mutating methods
+                    if (method->is_mutating) {
+                        mutating_methods_[decl->name].insert(method->name);
+                    }
                 }
                 break;
             }
@@ -252,6 +270,12 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
                         type_methods_[decl->extended_type].emplace(
                             method->name,
                             TypeInfo::function(params, return_type));
+                        // Track access level for extension methods
+                        member_access_levels_[decl->extended_type][method->name] = method->access_level;
+                        // Track mutating methods for extensions
+                        if (method->is_mutating) {
+                            mutating_methods_[decl->extended_type].insert(method->name);
+                        }
                     }
                 }
                 break;
@@ -305,7 +329,7 @@ void TypeChecker::exit_scope() {
     }
 }
 
-void TypeChecker::declare_symbol(const std::string& name, const TypeInfo& type, uint32_t line) {
+void TypeChecker::declare_symbol(const std::string& name, const TypeInfo& type, uint32_t line, bool is_let) {
     if (scopes_.empty()) {
         error("Internal error: no scope available", line);
     }
@@ -314,6 +338,11 @@ void TypeChecker::declare_symbol(const std::string& name, const TypeInfo& type, 
         error("Duplicate symbol '" + name + "'", line);
     }
     scope.emplace(name, type);
+    
+    // Track let constants separately
+    if (is_let) {
+        let_constants_.insert(name);
+    }
 }
 
 TypeChecker::TypeInfo TypeChecker::lookup_symbol(const std::string& name, uint32_t line) const {
@@ -436,7 +465,7 @@ void TypeChecker::check_var_decl(const VarDeclStmt* stmt) {
         }
     }
 
-    declare_symbol(stmt->name, declared, stmt->line);
+    declare_symbol(stmt->name, declared, stmt->line, stmt->is_let);
 
     if (stmt->is_computed && stmt->getter_body) {
         TypeInfo return_type = declared;
@@ -615,6 +644,9 @@ void TypeChecker::check_class_decl(const ClassDeclStmt* stmt) {
         }
     }
 
+    std::string prev_context = current_type_context_;
+    current_type_context_ = stmt->name;
+    
     enter_scope();
     declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
 
@@ -632,9 +664,13 @@ void TypeChecker::check_class_decl(const ClassDeclStmt* stmt) {
     }
 
     exit_scope();
+    current_type_context_ = prev_context;
 }
 
 void TypeChecker::check_struct_decl(const StructDeclStmt* stmt) {
+    std::string prev_context = current_type_context_;
+    current_type_context_ = stmt->name;
+    
     enter_scope();
     declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
 
@@ -670,6 +706,7 @@ void TypeChecker::check_struct_decl(const StructDeclStmt* stmt) {
     }
 
     exit_scope();
+    current_type_context_ = prev_context;
 }
 
 void TypeChecker::check_enum_decl(const EnumDeclStmt* stmt) {
@@ -722,6 +759,9 @@ void TypeChecker::check_extension_decl(const ExtensionDeclStmt* stmt) {
         error("Unknown extended type '" + stmt->extended_type + "'", stmt->line);
     }
 
+    std::string prev_context = current_type_context_;
+    current_type_context_ = stmt->extended_type;
+    
     enter_scope();
     declare_symbol("self", TypeInfo::user(stmt->extended_type), stmt->line);
 
@@ -749,6 +789,7 @@ void TypeChecker::check_extension_decl(const ExtensionDeclStmt* stmt) {
     }
 
     exit_scope();
+    current_type_context_ = prev_context;
 }
 
 void TypeChecker::check_do_catch_stmt(const DoCatchStmt* stmt) {
@@ -941,6 +982,12 @@ TypeChecker::TypeInfo TypeChecker::check_assign_expr(const AssignExpr* expr) {
     if (!has_symbol(expr->name)) {
         error("Undefined symbol '" + expr->name + "'", expr->line);
     }
+    
+    // Check if trying to reassign a let constant
+    if (let_constants_.contains(expr->name)) {
+        error("Cannot assign to value: '" + expr->name + "' is a 'let' constant", expr->line);
+    }
+    
     TypeInfo expected = lookup_symbol(expr->name, expr->line);
     TypeInfo actual = check_expr(expr->value.get());
     if (!is_assignable(expected, actual)) {
@@ -956,6 +1003,30 @@ TypeChecker::TypeInfo TypeChecker::check_call_expr(const CallExpr* expr) {
     for (const auto& arg : expr->arguments) {
         arg_types.push_back(check_expr(arg.get()));
     }
+    
+    // Check if calling a mutating method on a let constant
+    if (expr->callee->kind == ExprKind::Member) {
+        auto* member_expr = static_cast<const MemberExpr*>(expr->callee.get());
+        if (member_expr->object->kind == ExprKind::Identifier) {
+            auto* id_expr = static_cast<const IdentifierExpr*>(member_expr->object.get());
+            // Check if the object is a let constant
+            if (let_constants_.contains(id_expr->name)) {
+                // Check if it's a struct type
+                TypeInfo object_type = check_expr(member_expr->object.get());
+                if (object_type.kind == TypeKind::User) {
+                    // Check if the method is mutating
+                    auto mutating_it = mutating_methods_.find(object_type.name);
+                    if (mutating_it != mutating_methods_.end()) {
+                        if (mutating_it->second.contains(member_expr->member)) {
+                            error("Cannot call mutating method '" + member_expr->member + 
+                                  "' on 'let' constant '" + id_expr->name + "'", expr->line);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     if (callee.kind == TypeKind::Function) {
         if (callee.param_types.size() != expr->arguments.size()) {
             error("Function argument count mismatch", expr->line);
@@ -967,6 +1038,10 @@ TypeChecker::TypeInfo TypeChecker::check_call_expr(const CallExpr* expr) {
             }
         }
         return *callee.return_type;
+    }
+    // Constructor call: Type() returns an instance of that type
+    if (callee.kind == TypeKind::User || callee.kind == TypeKind::Protocol) {
+        return callee;  // Return the type itself (e.g., Person() returns Person)
     }
     return TypeInfo::unknown();
 }
@@ -987,6 +1062,18 @@ TypeChecker::TypeInfo TypeChecker::check_member_expr(const MemberExpr* expr) {
             if (prop_it != type_properties_.end()) {
                 auto member_it = prop_it->second.find(expr->member);
                 if (member_it != prop_it->second.end()) {
+                    // Check access level
+                    auto access_it = member_access_levels_.find(current);
+                    if (access_it != member_access_levels_.end()) {
+                        auto member_access_it = access_it->second.find(expr->member);
+                        if (member_access_it != access_it->second.end()) {
+                            AccessLevel level = member_access_it->second;
+                            if (level == AccessLevel::Private && current_type_context_ != current) {
+                                error("'" + expr->member + "' is inaccessible due to 'private' protection level", expr->line);
+                                return std::nullopt;  // Don't return the member if it's inaccessible
+                            }
+                        }
+                    }
                     return member_it->second;
                 }
             }
@@ -994,6 +1081,18 @@ TypeChecker::TypeInfo TypeChecker::check_member_expr(const MemberExpr* expr) {
             if (method_it != type_methods_.end()) {
                 auto found = method_it->second.find(expr->member);
                 if (found != method_it->second.end()) {
+                    // Check access level
+                    auto access_it = member_access_levels_.find(current);
+                    if (access_it != member_access_levels_.end()) {
+                        auto member_access_it = access_it->second.find(expr->member);
+                        if (member_access_it != access_it->second.end()) {
+                            AccessLevel level = member_access_it->second;
+                            if (level == AccessLevel::Private && current_type_context_ != current) {
+                                error("'" + expr->member + "' is inaccessible due to 'private' protection level", expr->line);
+                                return std::nullopt;  // Don't return the member if it's inaccessible
+                            }
+                        }
+                    }
                     return found->second;
                 }
             }

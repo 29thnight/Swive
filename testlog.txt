@@ -1,13 +1,13 @@
 ========================================
 SwiftScript Test Results
-Date: 2026-01-30 20:46:25
+Date: 2026-01-30 22:26:16
 ========================================
 
-Starting 12 test suites with 124 tests.
+Starting 18 test suites with 152 tests.
 
 [ Test Suite ] ClassTests
   [ RUN      ] ClassTests.SimpleClassMethod
-  [       OK ] ClassTests.SimpleClassMethod (0 ms)
+  [       OK ] ClassTests.SimpleClassMethod (1 ms)
   [ RUN      ] ClassTests.InitializerCalled
   [       OK ] ClassTests.InitializerCalled (0 ms)
   [ RUN      ] ClassTests.StoredPropertyDefaults
@@ -28,7 +28,7 @@ Starting 12 test suites with 124 tests.
   [       OK ] ClassTests.DeinitCalled (0 ms)
   [ RUN      ] ClassTests.DeinitWithProperties
   [       OK ] ClassTests.DeinitWithProperties (0 ms)
-  Tests passed: 11/11 (7 ms)
+  Tests passed: 11/11 (8 ms)
 
 [ Test Suite ] ComputedPropertiesTests
   [ RUN      ] ComputedPropertiesTests.GetterOnly
@@ -68,7 +68,7 @@ Starting 12 test suites with 124 tests.
   [       OK ] StructTests.PropertyModification (0 ms)
   [ RUN      ] StructTests.NestedStruct
   [       OK ] StructTests.NestedStruct (0 ms)
-  Tests passed: 10/10 (4 ms)
+  Tests passed: 10/10 (22 ms)
 
 [ Test Suite ] ClosureTests
   [ RUN      ] ClosureTests.BasicClosure
@@ -106,12 +106,7 @@ Starting 12 test suites with 124 tests.
   [ RUN      ] EnumTests.BasicEnum
   [       OK ] EnumTests.BasicEnum (0 ms)
   [ RUN      ] EnumTests.EnumRawValues
-  [  FAILED  ] EnumTests.EnumRawValues (0 ms)
-    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:465
-    Expected: swiftscript::test::test_enum_raw_values() doesn't throw an exception.
-  Actual: it throws std::runtime_error with description "Expected to find '3' in output (test_enum_raw_values)
-Actual output: ERROR: Unknown member 'rawValue' on type 'Priority' (line 9) (line 9)".
-
+  [       OK ] EnumTests.EnumRawValues (0 ms)
   [ RUN      ] EnumTests.EnumSwitch
   [       OK ] EnumTests.EnumSwitch (0 ms)
   [ RUN      ] EnumTests.EnumAssociatedValues
@@ -124,7 +119,7 @@ Actual output: ERROR: Unknown member 'rawValue' on type 'Priority' (line 9) (lin
   [       OK ] EnumTests.EnumComputedProperties (0 ms)
   [ RUN      ] EnumTests.MultipleEnums
   [       OK ] EnumTests.MultipleEnums (0 ms)
-  Tests passed: 7/8 (4 ms)
+  Tests passed: 8/8 (4 ms)
 
 [ Test Suite ] ProtocolTest
   [ RUN      ] ProtocolTest.BasicProtocolDeclaration
@@ -153,12 +148,7 @@ Actual output: ERROR: Unknown member 'rawValue' on type 'Priority' (line 9) (lin
   [ RUN      ] EnumInlineTests.BasicEnumDeclaration
   [       OK ] EnumInlineTests.BasicEnumDeclaration (0 ms)
   [ RUN      ] EnumInlineTests.EnumRawValues
-  [  FAILED  ] EnumInlineTests.EnumRawValues (0 ms)
-    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:545
-    Expected: swiftscript::test::test_enum_raw_values_inline() doesn't throw an exception.
-  Actual: it throws std::runtime_error with description "Expected to find '3' in output (test_enum_raw_values_inline)
-Actual output: ERROR: Unknown member 'rawValue' on type 'Priority' (line 9) (line 9)".
-
+  [       OK ] EnumInlineTests.EnumRawValues (0 ms)
   [ RUN      ] EnumInlineTests.EnumComparison
   [       OK ] EnumInlineTests.EnumComparison (0 ms)
   [ RUN      ] EnumInlineTests.EnumWithMethod
@@ -169,7 +159,7 @@ Actual output: ERROR: Unknown member 'rawValue' on type 'Priority' (line 9) (lin
   [       OK ] EnumInlineTests.EnumInSwitchStatement (0 ms)
   [ RUN      ] EnumInlineTests.EnumSimpleComputedProperty
   [       OK ] EnumInlineTests.EnumSimpleComputedProperty (0 ms)
-  Tests passed: 6/7 (3 ms)
+  Tests passed: 7/7 (3 ms)
 
 [ Test Suite ] ExtensionTest
   [ RUN      ] ExtensionTest.BasicMethod
@@ -258,16 +248,10 @@ Actual output: ERROR: Unknown member 'rawValue' on type 'Priority' (line 9) (lin
   [ RUN      ] Phase1Test.IntegrationOptionalTypeCast
   [       OK ] Phase1Test.IntegrationOptionalTypeCast (0 ms)
   [ RUN      ] Phase1Test.IntegrationStructMutatingStatic
-  [  FAILED  ] Phase1Test.IntegrationStructMutatingStatic (0 ms)
-    C:\Users\user\Desktop\SwiftScript\test\test_gtest.cpp:741
-    Expected: swiftscript::test::test_integration_struct_mutating_static() doesn't throw an exception.
-  Actual: it throws std::runtime_error with description "Expected to find '1' in output (count should be 1)
-Actual output: 0
-".
-
+  [       OK ] Phase1Test.IntegrationStructMutatingStatic (0 ms)
   [ RUN      ] Phase1Test.IntegrationKitchenSink
   [       OK ] Phase1Test.IntegrationKitchenSink (0 ms)
-  Tests passed: 32/33 (15 ms)
+  Tests passed: 33/33 (20 ms)
 
 [ Test Suite ] BitwiseOperatorsTest
   [ RUN      ] BitwiseOperatorsTest.BitwiseAnd
@@ -305,14 +289,88 @@ Actual output: 0
   [       OK ] StaticMembersTest.MixedStaticInstance (0 ms)
   Tests passed: 5/5 (3 ms)
 
+[ Test Suite ] LetConstantTest
+  [ RUN      ] LetConstantTest.LetReassignmentError
+  [       OK ] LetConstantTest.LetReassignmentError (0 ms)
+  [ RUN      ] LetConstantTest.VarReassignmentOk
+  [       OK ] LetConstantTest.VarReassignmentOk (0 ms)
+  [ RUN      ] LetConstantTest.MultipleLets
+  [       OK ] LetConstantTest.MultipleLets (0 ms)
+  [ RUN      ] LetConstantTest.LetScopes
+  [       OK ] LetConstantTest.LetScopes (0 ms)
+  [ RUN      ] LetConstantTest.LetStructMutatingError
+  [       OK ] LetConstantTest.LetStructMutatingError (0 ms)
+  [ RUN      ] LetConstantTest.VarStructMutatingOk
+  [       OK ] LetConstantTest.VarStructMutatingOk (0 ms)
+  [ RUN      ] LetConstantTest.LetStructNonMutatingOk
+  [       OK ] LetConstantTest.LetStructNonMutatingOk (0 ms)
+  Tests passed: 7/7 (4 ms)
+
+[ Test Suite ] AccessControlTest
+  [ RUN      ] AccessControlTest.PrivatePropertyError
+  [       OK ] AccessControlTest.PrivatePropertyError (0 ms)
+  [ RUN      ] AccessControlTest.PrivateMethodError
+  [       OK ] AccessControlTest.PrivateMethodError (1 ms)
+  [ RUN      ] AccessControlTest.PrivateAccessWithinClass
+  [       OK ] AccessControlTest.PrivateAccessWithinClass (1 ms)
+  [ RUN      ] AccessControlTest.PublicAccess
+  [       OK ] AccessControlTest.PublicAccess (0 ms)
+  [ RUN      ] AccessControlTest.InternalAccess
+  [       OK ] AccessControlTest.InternalAccess (0 ms)
+  [ RUN      ] AccessControlTest.PrivateStructMembers
+  [       OK ] AccessControlTest.PrivateStructMembers (0 ms)
+  [ RUN      ] AccessControlTest.PrivateStructError
+  [       OK ] AccessControlTest.PrivateStructError (2 ms)
+  [ RUN      ] AccessControlTest.ExtensionPrivateAccess
+  [       OK ] AccessControlTest.ExtensionPrivateAccess (0 ms)
+  [ RUN      ] AccessControlTest.ExtensionPrivateMethod
+  [       OK ] AccessControlTest.ExtensionPrivateMethod (0 ms)
+  [ RUN      ] AccessControlTest.ExtensionPrivateError
+  [       OK ] AccessControlTest.ExtensionPrivateError (1 ms)
+  Tests passed: 10/10 (18 ms)
+
+[ Test Suite ] PatternMatchingTest
+  [ RUN      ] PatternMatchingTest.AssociatedValueIntExtraction
+  [       OK ] PatternMatchingTest.AssociatedValueIntExtraction (0 ms)
+  [ RUN      ] PatternMatchingTest.AssociatedValueStringExtraction
+  [       OK ] PatternMatchingTest.AssociatedValueStringExtraction (0 ms)
+  [ RUN      ] PatternMatchingTest.MultipleAssociatedValues
+  [       OK ] PatternMatchingTest.MultipleAssociatedValues (0 ms)
+  [ RUN      ] PatternMatchingTest.AssociatedValuesWithDefault
+  [       OK ] PatternMatchingTest.AssociatedValuesWithDefault (0 ms)
+  Tests passed: 4/4 (5 ms)
+
+[ Test Suite ] PropertyObserversTest
+  [ RUN      ] PropertyObserversTest.WillSetBasic
+  [       OK ] PropertyObserversTest.WillSetBasic (0 ms)
+  [ RUN      ] PropertyObserversTest.DidSetBasic
+  [       OK ] PropertyObserversTest.DidSetBasic (0 ms)
+  [ RUN      ] PropertyObserversTest.WillSetAndDidSet
+  [       OK ] PropertyObserversTest.WillSetAndDidSet (0 ms)
+  [ RUN      ] PropertyObserversTest.ObserversInStruct
+  [       OK ] PropertyObserversTest.ObserversInStruct (0 ms)
+  Tests passed: 4/4 (3 ms)
+
+[ Test Suite ] LazyPropertiesTest
+  [ RUN      ] LazyPropertiesTest.LazyPropertyBasic
+  [       OK ] LazyPropertiesTest.LazyPropertyBasic (0 ms)
+  Tests passed: 1/1 (0 ms)
+
+[ Test Suite ] SubscriptTest
+  [ RUN      ] SubscriptTest.SubscriptBasic
+  [       OK ] SubscriptTest.SubscriptBasic (0 ms)
+  [ RUN      ] SubscriptTest.CustomSubscriptStruct
+  [       OK ] SubscriptTest.CustomSubscriptStruct (0 ms)
+  Tests passed: 2/2 (1 ms)
+
 ========================================
 Test Summary
 ========================================
-Total test suites: 12
-Total tests: 124
-Passed: 121
-Failed: 3
-Elapsed time: 66 ms
+Total test suites: 18
+Total tests: 152
+Passed: 152
+Failed: 0
+Elapsed time: 124 ms
 ========================================
 
-SOME TESTS FAILED!
+ALL TESTS PASSED!

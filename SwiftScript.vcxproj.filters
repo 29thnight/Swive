@@ -72,6 +72,9 @@
     <ClInclude Include="test\test_all_tests.hpp">
       <Filter>Test\internal\include</Filter>
     </ClInclude>
+    <ClInclude Include="test\test_property_observers_impl.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ss_core.cpp">
@@ -155,6 +158,15 @@
     <ClCompile Include="test\test_phase1.cpp">
       <Filter>Test\internal\src</Filter>
     </ClCompile>
+    <ClCompile Include="test\test_let.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="test\test_access_control.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="test\test_pattern_matching.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="test\build.sh" />
@@ -192,6 +204,14 @@
     <None Include="test_ext1.ss" />
     <None Include="test_computed_ext.ss" />
     <None Include="test_struct_prop_assign.ss" />
+    <None Include="test_rawvalue.swift" />
+    <None Include="test_mutating.swift" />
+    <None Include="GRAMMAR_TODO.md">
+      <Filter>Test\docs</Filter>
+    </None>
+    <None Include="test_private.swift" />
+    <None Include="test_observers.swift" />
+    <None Include="IMPLEMENTATION_STATUS.md" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="test\CMakeLists.txt" />

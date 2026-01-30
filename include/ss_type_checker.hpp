@@ -55,6 +55,8 @@ private:
     std::unordered_map<std::string, TypeKind> known_types_;
     std::unordered_map<std::string, std::unordered_map<std::string, TypeInfo>> type_properties_;
     std::unordered_map<std::string, std::unordered_map<std::string, TypeInfo>> type_methods_;
+    std::unordered_map<std::string, std::unordered_map<std::string, AccessLevel>> member_access_levels_;  // Track access levels
+    std::unordered_map<std::string, std::unordered_set<std::string>> mutating_methods_;  // Track mutating methods
     std::unordered_map<std::string, std::unordered_set<std::string>> enum_cases_;
     std::unordered_map<std::string, std::string> superclass_map_;
     std::unordered_map<std::string, std::unordered_set<std::string>> protocol_conformers_;
@@ -63,6 +65,8 @@ private:
 
     std::vector<std::unordered_map<std::string, TypeInfo>> scopes_;
     std::vector<FunctionContext> function_stack_;
+    std::unordered_set<std::string> let_constants_;  // Track let constants
+    std::string current_type_context_;  // Track which type we're currently inside (for access control)
     mutable std::vector<TypeCheckError> errors_;
 
     void collect_type_declarations(const std::vector<StmtPtr>& program);
@@ -74,7 +78,7 @@ private:
 
     void enter_scope();
     void exit_scope();
-    void declare_symbol(const std::string& name, const TypeInfo& type, uint32_t line);
+    void declare_symbol(const std::string& name, const TypeInfo& type, uint32_t line, bool is_let = false);
     TypeInfo lookup_symbol(const std::string& name, uint32_t line) const;
     bool has_symbol(const std::string& name) const;
 

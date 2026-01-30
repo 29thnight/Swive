@@ -206,6 +206,25 @@ std::unique_ptr<VarDeclStmt> Parser::parse_variable_decl(bool is_let) {
     } else if (match(TokenType::Equal)) {
         // Regular stored property with initializer
         stmt->initializer = expression();
+        
+        // Check for property observers after initializer
+        if (check(TokenType::LeftBrace)) {
+            advance(); // consume '{'
+            
+            // Parse willSet and/or didSet
+            while (!check(TokenType::RightBrace) && !is_at_end()) {
+                if (match(TokenType::WillSet)) {
+                    stmt->will_set_body = block();
+                } else if (match(TokenType::DidSet)) {
+                    stmt->did_set_body = block();
+                } else {
+                    error(peek(), "Expected 'willSet' or 'didSet' in property observers.");
+                    break;
+                }
+            }
+            
+            consume(TokenType::RightBrace, "Expected '}' after property observers.");
+        }
     }
 
     return stmt;
@@ -631,6 +650,30 @@ StmtPtr Parser::enum_declaration() {
         error(peek(), "Expected 'case', 'func', or 'var' inside enum.");
     }
 
+    // If no raw type was specified but cases have raw values, infer the raw type
+    if (!stmt->raw_type.has_value() && !stmt->cases.empty()) {
+        bool has_raw_values = false;
+        for (const auto& case_decl : stmt->cases) {
+            if (case_decl.raw_value.has_value()) {
+                has_raw_values = true;
+                // Infer raw type from the first raw value
+                TypeAnnotation raw_type;
+                if (case_decl.raw_value->is_int()) {
+                    raw_type.name = "Int";
+                } else if (case_decl.raw_value->is_float()) {
+                    raw_type.name = "Float";
+                } else if (case_decl.raw_value->is_bool()) {
+                    raw_type.name = "Bool";
+                } else {
+                    raw_type.name = "String";
+                }
+                raw_type.is_optional = false;
+                stmt->raw_type = raw_type;
+                break;
+            }
+        }
+    }
+
     consume(TokenType::RightBrace, "Expected '}' after enum body.");
     return stmt;
 }
@@ -763,6 +806,18 @@ StmtPtr Parser::extension_declaration() {
     consume(TokenType::LeftBrace, "Expected '{' after extension declaration.");
 
     while (!check(TokenType::RightBrace) && !is_at_end()) {
+        // Check for access control modifiers
+        AccessLevel access_level = AccessLevel::Internal;  // Default
+        if (match(TokenType::Public)) {
+            access_level = AccessLevel::Public;
+        } else if (match(TokenType::Private)) {
+            access_level = AccessLevel::Private;
+        } else if (match(TokenType::Internal)) {
+            access_level = AccessLevel::Internal;
+        } else if (match(TokenType::Fileprivate)) {
+            access_level = AccessLevel::Fileprivate;
+        }
+        
         // Check for static modifier
         bool is_static = false;
         if (match(TokenType::Static)) {
@@ -778,7 +833,7 @@ StmtPtr Parser::extension_declaration() {
             }
         }
 
-        // Method declaration: [static] [mutating] func name(...) -> Type { ... }
+        // Method declaration: [access] [static] [mutating] func name(...) -> Type { ... }
         if (check(TokenType::Func)) {
             advance(); // consume 'func'
             const Token& method_name = consume(TokenType::Identifier, "Expected method name.");
@@ -787,6 +842,7 @@ StmtPtr Parser::extension_declaration() {
             method->name = std::string(method_name.lexeme);
             method->is_mutating = is_mutating;
             method->is_static = is_static;
+            method->access_level = access_level;
 
             // Parameter list
             consume(TokenType::LeftParen, "Expected '(' after method name.");

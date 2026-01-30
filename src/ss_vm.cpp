@@ -1000,6 +1000,98 @@ namespace swiftscript {
                     }
                     break;
                 }
+                case OpCode::OP_DEFINE_PROPERTY_WITH_OBSERVERS: {
+                    // Stack: [... class/struct, default_value]
+                    // Read: property_name_idx, flags, will_set_idx, did_set_idx
+                    uint16_t name_idx = read_short();
+                    uint8_t flags = read_byte();
+                    uint16_t will_set_idx = read_short();
+                    uint16_t did_set_idx = read_short();
+                    
+                    bool is_let = (flags & 0x1) != 0;
+                    bool is_static = (flags & 0x2) != 0;
+                    bool is_lazy = (flags & 0x4) != 0;
+                    
+                    Value default_value = pop();
+                    Value type_val = peek(0);
+                    
+                    if (!type_val.is_object() || !type_val.as_object()) {
+                        throw std::runtime_error("OP_DEFINE_PROPERTY_WITH_OBSERVERS expects class or struct on stack.");
+                    }
+                    if (name_idx >= chunk_->strings.size()) {
+                        throw std::runtime_error("Property name index out of range.");
+                    }
+                    
+                    Object* type_obj = type_val.as_object();
+                    const std::string& prop_name = chunk_->strings[name_idx];
+                    
+                    // Create willSet observer closure if present
+                    Value will_set_observer = Value::null();
+                    if (will_set_idx != 0xFFFF && will_set_idx < chunk_->functions.size()) {
+                        const auto& will_set_proto = chunk_->functions[will_set_idx];
+                        std::vector<Value> will_set_defaults;
+                        std::vector<bool> will_set_has_defaults;
+                        build_param_defaults(will_set_proto, will_set_defaults, will_set_has_defaults);
+                        auto* will_set_func = allocate_object<FunctionObject>(
+                            will_set_proto.name,
+                            will_set_proto.params,
+                            will_set_proto.param_labels,
+                            std::move(will_set_defaults),
+                            std::move(will_set_has_defaults),
+                            will_set_proto.chunk,
+                            false,
+                            false
+                        );
+                        auto* will_set_closure = allocate_object<ClosureObject>(will_set_func);
+                        will_set_observer = Value::from_object(will_set_closure);
+                    }
+                    
+                    // Create didSet observer closure if present
+                    Value did_set_observer = Value::null();
+                    if (did_set_idx != 0xFFFF && did_set_idx < chunk_->functions.size()) {
+                        const auto& did_set_proto = chunk_->functions[did_set_idx];
+                        std::vector<Value> did_set_defaults;
+                        std::vector<bool> did_set_has_defaults;
+                        build_param_defaults(did_set_proto, did_set_defaults, did_set_has_defaults);
+                        auto* did_set_func = allocate_object<FunctionObject>(
+                            did_set_proto.name,
+                            did_set_proto.params,
+                            did_set_proto.param_labels,
+                            std::move(did_set_defaults),
+                            std::move(did_set_has_defaults),
+                            did_set_proto.chunk,
+                            false,
+                            false
+                        );
+                        auto* did_set_closure = allocate_object<ClosureObject>(did_set_func);
+                        did_set_observer = Value::from_object(did_set_closure);
+                    }
+                    
+                    if (type_obj->type == ObjectType::Class) {
+                        auto* klass = static_cast<ClassObject*>(type_obj);
+                        ClassObject::PropertyInfo info;
+                        info.name = prop_name;
+                        info.default_value = default_value;
+                        info.is_let = is_let;
+                        info.is_lazy = is_lazy;
+                        info.will_set_observer = will_set_observer;
+                        info.did_set_observer = did_set_observer;
+                        klass->properties.push_back(std::move(info));
+                    } else if (type_obj->type == ObjectType::Struct) {
+                        auto* struct_type = static_cast<StructObject*>(type_obj);
+                        StructObject::PropertyInfo info;
+                        info.name = prop_name;
+                        info.default_value = default_value;
+                        info.is_let = is_let;
+                        info.is_lazy = is_lazy;
+                        info.will_set_observer = will_set_observer;
+                        info.did_set_observer = did_set_observer;
+                        struct_type->properties.push_back(std::move(info));
+                    } else {
+                        throw std::runtime_error("OP_DEFINE_PROPERTY_WITH_OBSERVERS expects class or struct on stack.");
+                    }
+                    break;
+                }
                 case OpCode::OP_INHERIT: {
                     if (stack_.size() < 2) {
                         throw std::runtime_error("Stack underflow on inherit.");
@@ -1218,6 +1310,10 @@ namespace swiftscript {
                         stack_.insert(stack_.begin() + static_cast<long>(callee_index + 1), receiver_val);
                         arg_count += 1;
 
+                        // Store mutating info and receiver location for later
+                        bool is_mutating_call = bound->is_mutating;
+                        size_t receiver_stack_index = callee_index + 1;
+
                         // Replace callee slot: BoundMethod -> method
                         // Retain method first (it's referenced from bound which will be released)
                         Value method_val = bound->method;
@@ -1233,6 +1329,30 @@ namespace swiftscript {
                         callee = stack_[callee_index];
                         obj = callee.as_object();
                         has_receiver = true;
+                        
+                        // Now handle the actual function call below, but remember mutating info
+                        // We'll pass this to the CallFrame
+                        FunctionObject* func = nullptr;
+                        ClosureObject* closure = nullptr;
+
+                        if (obj->type == ObjectType::Closure) {
+                            closure = static_cast<ClosureObject*>(obj);
+                            func = closure->function;
+                        } else if (obj->type == ObjectType::Function) {
+                            func = static_cast<FunctionObject*>(obj);
+                        } else {
+                            throw std::runtime_error("Attempted to call a non-function.");
+                        }
+
+                        apply_positional_defaults(arg_count, func, has_receiver);
+
+                        if (!func->chunk) {
+                            throw std::runtime_error("Function has no body.");
+                        }
+                        call_frames_.emplace_back(callee_index + 1, ip_, chunk_, func->name, closure, func->is_initializer, is_mutating_call, receiver_stack_index);
+                        chunk_ = func->chunk.get();
+                        ip_ = 0;
+                        break;
                     }
 
                     FunctionObject* func = nullptr;
@@ -1879,14 +1999,81 @@ namespace swiftscript {
                             }
                         }
                         
-                        // Regular stored property
+                        // Regular stored property - check for observers
+                        Value will_set_observer = Value::null();
+                        Value did_set_observer = Value::null();
+                        Value old_value = Value::null();
+                        
+                        // Find property info and get observers
+                        if (inst->klass) {
+                            for (const auto& prop_info : inst->klass->properties) {
+                                if (prop_info.name == name) {
+                                    will_set_observer = prop_info.will_set_observer;
+                                    did_set_observer = prop_info.did_set_observer;
+                                    // Get old value for didSet
+                                    auto it = inst->fields.find(name);
+                                    if (it != inst->fields.end()) {
+                                        old_value = it->second;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        
                         pop();  // Remove instance
+                        
+                        // Call willSet if present
+                        if (!will_set_observer.is_null()) {
+                            call_property_observer(will_set_observer, obj_val, value);
+                        }
+                        
+                        // Set the property
                         inst->fields[name] = value;
+                        
+                        // Call didSet if present
+                        if (!did_set_observer.is_null()) {
+                            call_property_observer(did_set_observer, obj_val, old_value);
+                        }
+                        
                         push(value);
                     } else if (obj->type == ObjectType::StructInstance) {
-                        pop();
                         auto* inst = static_cast<StructInstanceObject*>(obj);
+                        
+                        // Check for observers in struct
+                        Value will_set_observer = Value::null();
+                        Value did_set_observer = Value::null();
+                        Value old_value = Value::null();
+                        
+                        if (inst->struct_type) {
+                            for (const auto& prop_info : inst->struct_type->properties) {
+                                if (prop_info.name == name) {
+                                    will_set_observer = prop_info.will_set_observer;
+                                    did_set_observer = prop_info.did_set_observer;
+                                    // Get old value for didSet
+                                    auto it = inst->fields.find(name);
+                                    if (it != inst->fields.end()) {
+                                        old_value = it->second;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        pop();  // Remove instance
+                        
+                        // Call willSet if present
+                        if (!will_set_observer.is_null()) {
+                            call_property_observer(will_set_observer, obj_val, value);
+                        }
+                        
+                        // Set the property
                         inst->fields[name] = value;
+                        
+                        // Call didSet if present
+                        if (!did_set_observer.is_null()) {
+                            call_property_observer(did_set_observer, obj_val, old_value);
+                        }
+                        
                         push(value);
                     } else if (obj->type == ObjectType::Map) {
                         pop();
@@ -2468,10 +2655,24 @@ namespace swiftscript {
                 auto method_it = inst->struct_type->methods.find(name);
                 if (method_it != inst->struct_type->methods.end()) {
                     // Create a bound method
-                    // For struct, we need to copy the instance for value semantics
-                    auto* copy = inst->deep_copy(*this);
-                    auto* bound = allocate_object<BoundMethodObject>(copy, method_it->second);
-                    return Value::from_object(bound);
+                    // Check if it's a mutating method
+                    bool is_mutating = false;
+                    auto mutating_it = inst->struct_type->mutating_methods.find(name);
+                    if (mutating_it != inst->struct_type->mutating_methods.end()) {
+                        is_mutating = mutating_it->second;
+                    }
+                    
+                    if (is_mutating) {
+                        // For mutating methods, bind to the original instance
+                        // The VM will handle copying it back after the call
+                        auto* bound = allocate_object<BoundMethodObject>(inst, method_it->second, true);
+                        return Value::from_object(bound);
+                    } else {
+                        // For non-mutating methods, copy the instance for value semantics
+                        auto* copy = inst->deep_copy(*this);
+                        auto* bound = allocate_object<BoundMethodObject>(copy, method_it->second, false);
+                        return Value::from_object(bound);
+                    }
                 }
             }
             return Value::null();
@@ -2731,6 +2932,178 @@ namespace swiftscript {
             upvalue->location = &upvalue->closed;
             open_upvalues_ = upvalue->next_upvalue;
         }
+    }
+
+    void VM::call_property_observer(Value observer, Value instance, Value argument) {
+        if (observer.is_null() || !observer.is_object()) {
+            return;  // No observer to call
+        }
+        
+        Object* obj = observer.as_object();
+        FunctionObject* func = nullptr;
+        ClosureObject* closure = nullptr;
+        
+        if (obj->type == ObjectType::Closure) {
+            closure = static_cast<ClosureObject*>(obj);
+            func = closure->function;
+        } else if (obj->type == ObjectType::Function) {
+            func = static_cast<FunctionObject*>(obj);
+        } else {
+            return;  // Not a callable
+        }
+        
+        if (!func || !func->chunk || func->params.size() != 2) {
+            return;  // Invalid observer function
+        }
+        
+        // Use the new execute_function helper
+        std::vector<Value> args = {instance, argument};
+        execute_function(func, closure, args);
+    }
+
+    Value VM::execute_function(FunctionObject* func, ClosureObject* closure, const std::vector<Value>& args) {
+        if (!func || !func->chunk) {
+            throw std::runtime_error("Invalid function to execute");
+        }
+        
+        // Save current execution state
+        const Chunk* saved_chunk = chunk_;
+        size_t saved_ip = ip_;
+        
+        // Push function and arguments onto stack
+        if (closure) {
+            push(Value::from_object(closure));
+        } else {
+            push(Value::from_object(func));
+        }
+        
+        for (const auto& arg : args) {
+            push(arg);
+        }
+        
+        // Calculate callee index
+        size_t callee_index = stack_.size() - args.size() - 1;
+        
+        // Create call frame
+        call_frames_.emplace_back(callee_index + 1, saved_ip, saved_chunk, func->name, closure, false);
+        
+        // Execute the function
+        chunk_ = func->chunk.get();
+        ip_ = 0;
+        
+        Value result = Value::null();
+        
+        try {
+            // Execute until OP_RETURN
+            while (ip_ < chunk_->code.size()) {
+                OpCode op = static_cast<OpCode>(read_byte());
+                
+                if (op == OpCode::OP_RETURN) {
+                    // Function is returning
+                    result = pop();  // Get return value
+                    
+                    // Clean up call frame
+                    CallFrame& frame = call_frames_.back();
+                    
+                    // Close upvalues
+                    if (stack_.size() > frame.stack_base) {
+                        close_upvalues(&stack_[frame.stack_base]);
+                    }
+                    
+                    // Restore execution state
+                    chunk_ = frame.chunk;
+                    ip_ = frame.return_address;
+                    
+                    // Pop call frame
+                    call_frames_.pop_back();
+                    
+                    // Clean up stack (remove callee and args)
+                    while (stack_.size() > callee_index) {
+                        pop();
+                    }
+                    
+                    return result;
+                }
+                
+                // Handle other opcodes by executing them inline
+                // We need to step back because read_byte() already consumed the opcode
+                ip_--;
+                
+                // Execute this one instruction
+                switch (static_cast<OpCode>(chunk_->code[ip_])) {
+                    case OpCode::OP_PRINT: {
+                        ip_++;  // consume opcode
+                        Value val = pop();
+                        std::cout << val.to_string() << "\n";
+                        break;
+                    }
+                    case OpCode::OP_POP:
+                        ip_++;
+                        pop();
+                        break;
+                    case OpCode::OP_GET_LOCAL: {
+                        ip_++;
+                        uint16_t slot = read_short();
+                        CallFrame& frame = call_frames_.back();
+                        push(stack_[frame.stack_base + slot]);
+                        break;
+                    }
+                    case OpCode::OP_GET_PROPERTY: {
+                        ip_++;
+                        const std::string& name = read_string();
+                        Value obj = pop();
+                        push(get_property(obj, name));
+                        break;
+                    }
+                    case OpCode::OP_NIL:
+                        ip_++;
+                        push(Value::null());
+                        break;
+                    case OpCode::OP_CONSTANT:
+                        ip_++;
+                        push(read_constant());
+                        break;
+                    case OpCode::OP_STRING: {
+                        ip_++;
+                        const std::string& str = read_string();
+                        auto* obj = allocate_object<StringObject>(str);
+                        push(Value::from_object(obj));
+                        break;
+                    }
+                    case OpCode::OP_TRUE:
+                        ip_++;
+                        push(Value::from_bool(true));
+                        break;
+                    case OpCode::OP_FALSE:
+                        ip_++;
+                        push(Value::from_bool(false));
+                        break;
+                    default:
+                        // For other opcodes, we need to handle them
+                        // This is a simplified version - ideally we'd refactor run() to handle one opcode at a time
+                        throw std::runtime_error("Unsupported opcode in nested function execution");
+                }
+            }
+            
+        } catch (...) {
+            // Restore state on error
+            chunk_ = saved_chunk;
+            ip_ = saved_ip;
+            
+            // Pop call frame if still there
+            if (!call_frames_.empty() && call_frames_.back().function_name == func->name) {
+                call_frames_.pop_back();
+            }
+            
+            // Clean up stack
+            while (stack_.size() > callee_index) {
+                pop();
+            }
+            
+            throw;
+        }
+        
+        return result;
     }
 
 } // namespace swiftscript

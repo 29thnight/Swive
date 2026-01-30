@@ -252,6 +252,8 @@ public:
         bool is_let{false};
         bool is_lazy{false};
         Value lazy_initializer;  // Closure to call on first access (if is_lazy)
+        Value will_set_observer;  // Function value (or null if no observer)
+        Value did_set_observer;   // Function value (or null if no observer)
     };
     struct ComputedPropertyInfo {
         std::string name;
@@ -365,6 +367,9 @@ public:
         std::string name;
         Value default_value;
         bool is_let{false};
+        bool is_lazy{false};
+        Value will_set_observer;  // Function value (or null if no observer)
+        Value did_set_observer;   // Function value (or null if no observer)
     };
     struct ComputedPropertyInfo {
         std::string name;
@@ -546,19 +551,20 @@ class BoundMethodObject : public Object {
 public:
     Object* receiver;  // InstanceObject* or StructInstanceObject*
     Value method; // closure/function value
+    bool is_mutating;  // True for mutating struct methods
 
-    BoundMethodObject(Object* recv, Value m)
-        : Object(ObjectType::BoundMethod), receiver(recv), method(m) {
+    BoundMethodObject(Object* recv, Value m, bool mutating = false)
+        : Object(ObjectType::BoundMethod), receiver(recv), method(m), is_mutating(mutating) {
     }
 
     // Convenience constructor for InstanceObject
-    BoundMethodObject(InstanceObject* recv, Value m)
-        : Object(ObjectType::BoundMethod), receiver(static_cast<Object*>(recv)), method(m) {
+    BoundMethodObject(InstanceObject* recv, Value m, bool mutating = false)
+        : Object(ObjectType::BoundMethod), receiver(static_cast<Object*>(recv)), method(m), is_mutating(mutating) {
     }
 
     // Convenience constructor for StructInstanceObject
-    BoundMethodObject(StructInstanceObject* recv, Value m)
-        : Object(ObjectType::BoundMethod), receiver(static_cast<Object*>(recv)), method(m) {
+    BoundMethodObject(StructInstanceObject* recv, Value m, bool mutating = false)
+        : Object(ObjectType::BoundMethod), receiver(static_cast<Object*>(recv)), method(m), is_mutating(mutating) {
     }
 
     std::string to_string() const override {

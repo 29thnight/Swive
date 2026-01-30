@@ -149,6 +149,9 @@ struct Protocol {
         OP_STRUCT_METHOD,      // Attach method to struct (with mutating flag)
         OP_COPY_VALUE,         // Deep copy struct instance for value semantics
 
+        // Property observers
+        OP_DEFINE_PROPERTY_WITH_OBSERVERS, // Define property with willSet/didSet observers
+
         // Enum operations
         OP_ENUM,               // Create enum type object
         OP_ENUM_CASE,          // Define enum case

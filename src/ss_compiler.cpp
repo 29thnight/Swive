@@ -228,6 +228,102 @@ void Compiler::visit(ClassDeclStmt* stmt) {
             emit_short(static_cast<uint16_t>(property_name_idx), property->line);
             emit_short(static_cast<uint16_t>(getter_idx), property->line);
             emit_short(static_cast<uint16_t>(setter_idx), property->line);
+        } else if (property->will_set_body || property->did_set_body) {
+            // Stored property with observers
+            if (property->initializer) {
+                compile_expr(property->initializer.get());
+            } else {
+                emit_op(OpCode::OP_NIL, property->line);
+            }
+
+            size_t property_name_idx = identifier_constant(property->name);
+            if (property_name_idx > std::numeric_limits<uint16_t>::max()) {
+                throw CompilerError("Too many property identifiers", property->line);
+            }
+
+            // Compile willSet observer if present
+            uint16_t will_set_idx = 0xFFFF;
+            if (property->will_set_body) {
+                FunctionPrototype will_set_proto;
+                will_set_proto.name = property->name + "_willSet";
+                will_set_proto.params = {"self", "newValue"};
+                will_set_proto.param_labels = {"", ""};
+                will_set_proto.param_defaults = {FunctionPrototype::ParamDefaultValue{}, FunctionPrototype::ParamDefaultValue{}};
+                will_set_proto.is_initializer = false;
+                will_set_proto.is_override = false;
+
+                Compiler will_set_compiler;
+                will_set_compiler.enclosing_ = this;
+                will_set_compiler.chunk_ = Chunk{};
+                will_set_compiler.locals_.clear();
+                will_set_compiler.scope_depth_ = 1;
+                will_set_compiler.recursion_depth_ = 0;
+                will_set_compiler.current_class_properties_ = &property_lookup;
+                will_set_compiler.allow_implicit_self_property_ = true;
+
+                // Add 'self' and 'newValue' as locals
+                will_set_compiler.declare_local("self", false);
+                will_set_compiler.mark_local_initialized();
+                will_set_compiler.declare_local("newValue", false);
+                will_set_compiler.mark_local_initialized();
+
+                // Compile willSet body
+                for (const auto& stmt_in_will_set : property->will_set_body->statements) {
+                    will_set_compiler.compile_stmt(stmt_in_will_set.get());
+                }
+
+                will_set_compiler.emit_op(OpCode::OP_NIL, property->line);
+                will_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
+
+                will_set_proto.chunk = std::make_shared<Chunk>(std::move(will_set_compiler.chunk_));
+                will_set_idx = chunk_.add_function(std::move(will_set_proto));
+            }
+
+            // Compile didSet observer if present
+            uint16_t did_set_idx = 0xFFFF;
+            if (property->did_set_body) {
+                FunctionPrototype did_set_proto;
+                did_set_proto.name = property->name + "_didSet";
+                did_set_proto.params = {"self", "oldValue"};
+                did_set_proto.param_labels = {"", ""};
+                did_set_proto.param_defaults = {FunctionPrototype::ParamDefaultValue{}, FunctionPrototype::ParamDefaultValue{}};
+                did_set_proto.is_initializer = false;
+                did_set_proto.is_override = false;
+
+                Compiler did_set_compiler;
+                did_set_compiler.enclosing_ = this;
+                did_set_compiler.chunk_ = Chunk{};
+                did_set_compiler.locals_.clear();
+                did_set_compiler.scope_depth_ = 1;
+                did_set_compiler.recursion_depth_ = 0;
+                did_set_compiler.current_class_properties_ = &property_lookup;
+                did_set_compiler.allow_implicit_self_property_ = true;
+
+                // Add 'self' and 'oldValue' as locals
+                did_set_compiler.declare_local("self", false);
+                did_set_compiler.mark_local_initialized();
+                did_set_compiler.declare_local("oldValue", false);
+                did_set_compiler.mark_local_initialized();
+
+                // Compile didSet body
+                for (const auto& stmt_in_did_set : property->did_set_body->statements) {
+                    did_set_compiler.compile_stmt(stmt_in_did_set.get());
+                }
+
+                did_set_compiler.emit_op(OpCode::OP_NIL, property->line);
+                did_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
+
+                did_set_proto.chunk = std::make_shared<Chunk>(std::move(did_set_compiler.chunk_));
+                did_set_idx = chunk_.add_function(std::move(did_set_proto));
+            }
+
+            // Emit property definition with observers
+            emit_op(OpCode::OP_DEFINE_PROPERTY_WITH_OBSERVERS, property->line);
+            emit_short(static_cast<uint16_t>(property_name_idx), property->line);
+            uint8_t flags = (property->is_let ? 0x1 : 0x0) | (property->is_static ? 0x2 : 0x0) | (property->is_lazy ? 0x4 : 0x0);
+            emit_byte(flags, property->line);
+            emit_short(static_cast<uint16_t>(will_set_idx), property->line);
+            emit_short(static_cast<uint16_t>(did_set_idx), property->line);
         } else {
             // Stored property
             if (property->initializer) {
@@ -243,8 +339,8 @@ void Compiler::visit(ClassDeclStmt* stmt) {
 
             emit_op(OpCode::OP_DEFINE_PROPERTY, property->line);
             emit_short(static_cast<uint16_t>(property_name_idx), property->line);
-            // flags: bit 0 = is_let, bit 1 = is_static
-            uint8_t flags = (property->is_let ? 0x1 : 0x0) | (property->is_static ? 0x2 : 0x0);
+            // flags: bit 0 = is_let, bit 1 = is_static, bit 2 = is_lazy
+            uint8_t flags = (property->is_let ? 0x1 : 0x0) | (property->is_static ? 0x2 : 0x0) | (property->is_lazy ? 0x4 : 0x0);
             emit_byte(flags, property->line);
         }
     }
@@ -430,21 +526,126 @@ void Compiler::visit(StructDeclStmt* stmt) {
             continue;
         }
         
-        if (property->initializer) {
-            compile_expr(property->initializer.get());
+        // Check if property has observers or is computed
+        if (property->is_computed) {
+            // Computed properties handled separately
+            continue;
+        }
+        
+        if (property->will_set_body || property->did_set_body) {
+            // Stored property with observers
+            if (property->initializer) {
+                compile_expr(property->initializer.get());
+            } else {
+                emit_op(OpCode::OP_NIL, property->line);
+            }
+
+            size_t property_name_idx = identifier_constant(property->name);
+            if (property_name_idx > std::numeric_limits<uint16_t>::max()) {
+                throw CompilerError("Too many property identifiers", property->line);
+            }
+
+            // Compile willSet observer if present
+            uint16_t will_set_idx = 0xFFFF;
+            if (property->will_set_body) {
+                FunctionPrototype will_set_proto;
+                will_set_proto.name = property->name + "_willSet";
+                will_set_proto.params = {"self", "newValue"};
+                will_set_proto.param_labels = {"", ""};
+                will_set_proto.param_defaults = {FunctionPrototype::ParamDefaultValue{}, FunctionPrototype::ParamDefaultValue{}};
+                will_set_proto.is_initializer = false;
+                will_set_proto.is_override = false;
+
+                Compiler will_set_compiler;
+                will_set_compiler.enclosing_ = this;
+                will_set_compiler.chunk_ = Chunk{};
+                will_set_compiler.locals_.clear();
+                will_set_compiler.scope_depth_ = 1;
+                will_set_compiler.recursion_depth_ = 0;
+                will_set_compiler.current_class_properties_ = &property_lookup;
+                will_set_compiler.allow_implicit_self_property_ = true;
+
+                // Add 'self' and 'newValue' as locals
+                will_set_compiler.declare_local("self", false);
+                will_set_compiler.mark_local_initialized();
+                will_set_compiler.declare_local("newValue", false);
+                will_set_compiler.mark_local_initialized();
+
+                // Compile willSet body
+                for (const auto& stmt_in_will_set : property->will_set_body->statements) {
+                    will_set_compiler.compile_stmt(stmt_in_will_set.get());
+                }
+
+                will_set_compiler.emit_op(OpCode::OP_NIL, property->line);
+                will_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
+
+                will_set_proto.chunk = std::make_shared<Chunk>(std::move(will_set_compiler.chunk_));
+                will_set_idx = chunk_.add_function(std::move(will_set_proto));
+            }
+
+            // Compile didSet observer if present
+            uint16_t did_set_idx = 0xFFFF;
+            if (property->did_set_body) {
+                FunctionPrototype did_set_proto;
+                did_set_proto.name = property->name + "_didSet";
+                did_set_proto.params = {"self", "oldValue"};
+                did_set_proto.param_labels = {"", ""};
+                did_set_proto.param_defaults = {FunctionPrototype::ParamDefaultValue{}, FunctionPrototype::ParamDefaultValue{}};
+                did_set_proto.is_initializer = false;
+                did_set_proto.is_override = false;
+
+                Compiler did_set_compiler;
+                did_set_compiler.enclosing_ = this;
+                did_set_compiler.chunk_ = Chunk{};
+                did_set_compiler.locals_.clear();
+                did_set_compiler.scope_depth_ = 1;
+                did_set_compiler.recursion_depth_ = 0;
+                did_set_compiler.current_class_properties_ = &property_lookup;
+                did_set_compiler.allow_implicit_self_property_ = true;
+
+                // Add 'self' and 'oldValue' as locals
+                did_set_compiler.declare_local("self", false);
+                did_set_compiler.mark_local_initialized();
+                did_set_compiler.declare_local("oldValue", false);
+                did_set_compiler.mark_local_initialized();
+
+                // Compile didSet body
+                for (const auto& stmt_in_did_set : property->did_set_body->statements) {
+                    did_set_compiler.compile_stmt(stmt_in_did_set.get());
+                }
+
+                did_set_compiler.emit_op(OpCode::OP_NIL, property->line);
+                did_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
+
+                did_set_proto.chunk = std::make_shared<Chunk>(std::move(did_set_compiler.chunk_));
+                did_set_idx = chunk_.add_function(std::move(did_set_proto));
+            }
+
+            // Emit property definition with observers
+            emit_op(OpCode::OP_DEFINE_PROPERTY_WITH_OBSERVERS, property->line);
+            emit_short(static_cast<uint16_t>(property_name_idx), property->line);
+            uint8_t flags = (property->is_let ? 0x1 : 0x0) | (property->is_static ? 0x2 : 0x0) | (property->is_lazy ? 0x4 : 0x0);
+            emit_byte(flags, property->line);
+            emit_short(static_cast<uint16_t>(will_set_idx), property->line);
+            emit_short(static_cast<uint16_t>(did_set_idx), property->line);
         } else {
-            emit_op(OpCode::OP_NIL, property->line);
-        }
+            // Regular stored property without observers
+            if (property->initializer) {
+                compile_expr(property->initializer.get());
+            } else {
+                emit_op(OpCode::OP_NIL, property->line);
+            }
 
-        size_t property_name_idx = identifier_constant(property->name);
-        if (property_name_idx > std::numeric_limits<uint16_t>::max()) {
-            throw CompilerError("Too many property identifiers", property->line);
-        }
+            size_t property_name_idx = identifier_constant(property->name);
+            if (property_name_idx > std::numeric_limits<uint16_t>::max()) {
+                throw CompilerError("Too many property identifiers", property->line);
+            }
 
-        emit_op(OpCode::OP_DEFINE_PROPERTY, property->line);
-        emit_short(static_cast<uint16_t>(property_name_idx), property->line);
-        uint8_t flags = property->is_let ? 1 : 0;
-        emit_byte(flags, property->line);
+            emit_op(OpCode::OP_DEFINE_PROPERTY, property->line);
+            emit_short(static_cast<uint16_t>(property_name_idx), property->line);
+            uint8_t flags = property->is_let ? 1 : 0;
+            emit_byte(flags, property->line);
+        }
     }
     
     // Define static properties

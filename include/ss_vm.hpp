@@ -123,6 +123,12 @@ namespace swiftscript {
 
         UpvalueObject* capture_upvalue(Value* local);
         void close_upvalues(Value* last);
+        
+        // Property observer helpers
+        void call_property_observer(Value observer, Value instance, Value argument);
+        
+        // Execute a function synchronously (for nested calls like observers)
+        Value execute_function(FunctionObject* func, ClosureObject* closure, const std::vector<Value>& args);
     };
 
     // Call Frame for function calls
@@ -134,14 +140,18 @@ namespace swiftscript {
         std::string function_name;
         ClosureObject* closure; // Current closure for upvalue access (nullptr for plain functions)
         bool is_initializer;
+        bool is_mutating;       // True if this is a mutating struct method
+        size_t receiver_index;  // Stack index of the receiver (for mutating methods)
 
-        CallFrame(size_t base, size_t ret_addr, const Chunk* call_chunk, std::string name, ClosureObject* c, bool initializer)
+        CallFrame(size_t base, size_t ret_addr, const Chunk* call_chunk, std::string name, ClosureObject* c, bool initializer, bool mutating = false, size_t recv_idx = 0)
             : stack_base(base),
               return_address(ret_addr),
               chunk(call_chunk),
               function_name(std::move(name)),
               closure(c),
-              is_initializer(initializer) {
+              is_initializer(initializer),
+              is_mutating(mutating),
+              receiver_index(recv_idx) {
         }
     };
 

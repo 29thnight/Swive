@@ -145,6 +145,7 @@
     <ClInclude Include="test\QUICK_REFERENCE.hpp" />
     <ClInclude Include="test\test_all_tests.hpp" />
     <ClInclude Include="test\test_helpers.hpp" />
+    <ClInclude Include="test\test_property_observers_impl.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ss_chunk.cpp" />
@@ -156,6 +157,7 @@
     <ClCompile Include="src\ss_token.cpp" />
     <ClCompile Include="src\ss_value.cpp" />
     <ClCompile Include="src\ss_vm.cpp" />
+    <ClCompile Include="test\test_access_control.cpp" />
     <ClCompile Include="test\test_basic.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
@@ -179,6 +181,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="test\test_let.cpp" />
     <ClCompile Include="test\test_minimal.cpp" />
     <ClCompile Include="test\test_new_features.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
@@ -193,6 +196,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="test\test_optional.cpp" />
+    <ClCompile Include="test\test_pattern_matching.cpp" />
     <ClCompile Include="test\test_phase1.cpp" />
     <ClCompile Include="test\test_protocol.cpp" />
     <ClCompile Include="test\test_simple.cpp">
@@ -208,6 +212,8 @@
   <ItemGroup>
     <None Include="docs\enum-implementation-status.md" />
     <None Include="docs\protocol-implementation.md" />
+    <None Include="GRAMMAR_TODO.md" />
+    <None Include="IMPLEMENTATION_STATUS.md" />
     <None Include="test\build.bat" />
     <None Include="test\build.sh" />
     <None Include="test\CHECKLIST.md" />
@@ -220,6 +226,10 @@
     <None Include="test_computed_ext.ss" />
     <None Include="test_ext1.ss" />
     <None Include="test_extension_simple.ss" />
+    <None Include="test_mutating.swift" />
+    <None Include="test_observers.swift" />
+    <None Include="test_private.swift" />
+    <None Include="test_rawvalue.swift" />
     <None Include="test_struct_prop_assign.ss" />
   </ItemGroup>
   <ItemGroup>

@@ -265,6 +265,19 @@ void test_struct_static_method_full();
 void test_extension_static_method();
 void test_mixed_static_instance();
 
+// Property observers tests
+void test_willset_basic();
+void test_didset_basic();
+void test_willset_and_didset();
+void test_observers_in_struct();
+
+// Lazy properties tests
+void test_lazy_property_basic();
+
+// Subscript tests
+void test_subscript_basic();
+void test_custom_subscript_struct();
+
 } // namespace test
 } // namespace swiftscript
 
@@ -811,6 +824,168 @@ TEST(StaticMembersTest, ExtensionStaticMethod) {
 
 TEST(StaticMembersTest, MixedStaticInstance) {
     EXPECT_NO_THROW(swiftscript::test::test_mixed_static_instance());
+}
+
+// ============================================================================
+// Let Constant Tests
+// ============================================================================
+
+namespace swiftscript { namespace test {
+    void test_let_reassignment_error();
+    void test_var_reassignment_ok();
+    void test_multiple_let_constants();
+    void test_let_scopes();
+    void test_let_struct_mutating_error();
+    void test_var_struct_mutating_ok();
+    void test_let_struct_non_mutating_ok();
+    
+    void test_private_property_error();
+    void test_private_method_error();
+    void test_private_access_within_class();
+    void test_public_access();
+    void test_internal_access();
+    void test_private_struct_members();
+    void test_private_struct_error();
+    void test_extension_private_access();
+    void test_extension_private_method();
+    void test_extension_private_error();
+    
+    void test_associated_value_int_extraction();
+    void test_associated_value_string_extraction();
+    void test_multiple_associated_values();
+    void test_associated_values_with_default();
+}} // namespace swiftscript::test
+
+TEST(LetConstantTest, LetReassignmentError) {
+    EXPECT_NO_THROW(swiftscript::test::test_let_reassignment_error());
+}
+
+TEST(LetConstantTest, VarReassignmentOk) {
+    EXPECT_NO_THROW(swiftscript::test::test_var_reassignment_ok());
+}
+
+TEST(LetConstantTest, MultipleLets) {
+    EXPECT_NO_THROW(swiftscript::test::test_multiple_let_constants());
+}
+
+TEST(LetConstantTest, LetScopes) {
+    EXPECT_NO_THROW(swiftscript::test::test_let_scopes());
+}
+
+TEST(LetConstantTest, LetStructMutatingError) {
+    EXPECT_NO_THROW(swiftscript::test::test_let_struct_mutating_error());
+}
+
+TEST(LetConstantTest, VarStructMutatingOk) {
+    EXPECT_NO_THROW(swiftscript::test::test_var_struct_mutating_ok());
+}
+
+TEST(LetConstantTest, LetStructNonMutatingOk) {
+    EXPECT_NO_THROW(swiftscript::test::test_let_struct_non_mutating_ok());
+}
+
+// ============================================================================
+// Access Control Tests
+// ============================================================================
+
+TEST(AccessControlTest, PrivatePropertyError) {
+    EXPECT_NO_THROW(swiftscript::test::test_private_property_error());
+}
+
+TEST(AccessControlTest, PrivateMethodError) {
+    EXPECT_NO_THROW(swiftscript::test::test_private_method_error());
+}
+
+TEST(AccessControlTest, PrivateAccessWithinClass) {
+    EXPECT_NO_THROW(swiftscript::test::test_private_access_within_class());
+}
+
+TEST(AccessControlTest, PublicAccess) {
+    EXPECT_NO_THROW(swiftscript::test::test_public_access());
+}
+
+TEST(AccessControlTest, InternalAccess) {
+    EXPECT_NO_THROW(swiftscript::test::test_internal_access());
+}
+
+TEST(AccessControlTest, PrivateStructMembers) {
+    EXPECT_NO_THROW(swiftscript::test::test_private_struct_members());
+}
+
+TEST(AccessControlTest, PrivateStructError) {
+    EXPECT_NO_THROW(swiftscript::test::test_private_struct_error());
+}
+
+TEST(AccessControlTest, ExtensionPrivateAccess) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_private_access());
+}
+
+TEST(AccessControlTest, ExtensionPrivateMethod) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_private_method());
+}
+
+TEST(AccessControlTest, ExtensionPrivateError) {
+    EXPECT_NO_THROW(swiftscript::test::test_extension_private_error());
+}
+
+// ============================================================================
+// Pattern Matching Tests
+// ============================================================================
+
+TEST(PatternMatchingTest, AssociatedValueIntExtraction) {
+    EXPECT_NO_THROW(swiftscript::test::test_associated_value_int_extraction());
+}
+
+TEST(PatternMatchingTest, AssociatedValueStringExtraction) {
+    EXPECT_NO_THROW(swiftscript::test::test_associated_value_string_extraction());
+}
+
+TEST(PatternMatchingTest, MultipleAssociatedValues) {
+    EXPECT_NO_THROW(swiftscript::test::test_multiple_associated_values());
+}
+
+TEST(PatternMatchingTest, AssociatedValuesWithDefault) {
+    EXPECT_NO_THROW(swiftscript::test::test_associated_values_with_default());
+}
+
+// ============================================================================
+// Property Observers Tests
+// ============================================================================
+
+TEST(PropertyObserversTest, WillSetBasic) {
+    EXPECT_NO_THROW(swiftscript::test::test_willset_basic());
+}
+
+TEST(PropertyObserversTest, DidSetBasic) {
+    EXPECT_NO_THROW(swiftscript::test::test_didset_basic());
+}
+
+TEST(PropertyObserversTest, WillSetAndDidSet) {
+    EXPECT_NO_THROW(swiftscript::test::test_willset_and_didset());
+}
+
+TEST(PropertyObserversTest, ObserversInStruct) {
+    EXPECT_NO_THROW(swiftscript::test::test_observers_in_struct());
+}
+
+// ============================================================================
+// Lazy Properties Tests
+// ============================================================================
+
+TEST(LazyPropertiesTest, LazyPropertyBasic) {
+    EXPECT_NO_THROW(swiftscript::test::test_lazy_property_basic());
+}
+
+// ============================================================================
+// Subscript Tests
+// ============================================================================
+
+TEST(SubscriptTest, SubscriptBasic) {
+    EXPECT_NO_THROW(swiftscript::test::test_subscript_basic());
+}
+
+TEST(SubscriptTest, CustomSubscriptStruct) {
+    EXPECT_NO_THROW(swiftscript::test::test_custom_subscript_struct());
 }
 
 // ============================================================================

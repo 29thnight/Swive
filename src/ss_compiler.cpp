@@ -1,6 +1,7 @@
 #include "ss_compiler.hpp"
 #include "ss_lexer.hpp"
 #include "ss_parser.hpp"
+#include "ss_type_checker.hpp"
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -10,6 +11,9 @@
 namespace swiftscript {
 
 Chunk Compiler::compile(const std::vector<StmtPtr>& program) {
+    TypeChecker checker;
+    checker.check(program);
+
     chunk_ = Chunk{};
     locals_.clear();
     scope_depth_ = 0;

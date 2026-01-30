@@ -138,6 +138,7 @@
     <ClInclude Include="include\ss_lexer.hpp" />
     <ClInclude Include="include\ss_parser.hpp" />
     <ClInclude Include="include\ss_token.hpp" />
+    <ClInclude Include="include\ss_type_checker.hpp" />
     <ClInclude Include="include\ss_value.hpp" />
     <ClInclude Include="include\ss_vm.hpp" />
     <ClInclude Include="test\EXAMPLES_test_helpers.hpp" />
@@ -151,6 +152,7 @@
     <ClCompile Include="src\ss_compiler.cpp" />
     <ClCompile Include="src\ss_lexer.cpp" />
     <ClCompile Include="src\ss_parser.cpp" />
+    <ClCompile Include="src\ss_type_checker.cpp" />
     <ClCompile Include="src\ss_token.cpp" />
     <ClCompile Include="src\ss_value.cpp" />
     <ClCompile Include="src\ss_vm.cpp" />

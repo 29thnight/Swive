@@ -249,29 +249,65 @@ namespace swiftscript {
     // ============================================================
 
     StmtPtr Parser::declaration() {
+        AccessLevel access_level = AccessLevel::Internal;
+        bool has_access_modifier = false;
+        if (match(TokenType::Public)) {
+            access_level = AccessLevel::Public;
+            has_access_modifier = true;
+        }
+        else if (match(TokenType::Private)) {
+            access_level = AccessLevel::Private;
+            has_access_modifier = true;
+        }
+        else if (match(TokenType::Internal)) {
+            access_level = AccessLevel::Internal;
+            has_access_modifier = true;
+        }
+        else if (match(TokenType::Fileprivate)) {
+            access_level = AccessLevel::Fileprivate;
+            has_access_modifier = true;
+        }
+
         if (check(TokenType::Import)) {
+            if (has_access_modifier) {
+                error(peek(), "Access control modifiers cannot be applied to import statements.");
+            }
             return import_declaration();
         }
         if (check(TokenType::Var) || check(TokenType::Let)) {
-            return var_declaration();
+            auto stmt = var_declaration();
+            if (auto* var = dynamic_cast<VarDeclStmt*>(stmt.get())) {
+                var->access_level = access_level;
+            }
+            else if (has_access_modifier) {
+                error(previous(), "Access control modifier must precede a declaration.");
+            }
+            return stmt;
         }
         if (check(TokenType::Class)) {
-            return class_declaration();
+            return class_declaration(access_level);
         }
         if (check(TokenType::Struct)) {
-            return struct_declaration();
+            return struct_declaration(access_level);
         }
         if (check(TokenType::Enum)) {
-            return enum_declaration();
+            return enum_declaration(access_level);
         }
         if (check(TokenType::Protocol)) {
-            return protocol_declaration();
+            return protocol_declaration(access_level);
         }
         if (check(TokenType::Extension)) {
-            return extension_declaration();
+            return extension_declaration(access_level);
         }
         if (check(TokenType::Func)) {
-            return func_declaration();
+            auto stmt = func_declaration();
+            if (auto* func = dynamic_cast<FuncDeclStmt*>(stmt.get())) {
+                func->access_level = access_level;
+            }
+            return stmt;
+        }
+        if (has_access_modifier) {
+            error(peek(), "Access control modifier must precede a declaration.");
         }
         return statement();
     }
@@ -489,7 +525,7 @@ namespace swiftscript {
         return stmt;
     }
 
-    StmtPtr Parser::class_declaration() {
+    StmtPtr Parser::class_declaration(AccessLevel access_level) {
         advance(); // consume 'class'
         const Token& name_tok = consume(TokenType::Identifier, "Expected class name.");
 
@@ -497,6 +533,7 @@ namespace swiftscript {
         stmt->line = name_tok.line;
         stmt->name = std::string(name_tok.lexeme);
         stmt->generic_params = parse_generic_params();
+        stmt->access_level = access_level;
 
         // Parse superclass and protocol conformances: class MyClass: SuperClass, Protocol1, Protocol2 { ... }
         if (match(TokenType::Colon)) {
@@ -628,7 +665,7 @@ namespace swiftscript {
         return stmt;
     }
 
-    StmtPtr Parser::struct_declaration() {
+    StmtPtr Parser::struct_declaration(AccessLevel access_level) {
         advance(); // consume 'struct'
         const Token& name_tok = consume(TokenType::Identifier, "Expected struct name.");
 
@@ -636,6 +673,7 @@ namespace swiftscript {
         stmt->line = name_tok.line;
         stmt->name = std::string(name_tok.lexeme);
         stmt->generic_params = parse_generic_params();
+        stmt->access_level = access_level;
 
         // Parse protocol conformances: struct MyStruct: Protocol1, Protocol2 { ... }
         if (match(TokenType::Colon)) {
@@ -773,7 +811,7 @@ namespace swiftscript {
         return stmt;
     }
 
-    StmtPtr Parser::enum_declaration() {
+    StmtPtr Parser::enum_declaration(AccessLevel access_level) {
         advance(); // consume 'enum'
         const Token& name_tok = consume(TokenType::Identifier, "Expected enum name.");
 
@@ -781,6 +819,7 @@ namespace swiftscript {
         stmt->line = name_tok.line;
         stmt->name = std::string(name_tok.lexeme);
         stmt->generic_params = parse_generic_params();
+        stmt->access_level = access_level;
 
         // Optional raw type: enum Status: Int { ... }
         if (match(TokenType::Colon)) {
@@ -928,7 +967,7 @@ namespace swiftscript {
         return stmt;
     }
 
-    StmtPtr Parser::protocol_declaration() {
+    StmtPtr Parser::protocol_declaration(AccessLevel access_level) {
         advance(); // consume 'protocol'
         const Token& name_tok = consume(TokenType::Identifier, "Expected protocol name.");
 
@@ -936,6 +975,7 @@ namespace swiftscript {
         stmt->line = name_tok.line;
         stmt->name = std::string(name_tok.lexeme);
         stmt->generic_params = parse_generic_params();
+        stmt->access_level = access_level;
 
         // Optional protocol inheritance: protocol MyProtocol: BaseProtocol1, BaseProtocol2 { ... }
         if (match(TokenType::Colon)) {
@@ -999,13 +1039,12 @@ namespace swiftscript {
 
                 // Parse { get } or { get set }
                 consume(TokenType::LeftBrace, "Expected '{' for property accessor specification.");
+                consume(TokenType::Get, "Expected 'get' in property requirement.");
 
-                if (consume(TokenType::Identifier, "Expected 'get' in property requirement.").lexeme != "get") {
-                    error(previous(), "Expected 'get' in property requirement.");
-                }
-
-                if (check(TokenType::Identifier) && peek().lexeme == "set") {
-                    advance(); // consume 'set'
+                if (match(TokenType::Set)) {
+                    if (is_let) {
+                        error(previous(), "Let properties in protocols cannot declare a setter.");
+                    }
                     prop_req.has_setter = true;
                 }
 
@@ -1060,13 +1099,14 @@ namespace swiftscript {
         return stmt;
     }
 
-    StmtPtr Parser::extension_declaration() {
+    StmtPtr Parser::extension_declaration(AccessLevel access_level) {
         advance(); // consume 'extension'
         const Token& type_tok = consume(TokenType::Identifier, "Expected type name after 'extension'.");
 
         auto stmt = std::make_unique<ExtensionDeclStmt>();
         stmt->line = type_tok.line;
         stmt->extended_type = std::string(type_tok.lexeme);
+        stmt->access_level = access_level;
 
         // Parse protocol conformances: extension String: Equatable, Hashable { ... }
         if (match(TokenType::Colon)) {

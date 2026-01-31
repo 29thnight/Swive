@@ -571,6 +571,7 @@ struct ClassDeclStmt : Stmt {
     std::vector<std::unique_ptr<FuncDeclStmt>> methods;
     std::vector<std::unique_ptr<VarDeclStmt>> properties;
     std::unique_ptr<BlockStmt> deinit_body;  // Optional deinit
+    AccessLevel access_level{AccessLevel::Internal};  // Default is internal
     ClassDeclStmt() : Stmt(StmtKind::ClassDecl) {}
 };
 
@@ -598,6 +599,7 @@ struct StructDeclStmt : Stmt {
     std::vector<std::unique_ptr<VarDeclStmt>> properties;  // Stored properties
     std::vector<std::unique_ptr<StructMethodDecl>> methods;
     std::vector<std::unique_ptr<FuncDeclStmt>> initializers;  // init methods
+    AccessLevel access_level{AccessLevel::Internal};  // Default is internal
 
     StructDeclStmt() : Stmt(StmtKind::StructDecl) {}
 };
@@ -618,6 +620,7 @@ struct EnumDeclStmt : Stmt {
     std::vector<EnumCaseDecl> cases;
     std::optional<TypeAnnotation> raw_type;  // Type of raw values (if any)
     std::vector<std::unique_ptr<StructMethodDecl>> methods;  // Methods and computed properties
+    AccessLevel access_level{AccessLevel::Internal};  // Default is internal
 
 
     EnumDeclStmt() : Stmt(StmtKind::EnumDecl) {}
@@ -656,6 +659,7 @@ struct ProtocolDeclStmt : Stmt {
     std::vector<ProtocolMethodRequirement> method_requirements;
     std::vector<ProtocolPropertyRequirement> property_requirements;
     std::vector<std::string> inherited_protocols;  // Protocol inheritance
+    AccessLevel access_level{AccessLevel::Internal};  // Default is internal
 
     ProtocolDeclStmt() : Stmt(StmtKind::ProtocolDecl) {}
 };
@@ -665,6 +669,7 @@ struct ExtensionDeclStmt : Stmt {
     std::string extended_type;  // Type being extended (e.g., "String", "Int", "MyClass")
     std::vector<std::string> protocol_conformances;  // Protocols added in this extension
     std::vector<std::unique_ptr<StructMethodDecl>> methods;  // Methods (including computed properties)
+    AccessLevel access_level{AccessLevel::Internal};  // Default is internal
     
     ExtensionDeclStmt() : Stmt(StmtKind::ExtensionDecl) {}
 };

@@ -71,6 +71,61 @@ namespace swiftscript {
         return peek().type == TokenType::Eof;
     }
 
+    bool Parser::looks_like_generic_type_args() const {
+        if (!check(TokenType::Less)) {
+            return false;
+        }
+
+        size_t lookahead = current_ + 1;
+        if (!is_type_start_token(lookahead)) {
+            return false;
+        }
+
+        int depth = 0;
+        for (size_t index = current_; index < tokens_.size(); ++index) {
+            const TokenType type = tokens_[index].type;
+            switch (type) {
+            case TokenType::Less:
+                ++depth;
+                break;
+            case TokenType::Greater:
+                --depth;
+                if (depth == 0) {
+                    return true;
+                }
+                break;
+            case TokenType::RightShift:
+                depth -= 2;
+                if (depth <= 0) {
+                    return true;
+                }
+                break;
+            case TokenType::Semicolon:
+            case TokenType::RightParen:
+            case TokenType::RightBrace:
+            case TokenType::RightBracket:
+            case TokenType::LeftBrace:
+            case TokenType::Comma:
+            case TokenType::Colon:
+            case TokenType::Eof:
+                return false;
+            default:
+                break;
+            }
+        }
+
+        return false;
+    }
+
+    bool Parser::is_type_start_token(size_t index) const {
+        if (index >= tokens_.size()) {
+            return false;
+        }
+
+        const TokenType type = tokens_[index].type;
+        return type == TokenType::Identifier || type == TokenType::LeftParen;
+    }
+
     // ============================================================
     //  Type annotation
     // ============================================================
@@ -2000,7 +2055,8 @@ namespace swiftscript {
             ident->line = line;
 
             // Check for generic type arguments: Box<Int>
-            if (match(TokenType::Less)) {
+            if (check(TokenType::Less) && looks_like_generic_type_args()) {
+                advance(); // consume '<'
                 std::vector<TypeAnnotation> generic_args;
                 do {
                     TypeAnnotation arg = parse_type_annotation();

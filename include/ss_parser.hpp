@@ -90,6 +90,8 @@ namespace swiftscript {
         const Token& consume(TokenType type, const std::string& message);
         [[noreturn]] void error(const Token& token, const std::string& message);
         bool is_at_end() const;
+        bool looks_like_generic_type_args() const;
+        bool is_type_start_token(size_t index) const;
     };
 
 } // namespace swiftscript

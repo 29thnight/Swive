@@ -2720,7 +2720,7 @@ void Compiler::visit(TypeCastExpr* expr) {
         throw CompilerError("Type name index out of range", expr->line);
     }
     
-    // Emit appropriate opcode
+    // Emit appropriate OPCODE
     if (expr->is_optional) {
         emit_op(OpCode::OP_TYPE_CAST_OPTIONAL, expr->line);
     } else if (expr->is_forced) {

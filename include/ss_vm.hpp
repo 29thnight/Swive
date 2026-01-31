@@ -111,6 +111,81 @@ namespace swiftscript {
 
         friend class RC;
 
+        // 공통: Value callee(Function/Closure)를 분석해서 호출 프레임을 설정한다.
+        // - self 포함 인자들은 호출자가 stack에 push 완료한 상태여야 함.
+        // - base_slot: CallFrame이 가리킬 첫 번째 인자 슬롯(보통 callee_index + 1)
+        // - return: 성공하면 true, 아니면 예외
+        static inline bool InvokeCallableWithPreparedStack(
+            VM& vm,
+            const Value& callee,
+            size_t base_slot,
+            size_t expected_param_count,
+            const char* error_prefix,
+            bool is_initializer = false
+        ) {
+            if (!callee.is_object() || !callee.as_object()) {
+                throw std::runtime_error(std::string(error_prefix) + ": callee is not an object.");
+            }
+
+            Object* obj_callee = callee.as_object();
+            FunctionObject* func = nullptr;
+            ClosureObject* closure = nullptr;
+
+            if (obj_callee->type == ObjectType::Closure) {
+                closure = static_cast<ClosureObject*>(obj_callee);
+                func = closure->function;
+            }
+            else if (obj_callee->type == ObjectType::Function) {
+                func = static_cast<FunctionObject*>(obj_callee);
+            }
+            else {
+                throw std::runtime_error(std::string(error_prefix) + ": callee must be a function/closure.");
+            }
+
+            if (!func || !func->chunk) {
+                throw std::runtime_error(std::string(error_prefix) + ": function has no body.");
+            }
+            if (func->params.size() != expected_param_count) {
+                throw std::runtime_error(std::string(error_prefix) + ": incorrect parameter count.");
+            }
+
+            vm.call_frames_.emplace_back(base_slot, vm.ip_, vm.chunk_, func->name, closure, is_initializer);
+            vm.chunk_ = func->chunk.get();
+            vm.ip_ = 0;
+            return true;
+        }
+
+        // computed getter: stack에 [getter, self]를 push하고 호출 프레임 구성
+        static inline bool TryInvokeComputedGetter(VM& vm, const Value& getter, const Value& self) {
+            vm.push(getter);
+            vm.push(self);
+            const size_t callee_index = vm.stack_.size() - 2; // [getter, self]
+            return InvokeCallableWithPreparedStack(
+                vm,
+                getter,
+                /*base_slot*/ callee_index + 1,
+                /*expected_param_count*/ 1,
+                "Computed getter",
+                /*is_initializer*/ false
+            );
+        }
+
+        // computed setter: stack에 [setter, self, value]를 push하고 호출 프레임 구성
+        static inline bool TryInvokeComputedSetter(VM& vm, const Value& setter, const Value& self, const Value& value) {
+            vm.push(setter);
+            vm.push(self);
+            vm.push(value);
+            const size_t callee_index = vm.stack_.size() - 3; // [setter, self, value]
+            return InvokeCallableWithPreparedStack(
+                vm,
+                setter,
+                /*base_slot*/ callee_index + 1,
+                /*expected_param_count*/ 2,
+                "Computed setter",
+                /*is_initializer*/ false
+            );
+        }
+
     private:
         Value run();
         uint8_t read_byte();

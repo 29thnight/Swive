@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="vm_opcodes">
+      <UniqueIdentifier>{e71a4d77-b8a6-42d8-96c9-df19cc0e27ae}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -60,11 +63,14 @@
     <ClInclude Include="..\SwiftScript\include\ss_vm.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="include\ss_vm_opcodes.inl">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="include\ss_opcodes.hpp">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ss_vm_opcodes.inl">
+      <Filter>vm_opcodes</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ss_vm_opcodes_arithmetic.inl">
+      <Filter>vm_opcodes</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -110,5 +116,13 @@
     <ClCompile Include="src\ss_ast_clone.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="include\ss_vm_opcodes_basic.inl">
+      <Filter>vm_opcodes</Filter>
+    </None>
+    <None Include="include\ss_opcodes.def">
+      <Filter>vm_opcodes</Filter>
+    </None>
   </ItemGroup>
 </Project>

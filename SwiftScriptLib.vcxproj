@@ -157,6 +157,7 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="include\ss_opcodes.hpp" />
     <ClInclude Include="include\ss_vm_opcodes.inl" />
+    <ClInclude Include="include\ss_vm_opcodes_arithmetic.inl" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
@@ -179,6 +180,10 @@
     </ClCompile>
     <ClCompile Include="src\ss_ast_clone.cpp" />
     <ClCompile Include="SwiftScriptLib.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="include\ss_opcodes.def" />
+    <None Include="include\ss_vm_opcodes_basic.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

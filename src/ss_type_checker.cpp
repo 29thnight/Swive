@@ -119,6 +119,12 @@ void TypeChecker::add_builtin_types() {
     known_types_.emplace("Dictionary", TypeKind::Builtin);
     known_types_.emplace("Void", TypeKind::Builtin);
     known_types_.emplace("Any", TypeKind::Builtin);
+
+    type_properties_["Array"].emplace("count", TypeInfo::builtin("Int"));
+    type_properties_["Array"].emplace("isEmpty", TypeInfo::builtin("Bool"));
+    type_methods_["Array"].emplace(
+        "append",
+        TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("Void")));
     
     // Register standard library protocols
     add_known_type("Equatable", TypeKind::Protocol, 0);

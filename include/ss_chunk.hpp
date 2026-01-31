@@ -178,6 +178,7 @@ struct Protocol {
         OP_THROW,              // throw error
 
         // Misc
+        OP_READ_LINE,
         OP_PRINT,
         OP_HALT,
     };

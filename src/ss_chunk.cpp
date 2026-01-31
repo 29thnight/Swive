@@ -190,6 +190,8 @@ size_t Chunk::disassemble_instruction(size_t offset) const {
             return simple_instruction("OP_CLOSE_UPVALUE", offset);
         case OpCode::OP_CLOSURE:
             return short_instruction("OP_CLOSURE", offset);
+        case OpCode::OP_READ_LINE:
+            return simple_instruction("OP_READ_LINE", offset);
         case OpCode::OP_PRINT:
             return simple_instruction("OP_PRINT", offset);
         case OpCode::OP_STRUCT:

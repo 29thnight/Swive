@@ -1619,7 +1619,7 @@ TypeChecker::TypeInfo TypeChecker::check_array_literal_expr(const ArrayLiteralEx
         if (is_unknown(element_type)) {
             element_type = current;
         } else if (!is_unknown(current) && !is_assignable(element_type, current)) {
-            error("Array literal elements must have compatible types", expr->line);
+            element_type = TypeInfo::builtin("Any");
         }
     }
     return TypeInfo::builtin("Array");
@@ -1639,7 +1639,7 @@ TypeChecker::TypeInfo TypeChecker::check_dict_literal_expr(const DictLiteralExpr
         if (is_unknown(value_type)) {
             value_type = current_value;
         } else if (!is_unknown(current_value) && !is_assignable(value_type, current_value)) {
-            error("Dictionary literal values must have compatible types", expr->line);
+            value_type = TypeInfo::builtin("Any");
         }
     }
     return TypeInfo::builtin("Dictionary");

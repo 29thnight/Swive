@@ -469,12 +469,17 @@ namespace swiftscript {
     StmtPtr Parser::import_declaration() {
         const Token& import_tok = advance();  // consume 'import'
 
-        // Expect a string literal: import "path/to/module.ss"
-        const Token& path_tok = consume(TokenType::String, "Expected string literal after 'import'.");
+        // Expect a string literal or identifier: import "path/to/module.ss" or import ModuleName
+        const Token* path_tok = nullptr;
+        if (check(TokenType::String) || check(TokenType::Identifier)) {
+            path_tok = &advance();
+        } else {
+            error(peek(), "Expected string literal or identifier after 'import'.");
+        }
 
         auto stmt = std::make_unique<ImportStmt>();
         stmt->line = import_tok.line;
-        stmt->module_path = std::string(path_tok.lexeme);
+        stmt->module_path = std::string(path_tok->lexeme);
 
         // Remove surrounding quotes if present
         if (!stmt->module_path.empty()) {

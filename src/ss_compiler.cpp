@@ -2528,6 +2528,14 @@ void Compiler::visit(SuperExpr* expr) {
 }
 
 void Compiler::visit(CallExpr* expr) {
+    if (expr->callee->kind == ExprKind::Identifier) {
+        auto* identifier = static_cast<IdentifierExpr*>(expr->callee.get());
+        if (identifier->name == "readLine" && expr->arguments.empty()) {
+            emit_op(OpCode::OP_READ_LINE, expr->line);
+            return;
+        }
+    }
+
     compile_expr(expr->callee.get());
 
     if (expr->arguments.size() > std::numeric_limits<uint16_t>::max()) {

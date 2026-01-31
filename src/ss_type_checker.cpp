@@ -85,6 +85,7 @@ imported_module_names_.clear();
     for (const auto& module_name : imported_module_names_) {
         declare_symbol(module_name, TypeInfo::unknown(), 0);
     }
+    declare_symbol("readLine", TypeInfo::function({}, TypeInfo::builtin("String", true)), 0);
     for (const auto* module_program : imported_programs) {
         declare_functions(*module_program);
     }

@@ -2347,6 +2347,16 @@ namespace swiftscript {
                     push(result);
                     break;
                 }
+                case OpCode::OP_READ_LINE: {
+                    std::string line;
+                    if (!std::getline(std::cin, line)) {
+                        push(Value::null());
+                        break;
+                    }
+                    auto* obj = allocate_object<StringObject>(std::move(line));
+                    push(Value::from_object(obj));
+                    break;
+                }
                 case OpCode::OP_PRINT: {
                     Value val = pop();
                     std::cout << val.to_string() << '\n';
@@ -3237,6 +3247,17 @@ namespace swiftscript {
                 
                 // Execute this one instruction
                 switch (static_cast<OpCode>(chunk_->code[ip_])) {
+                    case OpCode::OP_READ_LINE: {
+                        ip_++;
+                        std::string line;
+                        if (!std::getline(std::cin, line)) {
+                            push(Value::null());
+                            break;
+                        }
+                        auto* obj = allocate_object<StringObject>(std::move(line));
+                        push(Value::from_object(obj));
+                        break;
+                    }
                     case OpCode::OP_PRINT: {
                         ip_++;  // consume opcode
                         Value val = pop();

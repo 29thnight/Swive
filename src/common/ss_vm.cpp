@@ -246,8 +246,6 @@ namespace swiftscript {
         size_t saved_ip = ip_;
         body_idx saved_body = current_body_idx_;
         const MethodBody* saved_body_ptr = current_body_;
-        body_idx saved_body = current_body_idx_;
-        const MethodBody* saved_body_ptr = current_body_;
         size_t saved_stack_size = stack_.size();
         size_t saved_frames = call_frames_.size();
 
@@ -1311,6 +1309,8 @@ namespace swiftscript {
         // Save current execution state
         const Assembly* saved_chunk = chunk_;
         size_t saved_ip = ip_;
+        body_idx saved_body = current_body_idx_;
+        const MethodBody* saved_body_ptr = current_body_;
         
         // Push function and arguments onto stack
         if (closure) {

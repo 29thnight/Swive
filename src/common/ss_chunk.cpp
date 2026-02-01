@@ -498,6 +498,8 @@ void Assembly::serialize(std::ostream& out) const
                 WritePOD(out, t.method_list.count);
                 WritePOD(out, t.field_list.start);
                 WritePOD(out, t.field_list.count);
+                WritePOD(out, t.property_list.start);
+                WritePOD(out, t.property_list.count);
                 WriteVectorPOD(out, t.interfaces);
             }
         }
@@ -726,6 +728,10 @@ Assembly Assembly::deserialize(std::istream& in)
                 t.method_list.count = ReadPOD<uint32_t>(in);
                 t.field_list.start = ReadPOD<uint32_t>(in);
                 t.field_list.count = ReadPOD<uint32_t>(in);
+                if (h.verMinor >= 2) {
+                    t.property_list.start = ReadPOD<uint32_t>(in);
+                    t.property_list.count = ReadPOD<uint32_t>(in);
+                }
                 t.interfaces = ReadVectorPOD<type_idx>(in);
                 c.type_definitions.push_back(std::move(t));
             }

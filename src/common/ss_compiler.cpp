@@ -3822,6 +3822,7 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
         def.method_list.start = static_cast<uint32_t>(method_start);
         def.method_list.count = static_cast<uint32_t>(chunk_.method_definitions.size() - method_start);
 
+        size_t property_start = chunk_.property_definitions.size();
         for (const auto& prop : meta.properties) {
             PropertyDef def_prop{};
             def_prop.name = static_cast<string_idx>(chunk_.add_string(prop.name));
@@ -3848,6 +3849,8 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
             }
             chunk_.property_definitions.push_back(std::move(def_prop));
         }
+        def.property_list.start = static_cast<uint32_t>(property_start);
+        def.property_list.count = static_cast<uint32_t>(chunk_.property_definitions.size() - property_start);
     }
 }
 

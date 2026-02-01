@@ -121,10 +121,27 @@ namespace swiftscript {
             }
 
             Object* o = obj.as_object();
+            constexpr method_idx kInvalidMethod = std::numeric_limits<method_idx>::max();
 
             switch (o->type) {
             case ObjectType::Instance: {
                 auto* inst = static_cast<InstanceObject*>(o);
+                if (inst->klass) {
+                    const TypeDef* type_def = vm.resolve_type_def(inst->klass->name);
+                    if (type_def) {
+                        const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, false);
+                        if (prop_def && prop_def->getter != kInvalidMethod) {
+                            const MethodDef* getter_def = vm.resolve_method_def_by_index(prop_def->getter);
+                            if (getter_def) {
+                                vm.push(Value::null());
+                                vm.push(obj);
+                                size_t callee_index = vm.stack_.size() - 2;
+                                vm.invoke_method_def(*getter_def, callee_index, 1, true, false);
+                                return;
+                            }
+                        }
+                    }
+                }
                 if (inst->klass) {
                     for (const auto& cp : inst->klass->computed_properties) {
                         if (cp.name == name) {
@@ -138,6 +155,22 @@ namespace swiftscript {
             case ObjectType::EnumCase: {
                 auto* ec = static_cast<EnumCaseObject*>(o);
                 if (ec->enum_type) {
+                    const TypeDef* type_def = vm.resolve_type_def(ec->enum_type->name);
+                    if (type_def) {
+                        const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, false);
+                        if (prop_def && prop_def->getter != kInvalidMethod) {
+                            const MethodDef* getter_def = vm.resolve_method_def_by_index(prop_def->getter);
+                            if (getter_def) {
+                                vm.push(Value::null());
+                                vm.push(obj);
+                                size_t callee_index = vm.stack_.size() - 2;
+                                vm.invoke_method_def(*getter_def, callee_index, 1, true, false);
+                                return;
+                            }
+                        }
+                    }
+                }
+                if (ec->enum_type) {
                     for (const auto& cp : ec->enum_type->computed_properties) {
                         if (cp.name == name) {
                             VM::TryInvokeComputedGetter(vm, cp.getter, obj);
@@ -150,9 +183,76 @@ namespace swiftscript {
             case ObjectType::StructInstance: {
                 auto* si = static_cast<StructInstanceObject*>(o);
                 if (si->struct_type) {
+                    const TypeDef* type_def = vm.resolve_type_def(si->struct_type->name);
+                    if (type_def) {
+                        const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, false);
+                        if (prop_def && prop_def->getter != kInvalidMethod) {
+                            const MethodDef* getter_def = vm.resolve_method_def_by_index(prop_def->getter);
+                            if (getter_def) {
+                                vm.push(Value::null());
+                                vm.push(obj);
+                                size_t callee_index = vm.stack_.size() - 2;
+                                vm.invoke_method_def(*getter_def, callee_index, 1, true, false);
+                                return;
+                            }
+                        }
+                    }
+                }
+                if (si->struct_type) {
                     for (const auto& cp : si->struct_type->computed_properties) {
                         if (cp.name == name) {
                             VM::TryInvokeComputedGetter(vm, cp.getter, obj);
+                            return;
+                        }
+                    }
+                }
+                break;
+            }
+            case ObjectType::Class: {
+                auto* klass = static_cast<ClassObject*>(o);
+                const TypeDef* type_def = klass ? vm.resolve_type_def(klass->name) : nullptr;
+                if (type_def) {
+                    const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, true);
+                    if (prop_def && prop_def->getter != kInvalidMethod) {
+                        const MethodDef* getter_def = vm.resolve_method_def_by_index(prop_def->getter);
+                        if (getter_def) {
+                            vm.push(Value::null());
+                            size_t callee_index = vm.stack_.size() - 1;
+                            vm.invoke_method_def(*getter_def, callee_index, 0, false, false);
+                            return;
+                        }
+                    }
+                }
+                break;
+            }
+            case ObjectType::Struct: {
+                auto* st = static_cast<StructObject*>(o);
+                const TypeDef* type_def = st ? vm.resolve_type_def(st->name) : nullptr;
+                if (type_def) {
+                    const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, true);
+                    if (prop_def && prop_def->getter != kInvalidMethod) {
+                        const MethodDef* getter_def = vm.resolve_method_def_by_index(prop_def->getter);
+                        if (getter_def) {
+                            vm.push(Value::null());
+                            size_t callee_index = vm.stack_.size() - 1;
+                            vm.invoke_method_def(*getter_def, callee_index, 0, false, false);
+                            return;
+                        }
+                    }
+                }
+                break;
+            }
+            case ObjectType::Enum: {
+                auto* en = static_cast<EnumObject*>(o);
+                const TypeDef* type_def = en ? vm.resolve_type_def(en->name) : nullptr;
+                if (type_def) {
+                    const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, true);
+                    if (prop_def && prop_def->getter != kInvalidMethod) {
+                        const MethodDef* getter_def = vm.resolve_method_def_by_index(prop_def->getter);
+                        if (getter_def) {
+                            vm.push(Value::null());
+                            size_t callee_index = vm.stack_.size() - 1;
+                            vm.invoke_method_def(*getter_def, callee_index, 0, false, false);
                             return;
                         }
                     }
@@ -179,6 +279,7 @@ namespace swiftscript {
             }
 
             Object* o = obj_val.as_object();
+            constexpr method_idx kInvalidMethod = std::numeric_limits<method_idx>::max();
 
             switch (o->type) {
             case ObjectType::Instance: {
@@ -186,6 +287,23 @@ namespace swiftscript {
 
                 // 1) computed property 우선
                 if (inst->klass) {
+                    const TypeDef* type_def = vm.resolve_type_def(inst->klass->name);
+                    if (type_def) {
+                        const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, false);
+                        if (prop_def && prop_def->setter != kInvalidMethod) {
+                            const MethodDef* setter_def = vm.resolve_method_def_by_index(prop_def->setter);
+                            if (!setter_def) {
+                                throw std::runtime_error("Setter method not found for property: " + name);
+                            }
+                            vm.pop();
+                            vm.push(Value::null());
+                            vm.push(obj_val);
+                            vm.push(value);
+                            size_t callee_index = vm.stack_.size() - 3;
+                            vm.invoke_method_def(*setter_def, callee_index, 2, true, false);
+                            return;
+                        }
+                    }
                     for (const auto& cp : inst->klass->computed_properties) {
                         if (cp.name == name) {
                             if (cp.setter.is_null()) {
@@ -241,6 +359,23 @@ namespace swiftscript {
                 // 네 설계에서 setter 허용하려면 여기에 computed setter만 지원하는 게 일관적.
                 auto* ec = static_cast<EnumCaseObject*>(o);
                 if (ec->enum_type) {
+                    const TypeDef* type_def = vm.resolve_type_def(ec->enum_type->name);
+                    if (type_def) {
+                        const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, false);
+                        if (prop_def && prop_def->setter != kInvalidMethod) {
+                            const MethodDef* setter_def = vm.resolve_method_def_by_index(prop_def->setter);
+                            if (!setter_def) {
+                                throw std::runtime_error("Setter method not found for property: " + name);
+                            }
+                            vm.pop();
+                            vm.push(Value::null());
+                            vm.push(obj_val);
+                            vm.push(value);
+                            size_t callee_index = vm.stack_.size() - 3;
+                            vm.invoke_method_def(*setter_def, callee_index, 2, true, false);
+                            return;
+                        }
+                    }
                     for (const auto& cp : ec->enum_type->computed_properties) {
                         if (cp.name == name) {
                             // enum computed setter는 보통 금지. 허용할 거면 조건 완화.
@@ -260,6 +395,23 @@ namespace swiftscript {
                 // StructInstance도 computed setter 우선 처리 (extension computed property)
                 auto* si = static_cast<StructInstanceObject*>(o);
                 if (si->struct_type) {
+                    const TypeDef* type_def = vm.resolve_type_def(si->struct_type->name);
+                    if (type_def) {
+                        const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, false);
+                        if (prop_def && prop_def->setter != kInvalidMethod) {
+                            const MethodDef* setter_def = vm.resolve_method_def_by_index(prop_def->setter);
+                            if (!setter_def) {
+                                throw std::runtime_error("Setter method not found for property: " + name);
+                            }
+                            vm.pop();
+                            vm.push(Value::null());
+                            vm.push(obj_val);
+                            vm.push(value);
+                            size_t callee_index = vm.stack_.size() - 3;
+                            vm.invoke_method_def(*setter_def, callee_index, 2, true, false);
+                            return;
+                        }
+                    }
                     for (const auto& cp : si->struct_type->computed_properties) {
                         if (cp.name == name) {
                             if (cp.setter.is_null()) {
@@ -306,6 +458,79 @@ namespace swiftscript {
 
                 vm.push(value);
                 return;
+            }
+
+            case ObjectType::Class: {
+                auto* klass = static_cast<ClassObject*>(o);
+                const TypeDef* type_def = klass ? vm.resolve_type_def(klass->name) : nullptr;
+                if (type_def) {
+                    const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, true);
+                    if (prop_def && prop_def->setter != kInvalidMethod) {
+                        const MethodDef* setter_def = vm.resolve_method_def_by_index(prop_def->setter);
+                        if (!setter_def) {
+                            throw std::runtime_error("Setter method not found for property: " + name);
+                        }
+                        vm.pop();
+                        vm.push(Value::null());
+                        vm.push(value);
+                        size_t callee_index = vm.stack_.size() - 2;
+                        vm.invoke_method_def(*setter_def, callee_index, 1, false, false);
+                        return;
+                    }
+                }
+                vm.pop();
+                if (klass) {
+                    klass->static_properties[name] = value;
+                }
+                vm.push(value);
+                return;
+            }
+
+            case ObjectType::Struct: {
+                auto* st = static_cast<StructObject*>(o);
+                const TypeDef* type_def = st ? vm.resolve_type_def(st->name) : nullptr;
+                if (type_def) {
+                    const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, true);
+                    if (prop_def && prop_def->setter != kInvalidMethod) {
+                        const MethodDef* setter_def = vm.resolve_method_def_by_index(prop_def->setter);
+                        if (!setter_def) {
+                            throw std::runtime_error("Setter method not found for property: " + name);
+                        }
+                        vm.pop();
+                        vm.push(Value::null());
+                        vm.push(value);
+                        size_t callee_index = vm.stack_.size() - 2;
+                        vm.invoke_method_def(*setter_def, callee_index, 1, false, false);
+                        return;
+                    }
+                }
+                vm.pop();
+                if (st) {
+                    st->static_properties[name] = value;
+                }
+                vm.push(value);
+                return;
+            }
+
+            case ObjectType::Enum: {
+                auto* en = static_cast<EnumObject*>(o);
+                const TypeDef* type_def = en ? vm.resolve_type_def(en->name) : nullptr;
+                if (type_def) {
+                    const PropertyDef* prop_def = vm.find_property_def_for_type(*type_def, name, true);
+                    if (prop_def && prop_def->setter != kInvalidMethod) {
+                        const MethodDef* setter_def = vm.resolve_method_def_by_index(prop_def->setter);
+                        if (!setter_def) {
+                            throw std::runtime_error("Setter method not found for property: " + name);
+                        }
+                        vm.pop();
+                        vm.push(Value::null());
+                        vm.push(value);
+                        size_t callee_index = vm.stack_.size() - 2;
+                        vm.invoke_method_def(*setter_def, callee_index, 1, false, false);
+                        return;
+                    }
+                }
+                throw std::runtime_error("Enum property set not supported: " + name);
             }
 
             case ObjectType::Map: {

@@ -308,11 +308,40 @@ namespace swiftscript {
 
                 vm.apply_positional_defaults(arg_count, func, has_receiver);
 
+                uint32_t param_count = has_receiver ? static_cast<uint32_t>(arg_count - 1) : arg_count;
+                const TypeDef* type_def = nullptr;
+                if (bound->receiver->type == ObjectType::Instance) {
+                    auto* inst = static_cast<InstanceObject*>(bound->receiver);
+                    if (inst->klass) {
+                        type_def = vm.resolve_type_def(inst->klass->name);
+                    }
+                } else if (bound->receiver->type == ObjectType::StructInstance) {
+                    auto* inst = static_cast<StructInstanceObject*>(bound->receiver);
+                    if (inst->struct_type) {
+                        type_def = vm.resolve_type_def(inst->struct_type->name);
+                    }
+                } else if (bound->receiver->type == ObjectType::EnumCase) {
+                    auto* inst = static_cast<EnumCaseObject*>(bound->receiver);
+                    if (inst->enum_type) {
+                        type_def = vm.resolve_type_def(inst->enum_type->name);
+                    }
+                }
+
+                if (type_def) {
+                    const MethodDef* method_def = vm.find_method_def_for_type(*type_def, func->name, false, param_count);
+                    if (method_def) {
+                        vm.invoke_method_def(*method_def, callee_index, arg_count, true, func->is_initializer, is_mutating_call, receiver_stack_index);
+                        return;
+                    }
+                }
+
                 if (!func->chunk) {
                     throw std::runtime_error("Function has no body.");
                 }
-                vm.call_frames_.emplace_back(callee_index + 1, vm.ip_, vm.chunk_, func->name, closure, func->is_initializer, is_mutating_call, receiver_stack_index);
+                vm.call_frames_.emplace_back(callee_index + 1, vm.ip_, vm.chunk_, vm.current_body_idx_, func->name, closure, func->is_initializer, is_mutating_call, receiver_stack_index);
                 vm.chunk_ = func->chunk.get();
+                vm.current_body_idx_ = vm.entry_body_index(*vm.chunk_);
+                vm.set_active_body(vm.current_body_idx_);
                 vm.ip_ = 0;
                 return;
             }
@@ -333,21 +362,26 @@ namespace swiftscript {
 
             vm.apply_positional_defaults(arg_count, func, has_receiver);
 
-            if (has_receiver) {
-                if (arg_count != func->params.size()) {
-                    throw std::runtime_error("Incorrect argument count.");
-                }
+            uint32_t param_count = has_receiver ? static_cast<uint32_t>(arg_count - 1) : arg_count;
+            const MethodDef* method_def = vm.find_method_def_by_name(func->name, true, param_count);
+            if (!method_def) {
+                method_def = vm.find_method_def_by_name(func->name, false, param_count);
             }
-            else {
-                if (arg_count != func->params.size()) {
-                    throw std::runtime_error("Incorrect argument count.");
-                }
+            if (method_def) {
+                vm.invoke_method_def(*method_def, callee_index, arg_count, has_receiver, func->is_initializer);
+                return;
+            }
+
+            if (arg_count != func->params.size()) {
+                throw std::runtime_error("Incorrect argument count.");
             }
             if (!func->chunk) {
                 throw std::runtime_error("Function has no body.");
             }
-            vm.call_frames_.emplace_back(callee_index + 1, vm.ip_, vm.chunk_, func->name, closure, func->is_initializer);
+            vm.call_frames_.emplace_back(callee_index + 1, vm.ip_, vm.chunk_, vm.current_body_idx_, func->name, closure, func->is_initializer);
             vm.chunk_ = func->chunk.get();
+            vm.current_body_idx_ = vm.entry_body_index(*vm.chunk_);
+            vm.set_active_body(vm.current_body_idx_);
             vm.ip_ = 0;
         }
     };
@@ -656,21 +690,55 @@ namespace swiftscript {
 
             vm.apply_named_arguments(callee_index, arg_count, func, has_receiver, arg_names);
 
-            if (has_receiver) {
-                if (arg_count != func->params.size()) {
-                    throw std::runtime_error("Incorrect argument count.");
+            uint32_t param_count = has_receiver ? static_cast<uint32_t>(arg_count - 1) : arg_count;
+            const MethodDef* method_def = nullptr;
+            if (has_receiver && arg_count > 0) {
+                Value receiver_val = vm.stack_[callee_index + 1];
+                if (receiver_val.is_object() && receiver_val.as_object()) {
+                    Object* receiver_obj = receiver_val.as_object();
+                    const TypeDef* type_def = nullptr;
+                    if (receiver_obj->type == ObjectType::Instance) {
+                        auto* inst = static_cast<InstanceObject*>(receiver_obj);
+                        if (inst->klass) {
+                            type_def = vm.resolve_type_def(inst->klass->name);
+                        }
+                    } else if (receiver_obj->type == ObjectType::StructInstance) {
+                        auto* inst = static_cast<StructInstanceObject*>(receiver_obj);
+                        if (inst->struct_type) {
+                            type_def = vm.resolve_type_def(inst->struct_type->name);
+                        }
+                    } else if (receiver_obj->type == ObjectType::EnumCase) {
+                        auto* inst = static_cast<EnumCaseObject*>(receiver_obj);
+                        if (inst->enum_type) {
+                            type_def = vm.resolve_type_def(inst->enum_type->name);
+                        }
+                    }
+                    if (type_def) {
+                        method_def = vm.find_method_def_for_type(*type_def, func->name, false, param_count);
+                    }
                 }
             }
-            else {
-                if (arg_count != func->params.size()) {
-                    throw std::runtime_error("Incorrect argument count.");
+            if (!method_def) {
+                method_def = vm.find_method_def_by_name(func->name, true, param_count);
+                if (!method_def) {
+                    method_def = vm.find_method_def_by_name(func->name, false, param_count);
                 }
+            }
+            if (method_def) {
+                vm.invoke_method_def(*method_def, callee_index, arg_count, has_receiver, func->is_initializer);
+                return;
+            }
+
+            if (arg_count != func->params.size()) {
+                throw std::runtime_error("Incorrect argument count.");
             }
             if (!func->chunk) {
                 throw std::runtime_error("Function has no body.");
             }
-            vm.call_frames_.emplace_back(callee_index + 1, vm.ip_, vm.chunk_, func->name, closure, func->is_initializer);
+            vm.call_frames_.emplace_back(callee_index + 1, vm.ip_, vm.chunk_, vm.current_body_idx_, func->name, closure, func->is_initializer);
             vm.chunk_ = func->chunk.get();
+            vm.current_body_idx_ = vm.entry_body_index(*vm.chunk_);
+            vm.set_active_body(vm.current_body_idx_);
             vm.ip_ = 0;
         }
     };

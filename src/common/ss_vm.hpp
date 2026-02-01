@@ -1,4 +1,5 @@
 #pragma once
+#include <limits>
 #include <unordered_map>
 #include "ss_core.hpp"
 #include "ss_value.hpp"
@@ -48,6 +49,8 @@ namespace swiftscript {
         std::vector<CallFrame> call_frames_;
         const Assembly* chunk_{ nullptr };
         size_t ip_{ 0 };
+        body_idx current_body_idx_{ std::numeric_limits<body_idx>::max() };
+        const MethodBody* current_body_{ nullptr };
         UpvalueObject* open_upvalues_{ nullptr };
 
         // Global scope
@@ -149,8 +152,10 @@ namespace swiftscript {
                 throw std::runtime_error(std::string(error_prefix) + ": incorrect parameter count.");
             }
 
-            vm.call_frames_.emplace_back(base_slot, vm.ip_, vm.chunk_, func->name, closure, is_initializer);
+            vm.call_frames_.emplace_back(base_slot, vm.ip_, vm.chunk_, vm.current_body_idx_, func->name, closure, is_initializer);
             vm.chunk_ = func->chunk.get();
+            vm.current_body_idx_ = vm.entry_body_index(*vm.chunk_);
+            vm.set_active_body(vm.current_body_idx_);
             vm.ip_ = 0;
             return true;
         }
@@ -192,6 +197,31 @@ namespace swiftscript {
         uint16_t read_short();
         Value read_constant();
         const std::string& read_string();
+        const std::vector<uint8_t>& active_bytecode() const;
+        body_idx entry_body_index(const Assembly& chunk) const;
+        void set_active_body(body_idx idx);
+        uint32_t read_signature_param_count(signature_idx offset) const;
+        const MethodDef* find_method_def_by_name(const std::string& name,
+                                                 bool is_static,
+                                                 uint32_t param_count) const;
+        const MethodDef* find_method_def_for_type(const TypeDef& type_def,
+                                                  const std::string& name,
+                                                  bool is_static,
+                                                  uint32_t param_count) const;
+        const PropertyDef* find_property_def_for_type(const TypeDef& type_def,
+                                                      const std::string& name,
+                                                      bool is_static) const;
+        const FieldDef* find_field_def_for_type(const TypeDef& type_def,
+                                                const std::string& name,
+                                                bool is_static) const;
+        const MethodDef* resolve_method_def_by_index(method_idx idx) const;
+        bool invoke_method_def(const MethodDef& method_def,
+                               size_t callee_index,
+                               uint16_t arg_count,
+                               bool has_receiver,
+                               bool is_initializer,
+                               bool is_mutating = false,
+                               size_t receiver_index = 0);
         size_t current_stack_base() const;
         bool is_truthy(const Value& value) const;
         const TypeDef* resolve_type_def(const std::string& name) const;
@@ -227,16 +257,26 @@ namespace swiftscript {
         size_t stack_base;      // Base of this frame's stack
         size_t return_address;  // Where to return after call
         const Assembly* chunk;
+        body_idx body_index;
         std::string function_name;
         ClosureObject* closure; // Current closure for upvalue access (nullptr for plain functions)
         bool is_initializer;
         bool is_mutating;       // True if this is a mutating struct method
         size_t receiver_index;  // Stack index of the receiver (for mutating methods)
 
-        CallFrame(size_t base, size_t ret_addr, const Assembly* call_chunk, std::string name, ClosureObject* c, bool initializer, bool mutating = false, size_t recv_idx = 0)
+        CallFrame(size_t base,
+                  size_t ret_addr,
+                  const Assembly* call_chunk,
+                  body_idx call_body,
+                  std::string name,
+                  ClosureObject* c,
+                  bool initializer,
+                  bool mutating = false,
+                  size_t recv_idx = 0)
             : stack_base(base),
               return_address(ret_addr),
               chunk(call_chunk),
+              body_index(call_body),
               function_name(std::move(name)),
               closure(c),
               is_initializer(initializer),

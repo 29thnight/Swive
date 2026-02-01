@@ -107,6 +107,7 @@ struct TypeDef {
     type_idx base_type{0};
     Range method_list{};
     Range field_list{};
+    Range property_list{};
     std::vector<type_idx> interfaces;
 };
 
@@ -272,6 +273,6 @@ namespace swiftscript {
 
         constexpr uint32_t kMagicSSAS = 0x53415353; // 'SSAS' little-endian
         constexpr uint16_t kVerMajor = 1;
-        constexpr uint16_t kVerMinor = 1;
+        constexpr uint16_t kVerMinor = 2;
     }
 }

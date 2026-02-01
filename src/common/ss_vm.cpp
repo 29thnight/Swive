@@ -244,6 +244,10 @@ namespace swiftscript {
         // Save current execution state
         const Assembly* saved_chunk = chunk_;
         size_t saved_ip = ip_;
+        body_idx saved_body = current_body_idx_;
+        const MethodBody* saved_body_ptr = current_body_;
+        body_idx saved_body = current_body_idx_;
+        const MethodBody* saved_body_ptr = current_body_;
         size_t saved_stack_size = stack_.size();
         size_t saved_frames = call_frames_.size();
 
@@ -257,6 +261,7 @@ namespace swiftscript {
                 saved_stack_size + 1,  // stack_base (after self)
                 0,                      // return_address (not used)
                 chunk_,                 // saved chunk
+                saved_body,             // saved body index
                 "deinit",              // function name
                 closure,                // closure (if any)
                 false                   // is_initializer
@@ -264,11 +269,13 @@ namespace swiftscript {
 
             // Switch to deinit's chunk
             chunk_ = func->chunk.get();
+            current_body_idx_ = entry_body_index(*chunk_);
+            set_active_body(current_body_idx_);
             ip_ = 0;
 
             // Execute deinit bytecode until OP_RETURN
             // NOTE: We use stack_.push_back/pop_back directly to avoid RC on the dying instance
-            while (ip_ < chunk_->bytecode().size()) {
+            while (ip_ < active_bytecode().size()) {
                 OpCode op = static_cast<OpCode>(read_byte());
 
                 if (op == OpCode::OP_RETURN) {
@@ -329,6 +336,8 @@ namespace swiftscript {
         // Restore execution state
         chunk_ = saved_chunk;
         ip_ = saved_ip;
+        current_body_idx_ = saved_body;
+        current_body_ = saved_body_ptr;
 
         // Restore stack without RC (deinit runs in RC-free context)
         // All values pushed during deinit are either primitives or from the dying object
@@ -352,6 +361,8 @@ namespace swiftscript {
 
     Value VM::execute(const Assembly& chunk) {
         chunk_ = &chunk;
+        current_body_idx_ = entry_body_index(chunk);
+        set_active_body(current_body_idx_);
         ip_ = 0;
         stack_.clear();
         call_frames_.clear();
@@ -404,6 +415,8 @@ namespace swiftscript {
                 }
                 chunk_ = frame.chunk;
                 ip_ = frame.return_address;
+                current_body_idx_ = frame.body_index;
+                set_active_body(current_body_idx_);
                 push(result);
                 break;
             }
@@ -436,8 +449,46 @@ namespace swiftscript {
         }
     }
 
+    const std::vector<uint8_t>& VM::active_bytecode() const {
+        if (current_body_) {
+            return current_body_->bytecode;
+        }
+        if (chunk_ && !chunk_->method_bodies.empty()) {
+            return chunk_->method_bodies.front().bytecode;
+        }
+        if (!chunk_) {
+            throw std::runtime_error("No active chunk.");
+        }
+        return chunk_->code;
+    }
+
+    body_idx VM::entry_body_index(const Assembly& chunk) const {
+        if (!chunk.method_definitions.empty()) {
+            body_idx idx = chunk.method_definitions.front().body_ptr;
+            if (idx < chunk.method_bodies.size()) {
+                return idx;
+            }
+        }
+        if (!chunk.method_bodies.empty()) {
+            return 0;
+        }
+        return std::numeric_limits<body_idx>::max();
+    }
+
+    void VM::set_active_body(body_idx idx) {
+        if (!chunk_ || idx == std::numeric_limits<body_idx>::max()) {
+            current_body_ = nullptr;
+            return;
+        }
+        if (idx >= chunk_->method_bodies.size()) {
+            throw std::runtime_error("Method body index out of range.");
+        }
+        current_body_idx_ = idx;
+        current_body_ = &chunk_->method_bodies[idx];
+    }
+
     uint8_t VM::read_byte() {
-        return chunk_->bytecode()[ip_++];
+        return active_bytecode()[ip_++];
     }
 
     uint16_t VM::read_short() {
@@ -448,7 +499,9 @@ namespace swiftscript {
 
     Value VM::read_constant() {
         uint16_t idx = read_short();
-        const auto& pool = chunk_->constant_pool();
+        const auto& pool = chunk_->global_constant_pool.empty()
+            ? chunk_->constants
+            : chunk_->global_constant_pool;
         if (idx >= pool.size()) {
             throw std::runtime_error("Constant index out of range.");
         }
@@ -461,6 +514,193 @@ namespace swiftscript {
             throw std::runtime_error("String constant index out of range.");
         }
         return chunk_->strings[idx];
+    }
+
+    uint32_t VM::read_signature_param_count(signature_idx offset) const {
+        if (!chunk_) {
+            throw std::runtime_error("No active chunk for signature read.");
+        }
+        if (offset + sizeof(uint32_t) > chunk_->signature_blob.size()) {
+            throw std::runtime_error("Signature offset out of range.");
+        }
+        auto read_u32 = [&](size_t pos) -> uint32_t {
+            if (pos + sizeof(uint32_t) > chunk_->signature_blob.size()) {
+                throw std::runtime_error("Signature blob out of range.");
+            }
+            uint32_t value = 0;
+            value |= static_cast<uint32_t>(chunk_->signature_blob[pos]);
+            value |= static_cast<uint32_t>(chunk_->signature_blob[pos + 1]) << 8;
+            value |= static_cast<uint32_t>(chunk_->signature_blob[pos + 2]) << 16;
+            value |= static_cast<uint32_t>(chunk_->signature_blob[pos + 3]) << 24;
+            return value;
+        };
+        uint32_t param_count = read_u32(offset);
+        size_t expected_size = sizeof(uint32_t) * (2 + param_count);
+        if (offset + expected_size > chunk_->signature_blob.size()) {
+            throw std::runtime_error("Signature blob truncated.");
+        }
+        return param_count;
+    }
+
+    const MethodDef* VM::find_method_def_by_name(const std::string& name,
+                                                 bool is_static,
+                                                 uint32_t param_count) const {
+        if (!chunk_) {
+            return nullptr;
+        }
+        if (chunk_->signature_blob.empty()) {
+            return nullptr;
+        }
+        for (const auto& method : chunk_->method_definitions) {
+            if (method.name >= chunk_->strings.size()) {
+                continue;
+            }
+            if (chunk_->strings[method.name] != name) {
+                continue;
+            }
+            bool method_static = (method.flags & static_cast<uint32_t>(MethodFlags::Static)) != 0;
+            if (method_static != is_static) {
+                continue;
+            }
+            if (read_signature_param_count(method.signature) == param_count) {
+                return &method;
+            }
+        }
+        return nullptr;
+    }
+
+    const MethodDef* VM::find_method_def_for_type(const TypeDef& type_def,
+                                                  const std::string& name,
+                                                  bool is_static,
+                                                  uint32_t param_count) const {
+        if (!chunk_) {
+            return nullptr;
+        }
+        if (chunk_->signature_blob.empty()) {
+            return nullptr;
+        }
+        size_t start = type_def.method_list.start;
+        size_t end = start + type_def.method_list.count;
+        if (end > chunk_->method_definitions.size()) {
+            return nullptr;
+        }
+        for (size_t i = start; i < end; ++i) {
+            const auto& method = chunk_->method_definitions[i];
+            if (method.name >= chunk_->strings.size()) {
+                continue;
+            }
+            if (chunk_->strings[method.name] != name) {
+                continue;
+            }
+            bool method_static = (method.flags & static_cast<uint32_t>(MethodFlags::Static)) != 0;
+            if (method_static != is_static) {
+                continue;
+            }
+            if (read_signature_param_count(method.signature) == param_count) {
+                return &method;
+            }
+        }
+        return nullptr;
+    }
+
+    const PropertyDef* VM::find_property_def_for_type(const TypeDef& type_def,
+                                                      const std::string& name,
+                                                      bool is_static) const {
+        if (!chunk_) {
+            return nullptr;
+        }
+        size_t start = type_def.property_list.start;
+        size_t end = start + type_def.property_list.count;
+        if (end > chunk_->property_definitions.size()) {
+            return nullptr;
+        }
+        for (size_t i = start; i < end; ++i) {
+            const auto& prop = chunk_->property_definitions[i];
+            if (prop.name >= chunk_->strings.size()) {
+                continue;
+            }
+            if (chunk_->strings[prop.name] != name) {
+                continue;
+            }
+            bool prop_static = (prop.flags & static_cast<uint32_t>(PropertyFlags::Static)) != 0;
+            if (prop_static != is_static) {
+                continue;
+            }
+            return &prop;
+        }
+        return nullptr;
+    }
+
+    const FieldDef* VM::find_field_def_for_type(const TypeDef& type_def,
+                                                const std::string& name,
+                                                bool is_static) const {
+        if (!chunk_) {
+            return nullptr;
+        }
+        size_t start = type_def.field_list.start;
+        size_t end = start + type_def.field_list.count;
+        if (end > chunk_->field_definitions.size()) {
+            return nullptr;
+        }
+        for (size_t i = start; i < end; ++i) {
+            const auto& field = chunk_->field_definitions[i];
+            if (field.name >= chunk_->strings.size()) {
+                continue;
+            }
+            if (chunk_->strings[field.name] != name) {
+                continue;
+            }
+            bool field_static = (field.flags & static_cast<uint32_t>(FieldFlags::Static)) != 0;
+            if (field_static != is_static) {
+                continue;
+            }
+            return &field;
+        }
+        return nullptr;
+    }
+
+    const MethodDef* VM::resolve_method_def_by_index(method_idx idx) const {
+        if (!chunk_ || idx >= chunk_->method_definitions.size()) {
+            return nullptr;
+        }
+        return &chunk_->method_definitions[idx];
+    }
+
+    bool VM::invoke_method_def(const MethodDef& method_def,
+                               size_t callee_index,
+                               uint16_t arg_count,
+                               bool has_receiver,
+                               bool is_initializer,
+                               bool is_mutating,
+                               size_t receiver_index) {
+        if (!chunk_) {
+            throw std::runtime_error("No active chunk for method invocation.");
+        }
+        uint32_t param_count = read_signature_param_count(method_def.signature);
+        uint32_t expected = param_count + (has_receiver ? 1u : 0u);
+        if (arg_count != expected) {
+            throw std::runtime_error("Incorrect argument count.");
+        }
+        if (method_def.body_ptr == std::numeric_limits<body_idx>::max() ||
+            method_def.body_ptr >= chunk_->method_bodies.size()) {
+            throw std::runtime_error("Method body not found.");
+        }
+        std::string method_name = (method_def.name < chunk_->strings.size())
+            ? chunk_->strings[method_def.name]
+            : std::string("method");
+        call_frames_.emplace_back(
+            callee_index + 1,
+            ip_,
+            chunk_,
+            current_body_idx_,
+            method_name,
+            nullptr,
+            is_initializer,
+            is_mutating,
+            receiver_index);
+        set_active_body(method_def.body_ptr);
+        ip_ = 0;
+        return true;
     }
 
     size_t VM::current_stack_base() const {
@@ -594,6 +834,19 @@ namespace swiftscript {
 
         if (obj->type == ObjectType::Instance) {
             auto* inst = static_cast<InstanceObject*>(obj);
+            if (inst->klass) {
+                const TypeDef* type_def = resolve_type_def(inst->klass->name);
+                if (type_def) {
+                    const FieldDef* field_def = find_field_def_for_type(*type_def, name, false);
+                    if (field_def) {
+                        auto field_it = inst->fields.find(name);
+                        if (field_it != inst->fields.end()) {
+                            return field_it->second;
+                        }
+                        return Value::null();
+                    }
+                }
+            }
             auto field_it = inst->fields.find(name);
             if (field_it != inst->fields.end()) {
                 return field_it->second;
@@ -619,6 +872,15 @@ namespace swiftscript {
             }
             
             // Check static properties
+            if (const TypeDef* type_def = resolve_type_def(klass->name)) {
+                if (find_field_def_for_type(*type_def, name, true)) {
+                    auto static_prop_it = klass->static_properties.find(name);
+                    if (static_prop_it != klass->static_properties.end()) {
+                        return static_prop_it->second;
+                    }
+                    return Value::null();
+                }
+            }
             auto static_prop_it = klass->static_properties.find(name);
             if (static_prop_it != klass->static_properties.end()) {
                 return static_prop_it->second;
@@ -635,6 +897,19 @@ namespace swiftscript {
         // Struct instance property access
         if (obj->type == ObjectType::StructInstance) {
             auto* inst = static_cast<StructInstanceObject*>(obj);
+            if (inst->struct_type) {
+                const TypeDef* type_def = resolve_type_def(inst->struct_type->name);
+                if (type_def) {
+                    const FieldDef* field_def = find_field_def_for_type(*type_def, name, false);
+                    if (field_def) {
+                        auto field_it = inst->fields.find(name);
+                        if (field_it != inst->fields.end()) {
+                            return field_it->second;
+                        }
+                        return Value::null();
+                    }
+                }
+            }
             auto field_it = inst->fields.find(name);
             if (field_it != inst->fields.end()) {
                 return field_it->second;
@@ -678,6 +953,15 @@ namespace swiftscript {
             }
             
             // Check static properties
+            if (const TypeDef* type_def = resolve_type_def(struct_type->name)) {
+                if (find_field_def_for_type(*type_def, name, true)) {
+                    auto static_prop_it = struct_type->static_properties.find(name);
+                    if (static_prop_it != struct_type->static_properties.end()) {
+                        return static_prop_it->second;
+                    }
+                    return Value::null();
+                }
+            }
             auto static_prop_it = struct_type->static_properties.find(name);
             if (static_prop_it != struct_type->static_properties.end()) {
                 return static_prop_it->second;
@@ -1043,17 +1327,19 @@ namespace swiftscript {
         size_t callee_index = stack_.size() - args.size() - 1;
         
         // Create call frame
-        call_frames_.emplace_back(callee_index + 1, saved_ip, saved_chunk, func->name, closure, false);
+        call_frames_.emplace_back(callee_index + 1, saved_ip, saved_chunk, saved_body, func->name, closure, false);
         
         // Execute the function
         chunk_ = func->chunk.get();
+        current_body_idx_ = entry_body_index(*chunk_);
+        set_active_body(current_body_idx_);
         ip_ = 0;
         
         Value result = Value::null();
         
         try {
             // Execute until OP_RETURN
-            while (ip_ < chunk_->bytecode().size()) {
+            while (ip_ < active_bytecode().size()) {
                 OpCode op = static_cast<OpCode>(read_byte());
                 
                 if (op == OpCode::OP_RETURN) {
@@ -1071,6 +1357,8 @@ namespace swiftscript {
                     // Restore execution state
                     chunk_ = frame.chunk;
                     ip_ = frame.return_address;
+                    current_body_idx_ = frame.body_index;
+                    set_active_body(current_body_idx_);
                     
                     // Pop call frame
                     call_frames_.pop_back();
@@ -1088,7 +1376,7 @@ namespace swiftscript {
                 ip_--;
                 
                 // Execute this one instruction
-                switch (static_cast<OpCode>(chunk_->bytecode()[ip_])) {
+                switch (static_cast<OpCode>(active_bytecode()[ip_])) {
                     case OpCode::OP_READ_LINE: {
                         ip_++;
                         std::string line;
@@ -1158,6 +1446,8 @@ namespace swiftscript {
             // Restore state on error
             chunk_ = saved_chunk;
             ip_ = saved_ip;
+            current_body_idx_ = saved_body;
+            current_body_ = saved_body_ptr;
             
             // Pop call frame if still there
             if (!call_frames_.empty() && call_frames_.back().function_name == func->name) {

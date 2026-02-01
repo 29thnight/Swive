@@ -802,5 +802,31 @@ Assembly Assembly::deserialize(std::istream& in)
     return c;
 }
 
+void Assembly::expand_to_assembly() {
+    if (manifest.name.empty()) {
+        manifest.name = "Main";
+    }
+
+    if (global_constant_pool.empty() && !constants.empty()) {
+        global_constant_pool = constants;
+    }
+
+    if (method_bodies.empty()) {
+        MethodBody body{};
+        body.bytecode = code;
+        body.line_info = lines;
+        method_bodies.push_back(std::move(body));
+    }
+
+    if (method_definitions.empty()) {
+        MethodDef entry{};
+        entry.name = static_cast<string_idx>(add_string(manifest.name));
+        entry.flags = static_cast<uint32_t>(MethodFlags::Static);
+        entry.signature = 0;
+        entry.body_ptr = 0;
+        method_definitions.push_back(entry);
+    }
+}
+
 
 } // namespace swiftscript

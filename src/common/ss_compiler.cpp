@@ -53,6 +53,7 @@ for (const auto& stmt : specialized_program) {
 
     emit_op(OpCode::OP_NIL, 0);
     emit_op(OpCode::OP_HALT, 0);
+    chunk_.expand_to_assembly();
     return chunk_;
 }
 

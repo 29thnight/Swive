@@ -176,6 +176,7 @@ struct Assembly {
 
 	void serialize(std::ostream& out) const;
 	static Assembly deserialize(std::istream& in);
+    void expand_to_assembly();
 
 private:
     MethodBody& ensure_primary_body();

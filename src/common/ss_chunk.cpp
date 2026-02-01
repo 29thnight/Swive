@@ -4,6 +4,9 @@
 namespace swiftscript {
 
 void Assembly::write(uint8_t byte, uint32_t line) {
+    auto& body = ensure_primary_body();
+    body.bytecode.push_back(byte);
+    body.line_info.push_back(line);
     code.push_back(byte);
     lines.push_back(line);
 }
@@ -44,30 +47,35 @@ size_t Assembly::emit_jump(OpCode op, uint32_t line) {
     // �÷��̽�Ȧ���� 0xFFFF �ۼ�
     write(0xFF, line);
     write(0xFF, line);
-    return code.size() - 2;
+    return bytecode().size() - 2;
 }
 
 void Assembly::patch_jump(size_t offset) {
     // ���� ���ɾ� ���ĺ��� ���� ��ġ������ �Ÿ� ���
-    size_t jump = code.size() - offset - 2;
+    size_t jump = bytecode().size() - offset - 2;
     
     if (jump > 0xFFFF) {
         throw std::runtime_error("Too much code to jump over");
     }
-    
+
     code[offset] = (jump >> 8) & 0xFF;
     code[offset + 1] = jump & 0xFF;
+    if (!method_bodies.empty()) {
+        auto& body = method_bodies.front();
+        body.bytecode[offset] = (jump >> 8) & 0xFF;
+        body.bytecode[offset + 1] = jump & 0xFF;
+    }
 }
 
 const std::vector<uint8_t>& Assembly::bytecode() const {
-    if (!method_bodies.empty() && !method_bodies.front().bytecode.empty()) {
+    if (!method_bodies.empty()) {
         return method_bodies.front().bytecode;
     }
     return code;
 }
 
 const std::vector<uint32_t>& Assembly::line_info() const {
-    if (!method_bodies.empty() && !method_bodies.front().line_info.empty()) {
+    if (!method_bodies.empty()) {
         return method_bodies.front().line_info;
     }
     return lines;
@@ -78,6 +86,20 @@ const std::vector<Value>& Assembly::constant_pool() const {
         return global_constant_pool;
     }
     return constants;
+}
+
+size_t Assembly::code_size() const {
+    return bytecode().size();
+}
+
+MethodBody& Assembly::ensure_primary_body() {
+    if (method_bodies.empty()) {
+        MethodBody body{};
+        body.bytecode = code;
+        body.line_info = lines;
+        method_bodies.push_back(std::move(body));
+    }
+    return method_bodies.front();
 }
 
 void Assembly::disassemble(const std::string& name) const {

@@ -1361,7 +1361,7 @@ void Compiler::visit(GuardLetStmt* stmt) {
 void Compiler::visit(WhileStmt* stmt) {
     // ���� ���ؽ�Ʈ ����
     loop_stack_.push_back({});
-    size_t loop_start = chunk_.code.size();
+    size_t loop_start = chunk_.code_size();
     loop_stack_.back().loop_start = loop_start;
     loop_stack_.back().scope_depth_at_start = scope_depth_;
     
@@ -1392,7 +1392,7 @@ void Compiler::visit(WhileStmt* stmt) {
 void Compiler::visit(RepeatWhileStmt* stmt) {
     // repeat-while: body executes at least once, then checks condition
     loop_stack_.push_back({});
-    size_t loop_start = chunk_.code.size();
+    size_t loop_start = chunk_.code_size();
     loop_stack_.back().loop_start = loop_start;
     loop_stack_.back().scope_depth_at_start = scope_depth_;
     
@@ -1444,7 +1444,7 @@ void Compiler::visit(ForInStmt* stmt) {
         mark_local_initialized();
         
         loop_stack_.push_back({});
-        size_t loop_start = chunk_.code.size();
+        size_t loop_start = chunk_.code_size();
         loop_stack_.back().loop_start = loop_start;
         loop_stack_.back().scope_depth_at_start = scope_depth_;
         
@@ -1529,7 +1529,7 @@ void Compiler::visit(ForInStmt* stmt) {
         mark_local_initialized();
         
         loop_stack_.push_back({});
-        size_t loop_start = chunk_.code.size();
+    size_t loop_start = chunk_.code_size();
         loop_stack_.back().loop_start = loop_start;
         loop_stack_.back().scope_depth_at_start = scope_depth_;
         
@@ -3041,12 +3041,12 @@ size_t Compiler::emit_jump(OpCode op, uint32_t line) {
 }
 
 void Compiler::emit_loop(size_t loop_start, uint32_t line) {
-    if (chunk_.code.size() < loop_start) {
+    if (chunk_.code_size() < loop_start) {
         throw CompilerError("Invalid loop offset calculation", line);
     }
     
     emit_op(OpCode::OP_LOOP, line);
-    size_t offset = chunk_.code.size() - loop_start + 2;
+    size_t offset = chunk_.code_size() - loop_start + 2;
     
     if (offset > std::numeric_limits<uint16_t>::max()) {
         throw CompilerError("Loop body too large", line);

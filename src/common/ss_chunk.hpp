@@ -169,6 +169,7 @@ struct Assembly {
     const std::vector<uint8_t>& bytecode() const;
     const std::vector<uint32_t>& line_info() const;
     const std::vector<Value>& constant_pool() const;
+    size_t code_size() const;
 
     void disassemble(const std::string& name) const;
     size_t disassemble_instruction(size_t offset) const;
@@ -177,6 +178,7 @@ struct Assembly {
 	static Assembly deserialize(std::istream& in);
 
 private:
+    MethodBody& ensure_primary_body();
     size_t simple_instruction(const char* name, size_t offset) const;
     size_t constant_instruction(const char* name, size_t offset) const;
     size_t string_instruction(const char* name, size_t offset) const;

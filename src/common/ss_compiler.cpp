@@ -54,6 +54,7 @@ for (const auto& stmt : specialized_program) {
     emit_op(OpCode::OP_NIL, 0);
     emit_op(OpCode::OP_HALT, 0);
     chunk_.expand_to_assembly();
+    populate_metadata_tables(specialized_program);
     return chunk_;
 }
 
@@ -210,7 +211,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
             getter_compiler.emit_op(OpCode::OP_NIL, property->line);
             getter_compiler.emit_op(OpCode::OP_RETURN, property->line);
             
-            getter_proto.chunk = std::make_shared<Assembly>(std::move(getter_compiler.chunk_));
+            getter_proto.chunk = finalize_function_chunk(std::move(getter_compiler.chunk_));
             size_t getter_idx = chunk_.add_function(std::move(getter_proto));
             
             // Compile setter (if present)
@@ -250,7 +251,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 setter_compiler.emit_short(1, property->line);  // newValue is at local index 1
                 setter_compiler.emit_op(OpCode::OP_RETURN, property->line);
                 
-                setter_proto.chunk = std::make_shared<Assembly>(std::move(setter_compiler.chunk_));
+                setter_proto.chunk = finalize_function_chunk(std::move(setter_compiler.chunk_));
                 setter_idx = chunk_.add_function(std::move(setter_proto));
             }
             
@@ -306,7 +307,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 will_set_compiler.emit_op(OpCode::OP_NIL, property->line);
                 will_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
-                will_set_proto.chunk = std::make_shared<Assembly>(std::move(will_set_compiler.chunk_));
+                will_set_proto.chunk = finalize_function_chunk(std::move(will_set_compiler.chunk_));
                 will_set_idx = chunk_.add_function(std::move(will_set_proto));
             }
 
@@ -344,7 +345,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 did_set_compiler.emit_op(OpCode::OP_NIL, property->line);
                 did_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
-                did_set_proto.chunk = std::make_shared<Assembly>(std::move(did_set_compiler.chunk_));
+                did_set_proto.chunk = finalize_function_chunk(std::move(did_set_compiler.chunk_));
                 did_set_idx = chunk_.add_function(std::move(did_set_proto));
             }
 
@@ -445,7 +446,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         method_compiler.emit_op(OpCode::OP_NIL, method->line);
         method_compiler.emit_op(OpCode::OP_RETURN, method->line);
 
-        proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
+        proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -497,7 +498,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         deinit_compiler.emit_op(OpCode::OP_NIL, stmt->line);
         deinit_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-        proto.chunk = std::make_shared<Assembly>(std::move(deinit_compiler.chunk_));
+        proto.chunk = finalize_function_chunk(std::move(deinit_compiler.chunk_));
         proto.upvalues.reserve(deinit_compiler.upvalues_.size());
         for (const auto& uv : deinit_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -614,7 +615,7 @@ if (scope_depth_ > 0) {
                 will_set_compiler.emit_op(OpCode::OP_NIL, property->line);
                 will_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
-                will_set_proto.chunk = std::make_shared<Assembly>(std::move(will_set_compiler.chunk_));
+                will_set_proto.chunk = finalize_function_chunk(std::move(will_set_compiler.chunk_));
                 will_set_idx = chunk_.add_function(std::move(will_set_proto));
             }
 
@@ -652,7 +653,7 @@ if (scope_depth_ > 0) {
                 did_set_compiler.emit_op(OpCode::OP_NIL, property->line);
                 did_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
-                did_set_proto.chunk = std::make_shared<Assembly>(std::move(did_set_compiler.chunk_));
+                did_set_proto.chunk = finalize_function_chunk(std::move(did_set_compiler.chunk_));
                 did_set_idx = chunk_.add_function(std::move(did_set_proto));
             }
 
@@ -750,7 +751,7 @@ if (scope_depth_ > 0) {
             method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-            proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
+            proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
             proto.upvalues.reserve(method_compiler.upvalues_.size());
             for (const auto& uv : method_compiler.upvalues_) {
                 proto.upvalues.push_back({uv.index, uv.is_local});
@@ -822,7 +823,7 @@ if (scope_depth_ > 0) {
         method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
         method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-        proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
+        proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -895,7 +896,7 @@ if (scope_depth_ > 0) {
         init_compiler.emit_op(OpCode::OP_NIL, init_method->line);
         init_compiler.emit_op(OpCode::OP_RETURN, init_method->line);
 
-        proto.chunk = std::make_shared<Assembly>(std::move(init_compiler.chunk_));
+        proto.chunk = finalize_function_chunk(std::move(init_compiler.chunk_));
         proto.upvalues.reserve(init_compiler.upvalues_.size());
         for (const auto& uv : init_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1023,7 +1024,7 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         getter_compiler.emit_op(OpCode::OP_NIL, stmt->line);
         getter_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
         
-        getter_proto.chunk = std::make_shared<Assembly>(std::move(getter_compiler.chunk_));
+        getter_proto.chunk = finalize_function_chunk(std::move(getter_compiler.chunk_));
         getter_proto.upvalues.reserve(getter_compiler.upvalues_.size());
         for (const auto& uv : getter_compiler.upvalues_) {
             getter_proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1089,7 +1090,7 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
         method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-        proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
+        proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1978,7 +1979,7 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
             
-            getter_proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
+            getter_proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
             size_t func_idx = chunk_.add_function(std::move(getter_proto));
             
             // Emit OP_DEFINE_COMPUTED_PROPERTY with indices
@@ -2032,7 +2033,7 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-            func_proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
+            func_proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
             size_t func_idx = chunk_.add_function(std::move(func_proto));
 
             emit_op(OpCode::OP_FUNCTION, stmt->line);
@@ -2125,7 +2126,7 @@ void Compiler::visit(FuncDeclStmt* stmt) {
     function_compiler.emit_op(OpCode::OP_NIL, stmt->line);
     function_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-    proto.chunk = std::make_shared<Assembly>(std::move(function_compiler.chunk_));
+    proto.chunk = finalize_function_chunk(std::move(function_compiler.chunk_));
     proto.upvalues.reserve(function_compiler.upvalues_.size());
     for (const auto& uv : function_compiler.upvalues_) {
         proto.upvalues.push_back({uv.index, uv.is_local});
@@ -2698,7 +2699,7 @@ void Compiler::visit(ClosureExpr* expr) {
     closure_compiler.emit_op(OpCode::OP_NIL, expr->line);
     closure_compiler.emit_op(OpCode::OP_RETURN, expr->line);
 
-    proto.chunk = std::make_shared<Assembly>(std::move(closure_compiler.chunk_));
+    proto.chunk = finalize_function_chunk(std::move(closure_compiler.chunk_));
     proto.upvalues.reserve(closure_compiler.upvalues_.size());
     for (const auto& uv : closure_compiler.upvalues_) {
         proto.upvalues.push_back({uv.index, uv.is_local});
@@ -3063,6 +3064,11 @@ size_t Compiler::identifier_constant(const std::string& name) {
     return chunk_.add_string(name);
 }
 
+std::shared_ptr<Assembly> Compiler::finalize_function_chunk(Assembly&& chunk) {
+    chunk.expand_to_assembly();
+    return std::make_shared<Assembly>(std::move(chunk));
+}
+
 Assembly Compiler::compile_function_body(const FuncDeclStmt& stmt) {
     Compiler function_compiler;
     function_compiler.chunk_ = Assembly{};
@@ -3083,6 +3089,7 @@ Assembly Compiler::compile_function_body(const FuncDeclStmt& stmt) {
 
     function_compiler.emit_op(OpCode::OP_NIL, stmt.line);
     function_compiler.emit_op(OpCode::OP_RETURN, stmt.line);
+    function_compiler.chunk_.expand_to_assembly();
     return std::move(function_compiler.chunk_);
 }
 
@@ -3112,7 +3119,423 @@ Assembly Compiler::compile_struct_method_body(const StructMethodDecl& method, bo
 
     method_compiler.emit_op(OpCode::OP_NIL, 0);
     method_compiler.emit_op(OpCode::OP_RETURN, 0);
+    method_compiler.chunk_.expand_to_assembly();
     return std::move(method_compiler.chunk_);
+}
+
+void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
+    struct PendingMethod {
+        std::string name;
+        uint32_t flags{0};
+    };
+
+    struct PendingField {
+        std::string name;
+        uint32_t flags{0};
+        std::optional<TypeAnnotation> type;
+    };
+
+    struct PendingProperty {
+        std::string name;
+        uint32_t flags{0};
+        std::optional<TypeAnnotation> type;
+        bool has_getter{true};
+        bool has_setter{false};
+    };
+
+    struct PendingType {
+        uint32_t flags{0};
+        std::optional<std::string> base_type;
+        std::vector<std::string> interfaces;
+        std::vector<PendingMethod> methods;
+        std::vector<PendingField> fields;
+        std::vector<PendingProperty> properties;
+    };
+
+    std::unordered_map<std::string, PendingType> pending_types;
+    std::vector<std::string> type_order;
+
+    auto ensure_pending_type = [&](const std::string& name) -> PendingType& {
+        auto it = pending_types.find(name);
+        if (it != pending_types.end()) {
+            return it->second;
+        }
+        type_order.push_back(name);
+        return pending_types.emplace(name, PendingType{}).first->second;
+    };
+
+    auto access_type_flags = [](AccessLevel access) -> uint32_t {
+        switch (access) {
+        case AccessLevel::Public:
+            return static_cast<uint32_t>(TypeFlags::Public);
+        case AccessLevel::Private:
+        case AccessLevel::Fileprivate:
+            return static_cast<uint32_t>(TypeFlags::Private);
+        case AccessLevel::Internal:
+        default:
+            return 0;
+        }
+    };
+
+    auto access_field_flags = [](AccessLevel access) -> uint32_t {
+        switch (access) {
+        case AccessLevel::Public:
+            return static_cast<uint32_t>(FieldFlags::Public);
+        case AccessLevel::Private:
+        case AccessLevel::Fileprivate:
+            return static_cast<uint32_t>(FieldFlags::Private);
+        case AccessLevel::Internal:
+        default:
+            return 0;
+        }
+    };
+
+    auto access_property_flags = [](AccessLevel access) -> uint32_t {
+        switch (access) {
+        case AccessLevel::Public:
+            return static_cast<uint32_t>(PropertyFlags::Public);
+        case AccessLevel::Private:
+        case AccessLevel::Fileprivate:
+            return static_cast<uint32_t>(PropertyFlags::Private);
+        case AccessLevel::Internal:
+        default:
+            return 0;
+        }
+    };
+
+    auto access_method_flags = [](AccessLevel) -> uint32_t {
+        return 0;
+    };
+
+    for (const auto& stmt : program) {
+        if (!stmt) {
+            continue;
+        }
+
+        switch (stmt->kind) {
+        case StmtKind::ClassDecl: {
+            auto* class_decl = static_cast<ClassDeclStmt*>(stmt.get());
+            auto& meta = ensure_pending_type(class_decl->name);
+            meta.flags |= access_type_flags(class_decl->access_level) | static_cast<uint32_t>(TypeFlags::Class);
+            if (class_decl->superclass_name.has_value()) {
+                meta.base_type = class_decl->superclass_name.value();
+            }
+            for (const auto& proto : class_decl->protocol_conformances) {
+                meta.interfaces.push_back(proto);
+            }
+
+            for (const auto& prop : class_decl->properties) {
+                if (!prop) {
+                    continue;
+                }
+                if (prop->is_computed) {
+                    PendingProperty pending{};
+                    pending.name = prop->name;
+                    pending.type = prop->type_annotation;
+                    pending.flags = access_property_flags(prop->access_level);
+                    if (prop->is_static) {
+                        pending.flags |= static_cast<uint32_t>(PropertyFlags::Static);
+                    }
+                    pending.has_getter = true;
+                    pending.has_setter = prop->setter_body != nullptr;
+                    meta.properties.push_back(std::move(pending));
+                } else {
+                    PendingField pending{};
+                    pending.name = prop->name;
+                    pending.type = prop->type_annotation;
+                    pending.flags = access_field_flags(prop->access_level);
+                    if (prop->is_static) {
+                        pending.flags |= static_cast<uint32_t>(FieldFlags::Static);
+                    }
+                    if (!prop->is_let) {
+                        pending.flags |= static_cast<uint32_t>(FieldFlags::Mutable);
+                    }
+                    meta.fields.push_back(std::move(pending));
+                }
+            }
+
+            for (const auto& method : class_decl->methods) {
+                if (!method) {
+                    continue;
+                }
+                PendingMethod pending{};
+                pending.name = method->name;
+                pending.flags = access_method_flags(method->access_level);
+                if (method->is_static) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                }
+                if (method->is_override) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Override);
+                }
+                meta.methods.push_back(std::move(pending));
+            }
+
+            if (class_decl->deinit_body) {
+                PendingMethod pending{};
+                pending.name = "deinit";
+                pending.flags = static_cast<uint32_t>(MethodFlags::Virtual);
+                meta.methods.push_back(std::move(pending));
+            }
+            break;
+        }
+        case StmtKind::StructDecl: {
+            auto* struct_decl = static_cast<StructDeclStmt*>(stmt.get());
+            auto& meta = ensure_pending_type(struct_decl->name);
+            meta.flags |= access_type_flags(struct_decl->access_level) | static_cast<uint32_t>(TypeFlags::Struct);
+            for (const auto& proto : struct_decl->protocol_conformances) {
+                meta.interfaces.push_back(proto);
+            }
+
+            for (const auto& prop : struct_decl->properties) {
+                if (!prop) {
+                    continue;
+                }
+                if (prop->is_computed) {
+                    PendingProperty pending{};
+                    pending.name = prop->name;
+                    pending.type = prop->type_annotation;
+                    pending.flags = access_property_flags(prop->access_level);
+                    if (prop->is_static) {
+                        pending.flags |= static_cast<uint32_t>(PropertyFlags::Static);
+                    }
+                    pending.has_getter = true;
+                    pending.has_setter = prop->setter_body != nullptr;
+                    meta.properties.push_back(std::move(pending));
+                } else {
+                    PendingField pending{};
+                    pending.name = prop->name;
+                    pending.type = prop->type_annotation;
+                    pending.flags = access_field_flags(prop->access_level);
+                    if (prop->is_static) {
+                        pending.flags |= static_cast<uint32_t>(FieldFlags::Static);
+                    }
+                    if (!prop->is_let) {
+                        pending.flags |= static_cast<uint32_t>(FieldFlags::Mutable);
+                    }
+                    meta.fields.push_back(std::move(pending));
+                }
+            }
+
+            for (const auto& method : struct_decl->methods) {
+                if (!method) {
+                    continue;
+                }
+                if (method->is_computed_property) {
+                    PendingProperty pending{};
+                    pending.name = method->name;
+                    pending.flags = access_property_flags(method->access_level);
+                    if (method->is_static) {
+                        pending.flags |= static_cast<uint32_t>(PropertyFlags::Static);
+                    }
+                    pending.has_getter = true;
+                    pending.has_setter = method->is_mutating;
+                    meta.properties.push_back(std::move(pending));
+                    continue;
+                }
+                PendingMethod pending{};
+                pending.name = method->name;
+                pending.flags = access_method_flags(method->access_level);
+                if (method->is_static) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                }
+                if (method->is_mutating) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                }
+                meta.methods.push_back(std::move(pending));
+            }
+
+            for (const auto& init_method : struct_decl->initializers) {
+                if (!init_method) {
+                    continue;
+                }
+                PendingMethod pending{};
+                pending.name = "init";
+                pending.flags = static_cast<uint32_t>(MethodFlags::Mutating);
+                meta.methods.push_back(std::move(pending));
+            }
+            break;
+        }
+        case StmtKind::EnumDecl: {
+            auto* enum_decl = static_cast<EnumDeclStmt*>(stmt.get());
+            auto& meta = ensure_pending_type(enum_decl->name);
+            meta.flags |= access_type_flags(enum_decl->access_level) | static_cast<uint32_t>(TypeFlags::Enum);
+            for (const auto& method : enum_decl->methods) {
+                if (!method) {
+                    continue;
+                }
+                if (method->is_computed_property) {
+                    PendingProperty pending{};
+                    pending.name = method->name;
+                    pending.flags = access_property_flags(method->access_level);
+                    if (method->is_static) {
+                        pending.flags |= static_cast<uint32_t>(PropertyFlags::Static);
+                    }
+                    pending.has_getter = true;
+                    pending.has_setter = method->is_mutating;
+                    meta.properties.push_back(std::move(pending));
+                    continue;
+                }
+                PendingMethod pending{};
+                pending.name = method->name;
+                pending.flags = access_method_flags(method->access_level);
+                if (method->is_static) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                }
+                if (method->is_mutating) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                }
+                meta.methods.push_back(std::move(pending));
+            }
+            break;
+        }
+        case StmtKind::ProtocolDecl: {
+            auto* proto_decl = static_cast<ProtocolDeclStmt*>(stmt.get());
+            auto& meta = ensure_pending_type(proto_decl->name);
+            meta.flags |= access_type_flags(proto_decl->access_level) | static_cast<uint32_t>(TypeFlags::Interface);
+            for (const auto& proto : proto_decl->inherited_protocols) {
+                meta.interfaces.push_back(proto);
+            }
+            for (const auto& requirement : proto_decl->method_requirements) {
+                PendingMethod pending{};
+                pending.name = requirement.name;
+                pending.flags = static_cast<uint32_t>(MethodFlags::Virtual);
+                if (requirement.is_mutating) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                }
+                meta.methods.push_back(std::move(pending));
+            }
+            for (const auto& requirement : proto_decl->property_requirements) {
+                PendingProperty pending{};
+                pending.name = requirement.name;
+                pending.type = requirement.type;
+                pending.flags = static_cast<uint32_t>(PropertyFlags::Public);
+                pending.has_getter = requirement.has_getter;
+                pending.has_setter = requirement.has_setter;
+                meta.properties.push_back(std::move(pending));
+            }
+            break;
+        }
+        case StmtKind::ExtensionDecl: {
+            auto* ext_decl = static_cast<ExtensionDeclStmt*>(stmt.get());
+            auto& meta = ensure_pending_type(ext_decl->extended_type);
+            for (const auto& proto : ext_decl->protocol_conformances) {
+                meta.interfaces.push_back(proto);
+            }
+            for (const auto& method : ext_decl->methods) {
+                if (!method) {
+                    continue;
+                }
+                if (method->is_computed_property) {
+                    PendingProperty pending{};
+                    pending.name = method->name;
+                    pending.flags = access_property_flags(method->access_level);
+                    if (method->is_static) {
+                        pending.flags |= static_cast<uint32_t>(PropertyFlags::Static);
+                    }
+                    pending.has_getter = true;
+                    pending.has_setter = method->is_mutating;
+                    meta.properties.push_back(std::move(pending));
+                    continue;
+                }
+                PendingMethod pending{};
+                pending.name = method->name;
+                pending.flags = access_method_flags(method->access_level);
+                if (method->is_static) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                }
+                if (method->is_mutating) {
+                    pending.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                }
+                meta.methods.push_back(std::move(pending));
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    std::unordered_map<std::string, type_idx> type_indices;
+
+    auto ensure_type_def = [&](const std::string& name, uint32_t flags) -> type_idx {
+        auto it = type_indices.find(name);
+        if (it != type_indices.end()) {
+            auto& def = chunk_.type_definitions[it->second];
+            def.flags |= flags;
+            return it->second;
+        }
+        TypeDef def{};
+        def.name = static_cast<string_idx>(chunk_.add_string(name));
+        def.flags = flags;
+        chunk_.type_definitions.push_back(std::move(def));
+        type_idx idx = static_cast<type_idx>(chunk_.type_definitions.size() - 1);
+        type_indices.emplace(name, idx);
+        return idx;
+    };
+
+    auto resolve_type_annotation = [&](const std::optional<TypeAnnotation>& annotation) -> type_idx {
+        if (!annotation.has_value()) {
+            return 0;
+        }
+        return ensure_type_def(annotation->name, 0);
+    };
+
+    constexpr body_idx kInvalidBody = std::numeric_limits<body_idx>::max();
+    constexpr method_idx kInvalidMethod = std::numeric_limits<method_idx>::max();
+
+    for (const auto& type_name : type_order) {
+        auto meta_it = pending_types.find(type_name);
+        if (meta_it == pending_types.end()) {
+            continue;
+        }
+        auto& meta = meta_it->second;
+        type_idx idx = ensure_type_def(type_name, meta.flags);
+        TypeDef& def = chunk_.type_definitions[idx];
+        def.flags |= meta.flags;
+
+        if (meta.base_type.has_value()) {
+            def.base_type = ensure_type_def(meta.base_type.value(), 0);
+        }
+
+        def.interfaces.clear();
+        def.interfaces.reserve(meta.interfaces.size());
+        for (const auto& iface : meta.interfaces) {
+            def.interfaces.push_back(ensure_type_def(iface, 0));
+        }
+
+        size_t field_start = chunk_.field_definitions.size();
+        for (const auto& field : meta.fields) {
+            FieldDef def_field{};
+            def_field.name = static_cast<string_idx>(chunk_.add_string(field.name));
+            def_field.flags = field.flags;
+            def_field.type = resolve_type_annotation(field.type);
+            chunk_.field_definitions.push_back(std::move(def_field));
+        }
+        def.field_list.start = static_cast<uint32_t>(field_start);
+        def.field_list.count = static_cast<uint32_t>(chunk_.field_definitions.size() - field_start);
+
+        size_t method_start = chunk_.method_definitions.size();
+        for (const auto& method : meta.methods) {
+            MethodDef def_method{};
+            def_method.name = static_cast<string_idx>(chunk_.add_string(method.name));
+            def_method.flags = method.flags;
+            def_method.signature = 0;
+            def_method.body_ptr = kInvalidBody;
+            chunk_.method_definitions.push_back(std::move(def_method));
+        }
+        def.method_list.start = static_cast<uint32_t>(method_start);
+        def.method_list.count = static_cast<uint32_t>(chunk_.method_definitions.size() - method_start);
+
+        for (const auto& prop : meta.properties) {
+            PropertyDef def_prop{};
+            def_prop.name = static_cast<string_idx>(chunk_.add_string(prop.name));
+            def_prop.flags = prop.flags;
+            def_prop.type = resolve_type_annotation(prop.type);
+            def_prop.getter = prop.has_getter ? 0 : kInvalidMethod;
+            def_prop.setter = prop.has_setter ? 0 : kInvalidMethod;
+            chunk_.property_definitions.push_back(std::move(def_prop));
+        }
+    }
 }
 
 // ============================================================================

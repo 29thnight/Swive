@@ -105,7 +105,7 @@ namespace swiftscript {
     };
 
     // ============================================================================
-    // Property Access Handlers (Áß°£ º¹Àâµµ)
+    // Property Access Handlers (ì¤‘ê°„ ë³µì¡ë„)
     // ============================================================================
 
     template<>
@@ -172,7 +172,7 @@ namespace swiftscript {
         static void execute(VM& vm) {
             const std::string& name = vm.read_string();
             Value value = vm.pop();
-            Value obj_val = vm.peek(0); // setter´Â ±âÁ¸Ã³·³ object´Â popÇÏÁö ¾Ê°í peek ±âÁØ
+            Value obj_val = vm.peek(0); // setterëŠ” ê¸°ì¡´ì²˜ëŸ¼ objectëŠ” popí•˜ì§€ ì•Šê³  peek ê¸°ì¤€
 
             if (!obj_val.is_object() || !obj_val.as_object()) {
                 throw std::runtime_error("Property set on non-object.");
@@ -184,7 +184,7 @@ namespace swiftscript {
             case ObjectType::Instance: {
                 auto* inst = static_cast<InstanceObject*>(o);
 
-                // 1) computed property ¿ì¼±
+                // 1) computed property ìš°ì„ 
                 if (inst->klass) {
                     for (const auto& cp : inst->klass->computed_properties) {
                         if (cp.name == name) {
@@ -192,10 +192,10 @@ namespace swiftscript {
                                 throw std::runtime_error("Cannot set read-only computed property: " + name);
                             }
 
-                            // ±âÁ¸ ÄÚµå Èå¸§ À¯Áö: obj_val(=self)Àº stack¿¡ ³²¾ÆÀÖ¾ú°í,
-                            // computed setter È£ÃâÀ» À§ÇØ self/value¸¦ pushÇØ¼­ Á¡ÇÁ.
-                            // (±âÁ¸Àº vm.pop()À¸·Î obj_val Á¦°Å ÈÄ Àç-pushÇß´Âµ¥, ÀÇ¹Ì¸¸ ¸ÂÃß¸é µÊ)
-                            vm.pop(); // obj_val Á¦°Å (±âÁ¸°ú µ¿ÀÏÇÏ°Ô callee slot Á¤¸®)
+                            // ê¸°ì¡´ ì½”ë“œ íë¦„ ìœ ì§€: obj_val(=self)ì€ stackì— ë‚¨ì•„ìˆì—ˆê³ ,
+                            // computed setter í˜¸ì¶œì„ ìœ„í•´ self/valueë¥¼ pushí•´ì„œ ì í”„.
+                            // (ê¸°ì¡´ì€ vm.pop()ìœ¼ë¡œ obj_val ì œê±° í›„ ì¬-pushí–ˆëŠ”ë°, ì˜ë¯¸ë§Œ ë§ì¶”ë©´ ë¨)
+                            vm.pop(); // obj_val ì œê±° (ê¸°ì¡´ê³¼ ë™ì¼í•˜ê²Œ callee slot ì •ë¦¬)
 
                             VM::TryInvokeComputedSetter(vm, cp.setter, obj_val, value);
                             return;
@@ -220,7 +220,7 @@ namespace swiftscript {
                     }
                 }
 
-                vm.pop(); // obj_val Á¦°Å (±âÁ¸: ÃÖÁ¾ÀûÀ¸·Î value¸¸ push)
+                vm.pop(); // obj_val ì œê±° (ê¸°ì¡´: ìµœì¢…ì ìœ¼ë¡œ valueë§Œ push)
 
                 if (!will_set.is_null()) {
                     vm.call_property_observer(will_set, obj_val, value);
@@ -237,13 +237,13 @@ namespace swiftscript {
             }
 
             case ObjectType::EnumCase: {
-                // EnumCase´Â ÀÏ¹İÀûÀ¸·Î ÀĞ±â Àü¿ëÀÌ ¸¹Áö¸¸,
-                // ³× ¼³°è¿¡¼­ setter Çã¿ëÇÏ·Á¸é ¿©±â¿¡ computed setter¸¸ Áö¿øÇÏ´Â °Ô ÀÏ°üÀû.
+                // EnumCaseëŠ” ì¼ë°˜ì ìœ¼ë¡œ ì½ê¸° ì „ìš©ì´ ë§ì§€ë§Œ,
+                // ë„¤ ì„¤ê³„ì—ì„œ setter í—ˆìš©í•˜ë ¤ë©´ ì—¬ê¸°ì— computed setterë§Œ ì§€ì›í•˜ëŠ” ê²Œ ì¼ê´€ì .
                 auto* ec = static_cast<EnumCaseObject*>(o);
                 if (ec->enum_type) {
                     for (const auto& cp : ec->enum_type->computed_properties) {
                         if (cp.name == name) {
-                            // enum computed setter´Â º¸Åë ±İÁö. Çã¿ëÇÒ °Å¸é Á¶°Ç ¿ÏÈ­.
+                            // enum computed setterëŠ” ë³´í†µ ê¸ˆì§€. í—ˆìš©í•  ê±°ë©´ ì¡°ê±´ ì™„í™”.
                             if (cp.setter.is_null()) {
                                 throw std::runtime_error("Cannot set read-only enum computed property: " + name);
                             }
@@ -257,7 +257,7 @@ namespace swiftscript {
             }
 
             case ObjectType::StructInstance: {
-                // StructInstanceµµ computed setter ¿ì¼± Ã³¸® (extension computed property)
+                // StructInstanceë„ computed setter ìš°ì„  ì²˜ë¦¬ (extension computed property)
                 auto* si = static_cast<StructInstanceObject*>(o);
                 if (si->struct_type) {
                     for (const auto& cp : si->struct_type->computed_properties) {
@@ -1253,73 +1253,7 @@ namespace swiftscript {
             const std::string& type_name = vm.chunk_->strings[type_name_idx];
             Value value = vm.pop();
 
-            bool result = false;
-            if (type_name == "Int") {
-                result = value.is_int();
-            }
-            else if (type_name == "Float") {
-                result = value.is_float();
-            }
-            else if (type_name == "Bool") {
-                result = value.is_bool();
-            }
-            else if (type_name == "String") {
-                result = value.is_object() && value.as_object() &&
-                    value.as_object()->type == ObjectType::String;
-            }
-            else if (type_name == "Array") {
-                result = value.is_object() && value.as_object() &&
-                    value.as_object()->type == ObjectType::List;
-            }
-            else if (type_name == "Dictionary") {
-                result = value.is_object() && value.as_object() &&
-                    value.as_object()->type == ObjectType::Map;
-            }
-            else if (type_name == "Void") {
-                result = value.is_null();
-            }
-            else if (type_name == "Any") {
-                result = !value.is_null() && !value.is_undefined();
-            }
-            else {
-                // Check for class, struct, or enum types
-                result = false;
-            }
-
-            if (value.is_object() && value.as_object()) {
-                Object* obj = value.as_object();
-
-                // Check if object is an instance of the type
-                if (obj->type == ObjectType::Instance) {
-                    auto* inst = static_cast<InstanceObject*>(obj);
-                    ClassObject* klass = inst->klass;
-
-                    // Check class name and superclass chain
-                    while (klass) {
-                        if (klass->name == type_name) {
-                            result = true;
-                            break;
-                        }
-                        klass = klass->superclass;
-                    }
-                }
-                // Check for struct instances
-                else if (obj->type == ObjectType::StructInstance) {
-                    auto* struct_inst = static_cast<StructInstanceObject*>(obj);
-                    if (struct_inst->struct_type && struct_inst->struct_type->name == type_name) {
-                        result = true;
-                    }
-                }
-                // Check for enum cases
-                else if (obj->type == ObjectType::EnumCase) {
-                    auto* enum_case = static_cast<EnumCaseObject*>(obj);
-                    if (enum_case->enum_type && enum_case->enum_type->name == type_name) {
-                        result = true;
-                    }
-                }
-            }
-
-            vm.push(Value::from_bool(result));
+            vm.push(Value::from_bool(vm.matches_type(value, type_name)));
         }
     };
 
@@ -1352,28 +1286,7 @@ namespace swiftscript {
             const std::string& type_name = vm.chunk_->strings[type_name_idx];
             Value value = vm.pop();
 
-            bool is_valid = false;
-            if (value.is_object() && value.as_object()) {
-                Object* obj = value.as_object();
-
-                if (obj->type == ObjectType::Instance) {
-                    auto* inst = static_cast<InstanceObject*>(obj);
-                    ClassObject* klass = inst->klass;
-                    while (klass) {
-                        if (klass->name == type_name) {
-                            is_valid = true;
-                            break;
-                        }
-                        klass = klass->superclass;
-                    }
-                }
-                else if (obj->type == ObjectType::StructInstance) {
-                    auto* struct_inst = static_cast<StructInstanceObject*>(obj);
-                    if (struct_inst->struct_type && struct_inst->struct_type->name == type_name) {
-                        is_valid = true;
-                    }
-                }
-            }
+            bool is_valid = vm.matches_type(value, type_name);
 
             if (is_valid) {
                 vm.push(value);
@@ -1396,28 +1309,7 @@ namespace swiftscript {
             const std::string& type_name = vm.chunk_->strings[type_name_idx];
             Value value = vm.peek(0);
 
-            bool is_valid = false;
-            if (value.is_object() && value.as_object()) {
-                Object* obj = value.as_object();
-
-                if (obj->type == ObjectType::Instance) {
-                    auto* inst = static_cast<InstanceObject*>(obj);
-                    ClassObject* klass = inst->klass;
-                    while (klass) {
-                        if (klass->name == type_name) {
-                            is_valid = true;
-                            break;
-                        }
-                        klass = klass->superclass;
-                    }
-                }
-                else if (obj->type == ObjectType::StructInstance) {
-                    auto* struct_inst = static_cast<StructInstanceObject*>(obj);
-                    if (struct_inst->struct_type && struct_inst->struct_type->name == type_name) {
-                        is_valid = true;
-                    }
-                }
-            }
+            bool is_valid = vm.matches_type(value, type_name);
 
             if (!is_valid) {
                 throw std::runtime_error("Forced cast (as!) failed: value is not of type '" + type_name + "'");

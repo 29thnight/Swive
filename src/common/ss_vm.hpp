@@ -194,6 +194,8 @@ namespace swiftscript {
         const std::string& read_string();
         size_t current_stack_base() const;
         bool is_truthy(const Value& value) const;
+        const TypeDef* resolve_type_def(const std::string& name) const;
+        bool matches_type(const Value& value, const std::string& type_name) const;
         Value get_property(const Value& object, const std::string& name);
         bool find_method_on_class(ClassObject* klass, const std::string& name, Value& out_method) const;
         std::optional<Value> call_operator_overload(const Value& left, const Value& right, const std::string& name);

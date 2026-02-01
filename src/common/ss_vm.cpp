@@ -476,6 +476,82 @@ namespace swiftscript {
         return true;
     }
 
+    const TypeDef* VM::resolve_type_def(const std::string& name) const {
+        if (!chunk_) {
+            return nullptr;
+        }
+        for (const auto& def : chunk_->type_definitions) {
+            if (def.name < chunk_->strings.size() && chunk_->strings[def.name] == name) {
+                return &def;
+            }
+        }
+        return nullptr;
+    }
+
+    bool VM::matches_type(const Value& value, const std::string& type_name) const {
+        if (type_name == "Int") {
+            return value.is_int();
+        }
+        if (type_name == "Float") {
+            return value.is_float();
+        }
+        if (type_name == "Bool") {
+            return value.is_bool();
+        }
+        if (type_name == "String") {
+            return value.is_object() && value.as_object() &&
+                value.as_object()->type == ObjectType::String;
+        }
+        if (type_name == "Array") {
+            return value.is_object() && value.as_object() &&
+                value.as_object()->type == ObjectType::List;
+        }
+        if (type_name == "Dictionary") {
+            return value.is_object() && value.as_object() &&
+                value.as_object()->type == ObjectType::Map;
+        }
+        if (type_name == "Void") {
+            return value.is_null();
+        }
+        if (type_name == "Any") {
+            return !value.is_null() && !value.is_undefined();
+        }
+
+        const TypeDef* type_def = resolve_type_def(type_name);
+        if (!type_def || !value.is_object() || !value.as_object()) {
+            return false;
+        }
+
+        auto has_flag = [](uint32_t flags, TypeFlags flag) {
+            return (flags & static_cast<uint32_t>(flag)) != 0;
+        };
+
+        Object* obj = value.as_object();
+        if (has_flag(type_def->flags, TypeFlags::Class) && obj->type == ObjectType::Instance) {
+            auto* inst = static_cast<InstanceObject*>(obj);
+            ClassObject* klass = inst->klass;
+            while (klass) {
+                if (klass->name == type_name) {
+                    return true;
+                }
+                klass = klass->superclass;
+            }
+            return false;
+        }
+
+        if (has_flag(type_def->flags, TypeFlags::Struct) && obj->type == ObjectType::StructInstance) {
+            auto* struct_inst = static_cast<StructInstanceObject*>(obj);
+            return struct_inst->struct_type && struct_inst->struct_type->name == type_name;
+        }
+
+        if (has_flag(type_def->flags, TypeFlags::Enum) && obj->type == ObjectType::EnumCase) {
+            auto* enum_case = static_cast<EnumCaseObject*>(obj);
+            return enum_case->enum_type && enum_case->enum_type->name == type_name;
+        }
+
+        return false;
+    }
+
     Value VM::get_property(const Value& object, const std::string& name) {
         if (!object.is_object()) {
             throw std::runtime_error("Attempted property access on non-object.");

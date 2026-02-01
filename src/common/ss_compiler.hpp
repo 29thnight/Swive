@@ -185,6 +185,8 @@ private:
 
     Assembly compile_function_body(const FuncDeclStmt& stmt);
     Assembly compile_struct_method_body(const StructMethodDecl& method, bool is_mutating);
+    std::shared_ptr<Assembly> finalize_function_chunk(Assembly&& chunk);
+    void populate_metadata_tables(const std::vector<StmtPtr>& program);
 
     // Helper classes
     class RecursionGuard {

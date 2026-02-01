@@ -68,6 +68,12 @@ void Assembly::patch_jump(size_t offset) {
 }
 
 const std::vector<uint8_t>& Assembly::bytecode() const {
+    if (!method_definitions.empty()) {
+        body_idx idx = method_definitions.front().body_ptr;
+        if (idx < method_bodies.size()) {
+            return method_bodies[idx].bytecode;
+        }
+    }
     if (!method_bodies.empty()) {
         return method_bodies.front().bytecode;
     }
@@ -75,6 +81,12 @@ const std::vector<uint8_t>& Assembly::bytecode() const {
 }
 
 const std::vector<uint32_t>& Assembly::line_info() const {
+    if (!method_definitions.empty()) {
+        body_idx idx = method_definitions.front().body_ptr;
+        if (idx < method_bodies.size()) {
+            return method_bodies[idx].line_info;
+        }
+    }
     if (!method_bodies.empty()) {
         return method_bodies.front().line_info;
     }

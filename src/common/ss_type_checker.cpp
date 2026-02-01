@@ -1148,8 +1148,12 @@ void TypeChecker::check_extension_decl(const ExtensionDeclStmt* stmt) {
         function_stack_.push_back(FunctionContext{return_type});
         check_block(method->body.get());
         function_stack_.pop_back();
+        exit_scope();
+        exit_generic_params();
+    }
+
     exit_scope();
-    exit_generic_params();
+    current_type_context_ = prev_context;
 }
 
 void TypeChecker::check_attributes(const std::vector<Attribute>& attributes, uint32_t line) {
@@ -1165,10 +1169,6 @@ void TypeChecker::check_attributes(const std::vector<Attribute>& attributes, uin
             warn("Deprecated attribute applied", attribute.line ? attribute.line : line);
         }
     }
-}
-
-    exit_scope();
-    current_type_context_ = prev_context;
 }
 
 void TypeChecker::check_do_catch_stmt(const DoCatchStmt* stmt) {

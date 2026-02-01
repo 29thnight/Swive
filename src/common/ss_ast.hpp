@@ -56,6 +56,7 @@ using StmtPtr = std::unique_ptr<Stmt>;
 
 enum class ExprKind {
     Literal,
+    InterpolatedString,
     Identifier,
     Unary,
     Binary,
@@ -113,6 +114,11 @@ struct LiteralExpr : Expr {
         copy->string_value = string_value;
         return copy;
     }
+};
+
+struct InterpolatedStringExpr : Expr {
+    std::vector<std::variant<std::string, ExprPtr>> parts;
+    InterpolatedStringExpr() : Expr(ExprKind::InterpolatedString) {}
 };
 
 struct IdentifierExpr : Expr {

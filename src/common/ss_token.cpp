@@ -12,8 +12,12 @@ bool Token::is_operator() const {
 }
 
 bool Token::is_literal() const {
-    return (type >= TokenType::Integer && type <= TokenType::Null) ||
-           type == TokenType::String;
+    return type == TokenType::Integer ||
+           type == TokenType::Float ||
+           type == TokenType::String ||
+           type == TokenType::True ||
+           type == TokenType::False ||
+           type == TokenType::Null;
 }
 
 std::string Token::to_string() const {
@@ -34,6 +38,11 @@ const char* TokenUtils::token_type_name(TokenType type) {
         "INTEGER",
         "FLOAT",
         "STRING",
+        "INTERPOLATED_STRING_START",
+        "STRING_SEGMENT",
+        "INTERPOLATED_STRING_END",
+        "INTERPOLATION_START",
+        "INTERPOLATION_END",
         "TRUE",
         "FALSE",
         "NULL",

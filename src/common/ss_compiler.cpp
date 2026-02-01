@@ -1154,6 +1154,9 @@ void Compiler::compile_expr(Expr* expr) {
         case ExprKind::Literal:
             visit(static_cast<LiteralExpr*>(expr));
             break;
+        case ExprKind::InterpolatedString:
+            visit(static_cast<InterpolatedStringExpr*>(expr));
+            break;
         case ExprKind::Identifier:
             visit(static_cast<IdentifierExpr*>(expr));
             break;
@@ -2194,6 +2197,34 @@ void Compiler::visit(LiteralExpr* expr) {
         emit_op(expr->value.as_bool() ? OpCode::OP_TRUE : OpCode::OP_FALSE, expr->line);
     } else {
         emit_constant(expr->value, expr->line);
+    }
+}
+
+void Compiler::visit(InterpolatedStringExpr* expr) {
+    if (expr->parts.empty()) {
+        emit_string("", expr->line);
+        return;
+    }
+
+    bool has_output = false;
+
+    for (const auto& part : expr->parts) {
+        if (std::holds_alternative<std::string>(part)) {
+            const auto& text = std::get<std::string>(part);
+            emit_string(text, expr->line);
+            if (has_output) {
+                emit_op(OpCode::OP_ADD, expr->line);
+            } else {
+                has_output = true;
+            }
+        } else {
+            if (!has_output) {
+                emit_string("", expr->line);
+                has_output = true;
+            }
+            compile_expr(std::get<ExprPtr>(part).get());
+            emit_op(OpCode::OP_ADD, expr->line);
+        }
     }
 }
 

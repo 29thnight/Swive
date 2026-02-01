@@ -57,6 +57,11 @@ Token Lexer::make_token(TokenType type) {
     return Token(type, lexeme, line_, token_column_, start_);
 }
 
+Token Lexer::make_token_at(TokenType type, uint32_t start, uint32_t end, uint32_t line, uint32_t column) {
+    std::string_view lexeme = source_.substr(start, end - start);
+    return Token(type, lexeme, line, column, start);
+}
+
 Token Lexer::error_token(const char* message) {
     return Token(TokenType::Error, std::string_view(message), line_, token_column_, start_);
 }
@@ -125,9 +130,41 @@ Token Lexer::scan_number() {
 }
 
 Token Lexer::scan_string() {
+    const bool allow_interpolation = !in_interpolation_;
+    const uint32_t string_start = start_;
+    const uint32_t string_line = line_;
+    const uint32_t string_column = token_column_;
+    uint32_t segment_start = current_;
+    uint32_t segment_line = line_;
+    uint32_t segment_column = column_;
+
     while (!is_at_end() && peek() != '"') {
+        if (allow_interpolation && peek() == '\\' && peek_next() == '(') {
+            const uint32_t interp_start = current_;
+            const uint32_t interp_line = line_;
+            const uint32_t interp_column = column_;
+            std::vector<Token> tokens;
+            tokens.push_back(make_token_at(TokenType::InterpolatedStringStart, string_start, string_start + 1, string_line, string_column));
+            if (segment_start < current_) {
+                tokens.push_back(make_token_at(TokenType::StringSegment, segment_start, current_, segment_line, segment_column));
+            }
+            advance(); // consume '\'
+            advance(); // consume '('
+            tokens.push_back(make_token_at(TokenType::InterpolationStart, interp_start, interp_start + 2, interp_line, interp_column));
+            in_interpolated_string_ = true;
+            in_interpolation_ = true;
+            interpolation_depth_ = 1;
+            pending_tokens_.insert(pending_tokens_.end(), tokens.begin() + 1, tokens.end());
+            return tokens.front();
+        }
         if (peek() == '\n') { line_++; column_ = 0; }
-        if (peek() == '\\') advance(); // escape sequence
+        if (peek() == '\\') {
+            advance(); // escape sequence
+            if (!is_at_end()) {
+                advance();
+            }
+            continue;
+        }
         advance();
     }
 
@@ -137,6 +174,55 @@ Token Lexer::scan_string() {
 
     advance(); // closing quote
     return make_token(TokenType::String);
+}
+
+Token Lexer::scan_interpolated_string_segment() {
+    uint32_t segment_start = current_;
+    uint32_t segment_line = line_;
+    uint32_t segment_column = column_;
+
+    while (!is_at_end() && peek() != '"') {
+        if (peek() == '\\' && peek_next() == '(') {
+            const uint32_t interp_start = current_;
+            const uint32_t interp_line = line_;
+            const uint32_t interp_column = column_;
+            advance(); // consume '\'
+            advance(); // consume '('
+            in_interpolation_ = true;
+            interpolation_depth_ = 1;
+            if (segment_start < interp_start) {
+                Token segment = make_token_at(TokenType::StringSegment, segment_start, interp_start, segment_line, segment_column);
+                pending_tokens_.push_back(make_token_at(TokenType::InterpolationStart, interp_start, interp_start + 2, interp_line, interp_column));
+                return segment;
+            }
+            return make_token_at(TokenType::InterpolationStart, interp_start, interp_start + 2, interp_line, interp_column);
+        }
+        if (peek() == '\n') { line_++; column_ = 0; }
+        if (peek() == '\\') {
+            advance();
+            if (!is_at_end()) {
+                advance();
+            }
+            continue;
+        }
+        advance();
+    }
+
+    if (is_at_end()) {
+        return error_token("Unterminated string");
+    }
+
+    const uint32_t quote_start = current_;
+    const uint32_t quote_line = line_;
+    const uint32_t quote_column = column_;
+    advance(); // closing quote
+    in_interpolated_string_ = false;
+    if (segment_start < quote_start) {
+        Token segment = make_token_at(TokenType::StringSegment, segment_start, quote_start, segment_line, segment_column);
+        pending_tokens_.push_back(make_token_at(TokenType::InterpolatedStringEnd, quote_start, quote_start + 1, quote_line, quote_column));
+        return segment;
+    }
+    return make_token_at(TokenType::InterpolatedStringEnd, quote_start, quote_start + 1, quote_line, quote_column);
 }
 
 Token Lexer::scan_identifier() {
@@ -150,6 +236,16 @@ Token Lexer::scan_identifier() {
 // ---- Main scan ----
 
 Token Lexer::next_token() {
+    if (!pending_tokens_.empty()) {
+        Token token = pending_tokens_.front();
+        pending_tokens_.erase(pending_tokens_.begin());
+        return token;
+    }
+
+    if (in_interpolated_string_ && !in_interpolation_) {
+        return scan_interpolated_string_segment();
+    }
+
     skip_whitespace();
 
     start_ = current_;
@@ -169,8 +265,20 @@ Token Lexer::next_token() {
 
     // Operators and delimiters
     switch (c) {
-        case '(': return make_token(TokenType::LeftParen);
-        case ')': return make_token(TokenType::RightParen);
+        case '(':
+            if (in_interpolation_) {
+                interpolation_depth_++;
+            }
+            return make_token(TokenType::LeftParen);
+        case ')':
+            if (in_interpolation_ && interpolation_depth_ > 0) {
+                interpolation_depth_--;
+                if (interpolation_depth_ == 0) {
+                    in_interpolation_ = false;
+                    return make_token(TokenType::InterpolationEnd);
+                }
+            }
+            return make_token(TokenType::RightParen);
         case '{': return make_token(TokenType::LeftBrace);
         case '}': return make_token(TokenType::RightBrace);
         case '[': return make_token(TokenType::LeftBracket);

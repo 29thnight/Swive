@@ -28,6 +28,7 @@ let parsed: Int = Int("123")
 let ratio: Float = Float("3.5")
 let flag: Bool = Bool("true")
 let text: String = String(10)
+let welcome = "Hello, \(s)! version \(i)"
 ```
 
 ### 2) 변수/상수 선언

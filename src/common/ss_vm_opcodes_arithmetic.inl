@@ -12,21 +12,30 @@ namespace swiftscript {
         static void execute(VM& vm) {
             Value b = vm.pop();
             Value a = vm.pop();
+            const bool a_is_string = a.is_object() && a.as_object() && a.as_object()->type == ObjectType::String;
+            const bool b_is_string = b.is_object() && b.as_object() && b.as_object()->type == ObjectType::String;
+            if (a_is_string || b_is_string) {
+                std::string combined = a.to_string();
+                combined += b.to_string();
+                auto* obj = vm.allocate_object<StringObject>(std::move(combined));
+                vm.push(Value::from_object(obj));
+                return;
+            }
             if (a.is_int() && b.is_int()) {
                 vm.push(Value::from_int(a.as_int() + b.as_int()));
+                return;
             }
-            else {
-                auto fa = a.try_as<Float>();
-                auto fb = b.try_as<Float>();
-                if (!fa || !fb) {
-                    if (auto overloaded = vm.call_operator_overload(a, b, "+")) {
-                        vm.push(*overloaded);
-                        return;
-                    }
-                    throw std::runtime_error("Operands must be numbers for addition.");
+
+            auto fa = a.try_as<Float>();
+            auto fb = b.try_as<Float>();
+            if (!fa || !fb) {
+                if (auto overloaded = vm.call_operator_overload(a, b, "+")) {
+                    vm.push(*overloaded);
+                    return;
                 }
-                vm.push(Value::from_float(*fa + *fb));
+                throw std::runtime_error("Operands must be numbers for addition.");
             }
+            vm.push(Value::from_float(*fa + *fb));
         }
     };
 

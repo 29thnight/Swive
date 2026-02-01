@@ -135,6 +135,7 @@ private:
                                uint32_t line);
 
     void visit(LiteralExpr* expr);
+    void visit(InterpolatedStringExpr* expr);
     void visit(IdentifierExpr* expr);
     void visit(UnaryExpr* expr);
     void visit(BinaryExpr* expr);

@@ -2226,6 +2226,30 @@ namespace swiftscript {
             return lit;
         }
 
+        // Interpolated string literal
+        if (match(TokenType::InterpolatedStringStart)) {
+            uint32_t line = previous().line;
+            auto interp = std::make_unique<InterpolatedStringExpr>();
+            interp->line = line;
+
+            while (!check(TokenType::InterpolatedStringEnd) && !is_at_end()) {
+                if (match(TokenType::StringSegment)) {
+                    interp->parts.emplace_back(std::string(previous().lexeme));
+                    continue;
+                }
+                if (match(TokenType::InterpolationStart)) {
+                    ExprPtr expr = expression();
+                    consume(TokenType::InterpolationEnd, "Expected ')' after interpolated expression.");
+                    interp->parts.emplace_back(std::move(expr));
+                    continue;
+                }
+                error(peek(), "Expected string segment or interpolation expression.");
+            }
+
+            consume(TokenType::InterpolatedStringEnd, "Expected end of interpolated string.");
+            return interp;
+        }
+
         // String literal — stored as lexeme without quotes
         if (match(TokenType::String)) {
             uint32_t line = previous().line;

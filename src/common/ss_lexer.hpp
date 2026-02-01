@@ -26,10 +26,12 @@ private:
     bool is_at_end() const;
 
     Token make_token(TokenType type);
+    Token make_token_at(TokenType type, uint32_t start, uint32_t end, uint32_t line, uint32_t column);
     Token error_token(const char* message);
 
     Token scan_number();
     Token scan_string();
+    Token scan_interpolated_string_segment();
     Token scan_identifier();
 
     void skip_whitespace();
@@ -37,6 +39,11 @@ private:
     static bool is_digit(char c);
     static bool is_alpha(char c);
     static bool is_alpha_numeric(char c);
+
+    std::vector<Token> pending_tokens_;
+    bool in_interpolated_string_{false};
+    bool in_interpolation_{false};
+    uint32_t interpolation_depth_{0};
 };
 
 } // namespace swiftscript

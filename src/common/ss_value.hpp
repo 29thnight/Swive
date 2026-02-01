@@ -10,7 +10,7 @@ using Float = double;
 using Bool = bool;
 
 class VM;
-struct Chunk;
+struct Assembly;
 
 // Value class - 16 bytes on 64-bit systems
 class Value {
@@ -219,7 +219,7 @@ public:
     std::vector<std::string> param_labels;
     std::vector<Value> param_defaults;
     std::vector<bool> param_has_default;
-    std::shared_ptr<Chunk> chunk;
+    std::shared_ptr<Assembly> chunk;
     bool is_initializer{false};
     bool is_override{false};
 
@@ -228,7 +228,7 @@ public:
                    std::vector<std::string> function_param_labels,
                    std::vector<Value> function_param_defaults,
                    std::vector<bool> function_param_has_default,
-                   std::shared_ptr<Chunk> function_chunk,
+                   std::shared_ptr<Assembly> function_chunk,
                    bool initializer,
                    bool override_flag = false);
 

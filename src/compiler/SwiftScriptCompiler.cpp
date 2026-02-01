@@ -36,7 +36,7 @@ inline int CompileProject(const SSProject& proj, const std::string& buildType, c
     compiler.set_base_directory(proj.project_dir.string());
     compiler.set_module_resolver(&resolver);
 
-    Chunk chunk = compiler.compile(program);
+    Assembly chunk = compiler.compile(program);
 
     for (const auto& v : chunk.constants) {
         if (v.type() == Value::Type::Object) {
@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-    // 컴파일: 소스 → AST → Chunk
+    // 컴파일: 소스 → AST → Assembly
     try 
     {
         return CompileProject(project, buildType, outputFile);

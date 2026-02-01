@@ -44,7 +44,7 @@ void Value::serialize(std::ostream& out) const
 
     case Type::Object:
         // Object* is a runtime address -> cannot be serialized safely
-        throw std::runtime_error("Value::serialize: Object type is not serializable in Chunk constants");
+        throw std::runtime_error("Value::serialize: Object type is not serializable in Assembly constants");
     }
 
     throw std::runtime_error("Value::serialize: unknown Value::Type");
@@ -84,7 +84,7 @@ Value Value::deserialize(std::istream& in)
     case Type::Object:
         // We wrote refType for forward-compat but still can't restore object graphs here.
         (void)ref;
-        throw std::runtime_error("Value::deserialize: Object type is not supported in Chunk constants");
+        throw std::runtime_error("Value::deserialize: Object type is not supported in Assembly constants");
     }
 
     throw std::runtime_error("Value::deserialize: unknown Value::Type");
@@ -222,7 +222,7 @@ FunctionObject::FunctionObject(std::string function_name,
                            std::vector<std::string> function_param_labels,
                            std::vector<Value> function_param_defaults,
                            std::vector<bool> function_param_has_default,
-                           std::shared_ptr<Chunk> function_chunk,
+                           std::shared_ptr<Assembly> function_chunk,
                            bool initializer,
                            bool override_flag)
 : Object(ObjectType::Function),

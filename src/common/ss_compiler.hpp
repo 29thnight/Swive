@@ -37,14 +37,14 @@ struct EntryMainInfo {
 
 class Compiler {
 public:
-    Chunk compile(const std::vector<StmtPtr>& program);
+    Assembly compile(const std::vector<StmtPtr>& program);
     
     // Set base directory for resolving relative import paths
     void set_base_directory(const std::string& dir) { base_directory_ = dir; }
     void set_module_resolver(IModuleResolver* r) { module_resolver_ = r; }
 
 private:
-    Chunk chunk_;
+    Assembly chunk_;
     std::string base_directory_;  // Base directory for resolving imports
     IModuleResolver* module_resolver_{nullptr};
     std::unordered_set<std::string> imported_modules_;  // Track imported modules to prevent duplicates
@@ -183,8 +183,8 @@ private:
 
     size_t identifier_constant(const std::string& name);
 
-    Chunk compile_function_body(const FuncDeclStmt& stmt);
-    Chunk compile_struct_method_body(const StructMethodDecl& method, bool is_mutating);
+    Assembly compile_function_body(const FuncDeclStmt& stmt);
+    Assembly compile_struct_method_body(const StructMethodDecl& method, bool is_mutating);
 
     // Helper classes
     class RecursionGuard {

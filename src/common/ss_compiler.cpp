@@ -16,7 +16,7 @@ namespace swiftscript {
 
 
 
-Chunk Compiler::compile(const std::vector<StmtPtr>& program) {
+Assembly Compiler::compile(const std::vector<StmtPtr>& program) {
 // Step 1: Specialize generics (currently just passes through)
 auto specialized_program = specialize_generics(program);
     
@@ -26,7 +26,7 @@ checker.set_base_directory(base_directory_);
 checker.set_module_resolver(module_resolver_);
 checker.check(specialized_program);
 
-chunk_ = Chunk{};
+chunk_ = Assembly{};
 locals_.clear();
 scope_depth_ = 0;
 recursion_depth_ = 0;
@@ -186,10 +186,10 @@ void Compiler::visit(ClassDeclStmt* stmt) {
             getter_proto.params.push_back("self");
             getter_proto.param_labels.push_back("");
             getter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
-            getter_proto.chunk = std::make_shared<Chunk>();
+            getter_proto.chunk = std::make_shared<Assembly>();
             
             Compiler getter_compiler;
-            getter_compiler.chunk_ = Chunk{};
+            getter_compiler.chunk_ = Assembly{};
             getter_compiler.locals_.clear();
             getter_compiler.scope_depth_ = 1;
             getter_compiler.recursion_depth_ = 0;
@@ -209,7 +209,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
             getter_compiler.emit_op(OpCode::OP_NIL, property->line);
             getter_compiler.emit_op(OpCode::OP_RETURN, property->line);
             
-            getter_proto.chunk = std::make_shared<Chunk>(std::move(getter_compiler.chunk_));
+            getter_proto.chunk = std::make_shared<Assembly>(std::move(getter_compiler.chunk_));
             size_t getter_idx = chunk_.add_function(std::move(getter_proto));
             
             // Compile setter (if present)
@@ -223,10 +223,10 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 setter_proto.param_labels.push_back("");
                 setter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
                 setter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
-                setter_proto.chunk = std::make_shared<Chunk>();
+                setter_proto.chunk = std::make_shared<Assembly>();
                 
                 Compiler setter_compiler;
-                setter_compiler.chunk_ = Chunk{};
+                setter_compiler.chunk_ = Assembly{};
                 setter_compiler.locals_.clear();
                 setter_compiler.scope_depth_ = 1;
                 setter_compiler.recursion_depth_ = 0;
@@ -249,7 +249,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 setter_compiler.emit_short(1, property->line);  // newValue is at local index 1
                 setter_compiler.emit_op(OpCode::OP_RETURN, property->line);
                 
-                setter_proto.chunk = std::make_shared<Chunk>(std::move(setter_compiler.chunk_));
+                setter_proto.chunk = std::make_shared<Assembly>(std::move(setter_compiler.chunk_));
                 setter_idx = chunk_.add_function(std::move(setter_proto));
             }
             
@@ -284,7 +284,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
 
                 Compiler will_set_compiler;
                 will_set_compiler.enclosing_ = this;
-                will_set_compiler.chunk_ = Chunk{};
+                will_set_compiler.chunk_ = Assembly{};
                 will_set_compiler.locals_.clear();
                 will_set_compiler.scope_depth_ = 1;
                 will_set_compiler.recursion_depth_ = 0;
@@ -305,7 +305,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 will_set_compiler.emit_op(OpCode::OP_NIL, property->line);
                 will_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
-                will_set_proto.chunk = std::make_shared<Chunk>(std::move(will_set_compiler.chunk_));
+                will_set_proto.chunk = std::make_shared<Assembly>(std::move(will_set_compiler.chunk_));
                 will_set_idx = chunk_.add_function(std::move(will_set_proto));
             }
 
@@ -322,7 +322,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
 
                 Compiler did_set_compiler;
                 did_set_compiler.enclosing_ = this;
-                did_set_compiler.chunk_ = Chunk{};
+                did_set_compiler.chunk_ = Assembly{};
                 did_set_compiler.locals_.clear();
                 did_set_compiler.scope_depth_ = 1;
                 did_set_compiler.recursion_depth_ = 0;
@@ -343,7 +343,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 did_set_compiler.emit_op(OpCode::OP_NIL, property->line);
                 did_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
-                did_set_proto.chunk = std::make_shared<Chunk>(std::move(did_set_compiler.chunk_));
+                did_set_proto.chunk = std::make_shared<Assembly>(std::move(did_set_compiler.chunk_));
                 did_set_idx = chunk_.add_function(std::move(did_set_proto));
             }
 
@@ -414,7 +414,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
 
         Compiler method_compiler;
         method_compiler.enclosing_ = this;
-        method_compiler.chunk_ = Chunk{};
+        method_compiler.chunk_ = Assembly{};
         method_compiler.locals_.clear();
         method_compiler.scope_depth_ = 1;
         method_compiler.recursion_depth_ = 0;
@@ -444,7 +444,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         method_compiler.emit_op(OpCode::OP_NIL, method->line);
         method_compiler.emit_op(OpCode::OP_RETURN, method->line);
 
-        proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+        proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -477,7 +477,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
 
         Compiler deinit_compiler;
         deinit_compiler.enclosing_ = this;
-        deinit_compiler.chunk_ = Chunk{};
+        deinit_compiler.chunk_ = Assembly{};
         deinit_compiler.locals_.clear();
         deinit_compiler.scope_depth_ = 1;
         deinit_compiler.recursion_depth_ = 0;
@@ -496,7 +496,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         deinit_compiler.emit_op(OpCode::OP_NIL, stmt->line);
         deinit_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-        proto.chunk = std::make_shared<Chunk>(std::move(deinit_compiler.chunk_));
+        proto.chunk = std::make_shared<Assembly>(std::move(deinit_compiler.chunk_));
         proto.upvalues.reserve(deinit_compiler.upvalues_.size());
         for (const auto& uv : deinit_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -592,7 +592,7 @@ if (scope_depth_ > 0) {
 
                 Compiler will_set_compiler;
                 will_set_compiler.enclosing_ = this;
-                will_set_compiler.chunk_ = Chunk{};
+                will_set_compiler.chunk_ = Assembly{};
                 will_set_compiler.locals_.clear();
                 will_set_compiler.scope_depth_ = 1;
                 will_set_compiler.recursion_depth_ = 0;
@@ -613,7 +613,7 @@ if (scope_depth_ > 0) {
                 will_set_compiler.emit_op(OpCode::OP_NIL, property->line);
                 will_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
-                will_set_proto.chunk = std::make_shared<Chunk>(std::move(will_set_compiler.chunk_));
+                will_set_proto.chunk = std::make_shared<Assembly>(std::move(will_set_compiler.chunk_));
                 will_set_idx = chunk_.add_function(std::move(will_set_proto));
             }
 
@@ -630,7 +630,7 @@ if (scope_depth_ > 0) {
 
                 Compiler did_set_compiler;
                 did_set_compiler.enclosing_ = this;
-                did_set_compiler.chunk_ = Chunk{};
+                did_set_compiler.chunk_ = Assembly{};
                 did_set_compiler.locals_.clear();
                 did_set_compiler.scope_depth_ = 1;
                 did_set_compiler.recursion_depth_ = 0;
@@ -651,7 +651,7 @@ if (scope_depth_ > 0) {
                 did_set_compiler.emit_op(OpCode::OP_NIL, property->line);
                 did_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
-                did_set_proto.chunk = std::make_shared<Chunk>(std::move(did_set_compiler.chunk_));
+                did_set_proto.chunk = std::make_shared<Assembly>(std::move(did_set_compiler.chunk_));
                 did_set_idx = chunk_.add_function(std::move(did_set_proto));
             }
 
@@ -729,7 +729,7 @@ if (scope_depth_ > 0) {
 
             Compiler method_compiler;
             method_compiler.enclosing_ = this;
-            method_compiler.chunk_ = Chunk{};
+            method_compiler.chunk_ = Assembly{};
             method_compiler.locals_.clear();
             method_compiler.scope_depth_ = 1;
             method_compiler.recursion_depth_ = 0;
@@ -749,7 +749,7 @@ if (scope_depth_ > 0) {
             method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-            proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+            proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
             proto.upvalues.reserve(method_compiler.upvalues_.size());
             for (const auto& uv : method_compiler.upvalues_) {
                 proto.upvalues.push_back({uv.index, uv.is_local});
@@ -794,7 +794,7 @@ if (scope_depth_ > 0) {
 
         Compiler method_compiler;
         method_compiler.enclosing_ = this;
-        method_compiler.chunk_ = Chunk{};
+        method_compiler.chunk_ = Assembly{};
         method_compiler.locals_.clear();
         method_compiler.scope_depth_ = 1;
         method_compiler.recursion_depth_ = 0;
@@ -821,7 +821,7 @@ if (scope_depth_ > 0) {
         method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
         method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-        proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+        proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -867,7 +867,7 @@ if (scope_depth_ > 0) {
 
         Compiler init_compiler;
         init_compiler.enclosing_ = this;
-        init_compiler.chunk_ = Chunk{};
+        init_compiler.chunk_ = Assembly{};
         init_compiler.locals_.clear();
         init_compiler.scope_depth_ = 1;
         init_compiler.recursion_depth_ = 0;
@@ -894,7 +894,7 @@ if (scope_depth_ > 0) {
         init_compiler.emit_op(OpCode::OP_NIL, init_method->line);
         init_compiler.emit_op(OpCode::OP_RETURN, init_method->line);
 
-        proto.chunk = std::make_shared<Chunk>(std::move(init_compiler.chunk_));
+        proto.chunk = std::make_shared<Assembly>(std::move(init_compiler.chunk_));
         proto.upvalues.reserve(init_compiler.upvalues_.size());
         for (const auto& uv : init_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1000,7 +1000,7 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         
         Compiler getter_compiler;
         getter_compiler.enclosing_ = this;
-        getter_compiler.chunk_ = Chunk{};
+        getter_compiler.chunk_ = Assembly{};
         getter_compiler.locals_.clear();
         getter_compiler.scope_depth_ = 1;
         getter_compiler.recursion_depth_ = 0;
@@ -1022,7 +1022,7 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         getter_compiler.emit_op(OpCode::OP_NIL, stmt->line);
         getter_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
         
-        getter_proto.chunk = std::make_shared<Chunk>(std::move(getter_compiler.chunk_));
+        getter_proto.chunk = std::make_shared<Assembly>(std::move(getter_compiler.chunk_));
         getter_proto.upvalues.reserve(getter_compiler.upvalues_.size());
         for (const auto& uv : getter_compiler.upvalues_) {
             getter_proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1063,7 +1063,7 @@ void Compiler::visit(EnumDeclStmt* stmt) {
 
         Compiler method_compiler;
         method_compiler.enclosing_ = this;
-        method_compiler.chunk_ = Chunk{};
+        method_compiler.chunk_ = Assembly{};
         method_compiler.locals_.clear();
         method_compiler.scope_depth_ = 1;
         method_compiler.recursion_depth_ = 0;
@@ -1088,7 +1088,7 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
         method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-        proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+        proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1977,7 +1977,7 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
             
-            getter_proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+            getter_proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
             size_t func_idx = chunk_.add_function(std::move(getter_proto));
             
             // Emit OP_DEFINE_COMPUTED_PROPERTY with indices
@@ -2031,7 +2031,7 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             method_compiler.emit_op(OpCode::OP_NIL, stmt->line);
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-            func_proto.chunk = std::make_shared<Chunk>(std::move(method_compiler.chunk_));
+            func_proto.chunk = std::make_shared<Assembly>(std::move(method_compiler.chunk_));
             size_t func_idx = chunk_.add_function(std::move(func_proto));
 
             emit_op(OpCode::OP_FUNCTION, stmt->line);
@@ -2105,7 +2105,7 @@ void Compiler::visit(FuncDeclStmt* stmt) {
 
     Compiler function_compiler;
     function_compiler.enclosing_ = this;
-    function_compiler.chunk_ = Chunk{};
+    function_compiler.chunk_ = Assembly{};
     function_compiler.locals_.clear();
     function_compiler.scope_depth_ = 1;
     function_compiler.recursion_depth_ = 0;
@@ -2124,7 +2124,7 @@ void Compiler::visit(FuncDeclStmt* stmt) {
     function_compiler.emit_op(OpCode::OP_NIL, stmt->line);
     function_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
-    proto.chunk = std::make_shared<Chunk>(std::move(function_compiler.chunk_));
+    proto.chunk = std::make_shared<Assembly>(std::move(function_compiler.chunk_));
     proto.upvalues.reserve(function_compiler.upvalues_.size());
     for (const auto& uv : function_compiler.upvalues_) {
         proto.upvalues.push_back({uv.index, uv.is_local});
@@ -2680,7 +2680,7 @@ void Compiler::visit(ClosureExpr* expr) {
 
     Compiler closure_compiler;
     closure_compiler.enclosing_ = this;
-    closure_compiler.chunk_ = Chunk{};
+    closure_compiler.chunk_ = Assembly{};
     closure_compiler.locals_.clear();
     closure_compiler.scope_depth_ = 1;
     closure_compiler.recursion_depth_ = 0;
@@ -2697,7 +2697,7 @@ void Compiler::visit(ClosureExpr* expr) {
     closure_compiler.emit_op(OpCode::OP_NIL, expr->line);
     closure_compiler.emit_op(OpCode::OP_RETURN, expr->line);
 
-    proto.chunk = std::make_shared<Chunk>(std::move(closure_compiler.chunk_));
+    proto.chunk = std::make_shared<Assembly>(std::move(closure_compiler.chunk_));
     proto.upvalues.reserve(closure_compiler.upvalues_.size());
     for (const auto& uv : closure_compiler.upvalues_) {
         proto.upvalues.push_back({uv.index, uv.is_local});
@@ -3062,9 +3062,9 @@ size_t Compiler::identifier_constant(const std::string& name) {
     return chunk_.add_string(name);
 }
 
-Chunk Compiler::compile_function_body(const FuncDeclStmt& stmt) {
+Assembly Compiler::compile_function_body(const FuncDeclStmt& stmt) {
     Compiler function_compiler;
-    function_compiler.chunk_ = Chunk{};
+    function_compiler.chunk_ = Assembly{};
     function_compiler.locals_.clear();
     function_compiler.scope_depth_ = 1;
     function_compiler.recursion_depth_ = 0;
@@ -3085,9 +3085,9 @@ Chunk Compiler::compile_function_body(const FuncDeclStmt& stmt) {
     return std::move(function_compiler.chunk_);
 }
 
-Chunk Compiler::compile_struct_method_body(const StructMethodDecl& method, bool is_mutating) {
+Assembly Compiler::compile_struct_method_body(const StructMethodDecl& method, bool is_mutating) {
     Compiler method_compiler;
-    method_compiler.chunk_ = Chunk{};
+    method_compiler.chunk_ = Assembly{};
     method_compiler.locals_.clear();
     method_compiler.scope_depth_ = 1;
     method_compiler.recursion_depth_ = 0;

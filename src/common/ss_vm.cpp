@@ -242,7 +242,7 @@ namespace swiftscript {
         if (!func || !func->chunk) return;
 
         // Save current execution state
-        const Chunk* saved_chunk = chunk_;
+        const Assembly* saved_chunk = chunk_;
         size_t saved_ip = ip_;
         size_t saved_stack_size = stack_.size();
         size_t saved_frames = call_frames_.size();
@@ -346,11 +346,11 @@ namespace swiftscript {
         Parser parser(std::move(tokens));
         auto program = parser.parse();
         Compiler compiler;
-        Chunk chunk = compiler.compile(program);
+        Assembly chunk = compiler.compile(program);
         return execute(chunk);
     }
 
-    Value VM::execute(const Chunk& chunk) {
+    Value VM::execute(const Assembly& chunk) {
         chunk_ = &chunk;
         ip_ = 0;
         stack_.clear();
@@ -948,7 +948,7 @@ namespace swiftscript {
         }
         
         // Save current execution state
-        const Chunk* saved_chunk = chunk_;
+        const Assembly* saved_chunk = chunk_;
         size_t saved_ip = ip_;
         
         // Push function and arguments onto stack

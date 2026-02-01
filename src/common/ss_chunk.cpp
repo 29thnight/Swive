@@ -3,21 +3,21 @@
 
 namespace swiftscript {
 
-void Chunk::write(uint8_t byte, uint32_t line) {
+void Assembly::write(uint8_t byte, uint32_t line) {
     code.push_back(byte);
     lines.push_back(line);
 }
 
-void Chunk::write_op(OpCode op, uint32_t line) {
+void Assembly::write_op(OpCode op, uint32_t line) {
     write(static_cast<uint8_t>(op), line);
 }
 
-size_t Chunk::add_constant(Value value) {
+size_t Assembly::add_constant(Value value) {
     constants.push_back(value);
     return constants.size() - 1;
 }
 
-size_t Chunk::add_string(const std::string& str) {
+size_t Assembly::add_string(const std::string& str) {
     // �̹� �����ϴ� ���ڿ����� Ȯ��
     for (size_t i = 0; i < strings.size(); ++i) {
         if (strings[i] == str) {
@@ -28,17 +28,17 @@ size_t Chunk::add_string(const std::string& str) {
     return strings.size() - 1;
 }
 
-size_t Chunk::add_function(FunctionPrototype proto) {
+size_t Assembly::add_function(FunctionPrototype proto) {
     functions.push_back(std::move(proto));
     return functions.size() - 1;
 }
 
-size_t Chunk::add_protocol(std::shared_ptr<Protocol> protocol) {
+size_t Assembly::add_protocol(std::shared_ptr<Protocol> protocol) {
     protocols.push_back(std::move(protocol));
     return protocols.size() - 1;
 }
 
-size_t Chunk::emit_jump(OpCode op, uint32_t line) {
+size_t Assembly::emit_jump(OpCode op, uint32_t line) {
     write_op(op, line);
     // �÷��̽�Ȧ���� 0xFFFF �ۼ�
     write(0xFF, line);
@@ -46,7 +46,7 @@ size_t Chunk::emit_jump(OpCode op, uint32_t line) {
     return code.size() - 2;
 }
 
-void Chunk::patch_jump(size_t offset) {
+void Assembly::patch_jump(size_t offset) {
     // ���� ���ɾ� ���ĺ��� ���� ��ġ������ �Ÿ� ���
     size_t jump = code.size() - offset - 2;
     
@@ -58,14 +58,14 @@ void Chunk::patch_jump(size_t offset) {
     code[offset + 1] = jump & 0xFF;
 }
 
-void Chunk::disassemble(const std::string& name) const {
+void Assembly::disassemble(const std::string& name) const {
     std::cout << "== " << name << " ==\n";
     for (size_t offset = 0; offset < code.size();) {
         offset = disassemble_instruction(offset);
     }
 }
 
-size_t Chunk::disassemble_instruction(size_t offset) const {
+size_t Assembly::disassemble_instruction(size_t offset) const {
     std::cout << std::setw(4) << std::setfill('0') << offset << " ";
     
     if (offset > 0 && lines[offset] == lines[offset - 1]) {
@@ -231,12 +231,12 @@ size_t Chunk::disassemble_instruction(size_t offset) const {
     }
 }
 
-size_t Chunk::simple_instruction(const char* name, size_t offset) const {
+size_t Assembly::simple_instruction(const char* name, size_t offset) const {
     std::cout << name << "\n";
     return offset + 1;
 }
 
-size_t Chunk::constant_instruction(const char* name, size_t offset) const {
+size_t Assembly::constant_instruction(const char* name, size_t offset) const {
     uint16_t constant = (code[offset + 1] << 8) | code[offset + 2];
     std::cout << std::setw(16) << std::left << name << " " 
               << std::setw(4) << constant << " '";
@@ -260,7 +260,7 @@ size_t Chunk::constant_instruction(const char* name, size_t offset) const {
     return offset + 3;
 }
 
-size_t Chunk::string_instruction(const char* name, size_t offset) const {
+size_t Assembly::string_instruction(const char* name, size_t offset) const {
     uint16_t str_idx = (code[offset + 1] << 8) | code[offset + 2];
     std::cout << std::setw(16) << std::left << name << " " 
               << std::setw(4) << str_idx << " '";
@@ -273,13 +273,13 @@ size_t Chunk::string_instruction(const char* name, size_t offset) const {
     return offset + 3;
 }
 
-size_t Chunk::short_instruction(const char* name, size_t offset) const {
+size_t Assembly::short_instruction(const char* name, size_t offset) const {
     uint16_t value = (code[offset + 1] << 8) | code[offset + 2];
     std::cout << std::setw(16) << std::left << name << " " << value << "\n";
     return offset + 3;
 }
 
-size_t Chunk::jump_instruction(const char* name, int sign, size_t offset) const {
+size_t Assembly::jump_instruction(const char* name, int sign, size_t offset) const {
     uint16_t jump = (code[offset + 1] << 8) | code[offset + 2];
     std::cout << std::setw(16) << std::left << name << " " 
               << std::setw(4) << offset << " -> " 
@@ -287,7 +287,7 @@ size_t Chunk::jump_instruction(const char* name, int sign, size_t offset) const 
     return offset + 3;
 }
 
-size_t Chunk::property_instruction(const char* name, size_t offset) const {
+size_t Assembly::property_instruction(const char* name, size_t offset) const {
     uint16_t str_idx = (code[offset + 1] << 8) | code[offset + 2];
     uint8_t flags = code[offset + 3];
     bool is_let = (flags & 0x1) != 0;
@@ -297,11 +297,11 @@ size_t Chunk::property_instruction(const char* name, size_t offset) const {
     return offset + 4;
 }
 
-void Chunk::serialize(std::ostream& out) const
+void Assembly::serialize(std::ostream& out) const
 {
     // Header
-    ChunkFileHeader h{};
-    h.magic = kMagicSSCH;
+    AssemblyFileHeader h{};
+    h.magic = kMagicSSAS;
     h.verMajor = kVerMajor;
     h.verMinor = kVerMinor;
     WritePOD(out, h);
@@ -414,16 +414,16 @@ void Chunk::serialize(std::ostream& out) const
     }
 }
 
-Chunk Chunk::deserialize(std::istream& in)
+Assembly Assembly::deserialize(std::istream& in)
 {
     // Header validate
-    auto h = ReadPOD<ChunkFileHeader>(in);
-    if (h.magic != kMagicSSCH)
-        throw std::runtime_error("Chunk::deserialize bad magic");
+    auto h = ReadPOD<AssemblyFileHeader>(in);
+    if (h.magic != kMagicSSAS)
+        throw std::runtime_error("Assembly::deserialize bad magic");
     if (h.verMajor != kVerMajor)
-        throw std::runtime_error("Chunk::deserialize version mismatch");
+        throw std::runtime_error("Assembly::deserialize version mismatch");
 
-    Chunk c{};
+    Assembly c{};
     c.code = ReadVectorPOD<uint8_t>(in);
     c.lines = ReadVectorPOD<uint32_t>(in);
 
@@ -491,10 +491,10 @@ Chunk Chunk::deserialize(std::istream& in)
             fn.is_initializer = ReadPOD<uint8_t>(in) != 0;
             fn.is_override = ReadPOD<uint8_t>(in) != 0;
 
-            bool hasChunk = ReadPOD<uint8_t>(in) != 0;
-            if (hasChunk)
+            bool hasAssembly = ReadPOD<uint8_t>(in) != 0;
+            if (hasAssembly)
             {
-                fn.chunk = std::make_shared<Chunk>(Chunk::deserialize(in));
+                fn.chunk = std::make_shared<Assembly>(Assembly::deserialize(in));
             }
 
             c.functions.push_back(std::move(fn));

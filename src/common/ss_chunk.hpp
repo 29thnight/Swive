@@ -5,7 +5,7 @@
 
 namespace swiftscript {
 
-struct Chunk;
+struct Assembly;
 
 // Upvalue descriptor for compilation
 struct UpvalueInfo {
@@ -23,7 +23,7 @@ struct FunctionPrototype {
         std::optional<std::string> string_value;
     };
     std::vector<ParamDefaultValue> param_defaults;
-    std::shared_ptr<Chunk> chunk;
+    std::shared_ptr<Assembly> chunk;
     std::vector<UpvalueInfo> upvalues;  // Captured variables info
     bool is_initializer{false};
     bool is_override{false};
@@ -51,8 +51,8 @@ struct Protocol {
     std::vector<std::string> inherited_protocols;
 };
 
-    // Bytecode chunk
-    struct Chunk {
+    // Bytecode assembly
+    struct Assembly {
         std::vector<uint8_t> code;
         std::vector<uint32_t> lines;
         std::vector<Value> constants;
@@ -75,7 +75,7 @@ struct Protocol {
         size_t disassemble_instruction(size_t offset) const;
 
 		void serialize(std::ostream& out) const;
-		static Chunk deserialize(std::istream& in);
+		static Assembly deserialize(std::istream& in);
 
     private:
         size_t simple_instruction(const char* name, size_t offset) const;
@@ -99,7 +99,7 @@ namespace swiftscript {
         {
             static_assert(std::is_trivially_copyable_v<T>);
             out.write(reinterpret_cast<const char*>(&v), sizeof(T));
-            if (!out) throw std::runtime_error("Chunk::serialize write failed");
+            if (!out) throw std::runtime_error("Assembly::serialize write failed");
         }
 
         template<class T>
@@ -108,20 +108,20 @@ namespace swiftscript {
             static_assert(std::is_trivially_copyable_v<T>);
             T v{};
             in.read(reinterpret_cast<char*>(&v), sizeof(T));
-            if (!in) throw std::runtime_error("Chunk::deserialize read failed");
+            if (!in) throw std::runtime_error("Assembly::deserialize read failed");
             return v;
         }
 
         void WriteBytes(std::ostream& out, const void* data, size_t size)
         {
             out.write(reinterpret_cast<const char*>(data), (std::streamsize)size);
-            if (!out) throw std::runtime_error("Chunk::serialize write bytes failed");
+            if (!out) throw std::runtime_error("Assembly::serialize write bytes failed");
         }
 
         void ReadBytes(std::istream& in, void* data, size_t size)
         {
             in.read(reinterpret_cast<char*>(data), (std::streamsize)size);
-            if (!in) throw std::runtime_error("Chunk::deserialize read bytes failed");
+            if (!in) throw std::runtime_error("Assembly::deserialize read bytes failed");
         }
 
         void WriteString(std::ostream& out, const std::string& s)
@@ -161,14 +161,14 @@ namespace swiftscript {
         }
 
         // ---- file header ----
-        struct ChunkFileHeader
+        struct AssemblyFileHeader
         {
-            uint32_t magic;      // 'SSCH'
+            uint32_t magic;      // 'SSAS'
             uint16_t verMajor;   // 1
             uint16_t verMinor;   // 0
         };
 
-        constexpr uint32_t kMagicSSCH = 0x48435353; // 'SSCH' little-endian
+        constexpr uint32_t kMagicSSAS = 0x53415353; // 'SSAS' little-endian
         constexpr uint16_t kVerMajor = 1;
         constexpr uint16_t kVerMinor = 0;
     }

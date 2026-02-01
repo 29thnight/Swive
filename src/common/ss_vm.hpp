@@ -46,7 +46,7 @@ namespace swiftscript {
         // Execution state
         std::vector<Value> stack_;
         std::vector<CallFrame> call_frames_;
-        const Chunk* chunk_{ nullptr };
+        const Assembly* chunk_{ nullptr };
         size_t ip_{ 0 };
         UpvalueObject* open_upvalues_{ nullptr };
 
@@ -99,7 +99,7 @@ namespace swiftscript {
         void collect_if_needed();
         void record_rc_operation();
         Value interpret(const std::string& source);
-        Value execute(const Chunk& chunk);
+        Value execute(const Assembly& chunk);
 
         // Statistics
         const MemoryStats& get_stats() const { return stats_; }
@@ -111,10 +111,10 @@ namespace swiftscript {
 
         friend class RC;
 
-        // °øÅë: Value callee(Function/Closure)¸¦ ºĞ¼®ÇØ¼­ È£Ãâ ÇÁ·¹ÀÓÀ» ¼³Á¤ÇÑ´Ù.
-        // - self Æ÷ÇÔ ÀÎÀÚµéÀº È£ÃâÀÚ°¡ stack¿¡ push ¿Ï·áÇÑ »óÅÂ¿©¾ß ÇÔ.
-        // - base_slot: CallFrameÀÌ °¡¸®Å³ Ã¹ ¹øÂ° ÀÎÀÚ ½½·Ô(º¸Åë callee_index + 1)
-        // - return: ¼º°øÇÏ¸é true, ¾Æ´Ï¸é ¿¹¿Ü
+        // ê³µí†µ: Value callee(Function/Closure)ë¥¼ ë¶„ì„í•´ì„œ í˜¸ì¶œ í”„ë ˆì„ì„ ì„¤ì •í•œë‹¤.
+        // - self í¬í•¨ ì¸ìë“¤ì€ í˜¸ì¶œìê°€ stackì— push ì™„ë£Œí•œ ìƒíƒœì—¬ì•¼ í•¨.
+        // - base_slot: CallFrameì´ ê°€ë¦¬í‚¬ ì²« ë²ˆì§¸ ì¸ì ìŠ¬ë¡¯(ë³´í†µ callee_index + 1)
+        // - return: ì„±ê³µí•˜ë©´ true, ì•„ë‹ˆë©´ ì˜ˆì™¸
         static inline bool InvokeCallableWithPreparedStack(
             VM& vm,
             const Value& callee,
@@ -155,7 +155,7 @@ namespace swiftscript {
             return true;
         }
 
-        // computed getter: stack¿¡ [getter, self]¸¦ pushÇÏ°í È£Ãâ ÇÁ·¹ÀÓ ±¸¼º
+        // computed getter: stackì— [getter, self]ë¥¼ pushí•˜ê³  í˜¸ì¶œ í”„ë ˆì„ êµ¬ì„±
         static inline bool TryInvokeComputedGetter(VM& vm, const Value& getter, const Value& self) {
             vm.push(getter);
             vm.push(self);
@@ -170,7 +170,7 @@ namespace swiftscript {
             );
         }
 
-        // computed setter: stack¿¡ [setter, self, value]¸¦ pushÇÏ°í È£Ãâ ÇÁ·¹ÀÓ ±¸¼º
+        // computed setter: stackì— [setter, self, value]ë¥¼ pushí•˜ê³  í˜¸ì¶œ í”„ë ˆì„ êµ¬ì„±
         static inline bool TryInvokeComputedSetter(VM& vm, const Value& setter, const Value& self, const Value& value) {
             vm.push(setter);
             vm.push(self);
@@ -224,14 +224,14 @@ namespace swiftscript {
     public:
         size_t stack_base;      // Base of this frame's stack
         size_t return_address;  // Where to return after call
-        const Chunk* chunk;
+        const Assembly* chunk;
         std::string function_name;
         ClosureObject* closure; // Current closure for upvalue access (nullptr for plain functions)
         bool is_initializer;
         bool is_mutating;       // True if this is a mutating struct method
         size_t receiver_index;  // Stack index of the receiver (for mutating methods)
 
-        CallFrame(size_t base, size_t ret_addr, const Chunk* call_chunk, std::string name, ClosureObject* c, bool initializer, bool mutating = false, size_t recv_idx = 0)
+        CallFrame(size_t base, size_t ret_addr, const Assembly* call_chunk, std::string name, ClosureObject* c, bool initializer, bool mutating = false, size_t recv_idx = 0)
             : stack_base(base),
               return_address(ret_addr),
               chunk(call_chunk),

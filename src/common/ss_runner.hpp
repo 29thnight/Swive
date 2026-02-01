@@ -31,7 +31,7 @@ inline Value RunProject(VM& vm, const SSProject& proj) {
     compiler.set_base_directory(proj.project_dir.string());
     compiler.set_module_resolver(&resolver);
 
-    Chunk chunk = compiler.compile(program);
+    Assembly chunk = compiler.compile(program);
     return vm.execute(chunk);
 }
 

@@ -38,7 +38,7 @@ inline int CompileProject(const SSProject& proj, const std::string& buildType, c
 
     Assembly chunk = compiler.compile(program);
 
-    for (const auto& v : chunk.constants) {
+    for (const auto& v : chunk.constant_pool()) {
         if (v.type() == Value::Type::Object) {
             std::cerr << "Object constant detected in constants pool!\n";
 			return COMPILE_CODE::ERROR;

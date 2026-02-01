@@ -14,6 +14,7 @@ void Assembly::write_op(OpCode op, uint32_t line) {
 
 size_t Assembly::add_constant(Value value) {
     constants.push_back(value);
+    global_constant_pool.push_back(constants.back());
     return constants.size() - 1;
 }
 
@@ -58,23 +59,48 @@ void Assembly::patch_jump(size_t offset) {
     code[offset + 1] = jump & 0xFF;
 }
 
+const std::vector<uint8_t>& Assembly::bytecode() const {
+    if (!method_bodies.empty() && !method_bodies.front().bytecode.empty()) {
+        return method_bodies.front().bytecode;
+    }
+    return code;
+}
+
+const std::vector<uint32_t>& Assembly::line_info() const {
+    if (!method_bodies.empty() && !method_bodies.front().line_info.empty()) {
+        return method_bodies.front().line_info;
+    }
+    return lines;
+}
+
+const std::vector<Value>& Assembly::constant_pool() const {
+    if (!global_constant_pool.empty()) {
+        return global_constant_pool;
+    }
+    return constants;
+}
+
 void Assembly::disassemble(const std::string& name) const {
     std::cout << "== " << name << " ==\n";
-    for (size_t offset = 0; offset < code.size();) {
+    const auto& code_view = bytecode();
+    for (size_t offset = 0; offset < code_view.size();) {
         offset = disassemble_instruction(offset);
     }
 }
 
 size_t Assembly::disassemble_instruction(size_t offset) const {
+    const auto& code_view = bytecode();
+    const auto& line_view = line_info();
     std::cout << std::setw(4) << std::setfill('0') << offset << " ";
     
-    if (offset > 0 && lines[offset] == lines[offset - 1]) {
+    if (offset > 0 && offset < line_view.size() && line_view[offset] == line_view[offset - 1]) {
         std::cout << "   | ";
     } else {
-        std::cout << std::setw(4) << lines[offset] << " ";
+        const uint32_t line = offset < line_view.size() ? line_view[offset] : 0;
+        std::cout << std::setw(4) << line << " ";
     }
     
-    OpCode instruction = static_cast<OpCode>(code[offset]);
+    OpCode instruction = static_cast<OpCode>(code_view[offset]);
     
     switch (instruction) {
         case OpCode::OP_CONSTANT:
@@ -150,7 +176,7 @@ size_t Assembly::disassemble_instruction(size_t offset) const {
         case OpCode::OP_CALL:
             return short_instruction("OP_CALL", offset);
         case OpCode::OP_CALL_NAMED: {
-            uint16_t arg_count = (code[offset + 1] << 8) | code[offset + 2];
+            uint16_t arg_count = (code_view[offset + 1] << 8) | code_view[offset + 2];
             std::cout << std::setw(16) << std::left << "OP_CALL_NAMED" << " "
                       << std::setw(4) << arg_count << "\n";
             return offset + 3 + arg_count * 2;
@@ -196,8 +222,8 @@ size_t Assembly::disassemble_instruction(size_t offset) const {
         case OpCode::OP_STRUCT:
             return string_instruction("OP_STRUCT", offset);
         case OpCode::OP_STRUCT_METHOD: {
-            uint16_t str_idx = (code[offset + 1] << 8) | code[offset + 2];
-            uint8_t is_mutating = code[offset + 3];
+            uint16_t str_idx = (code_view[offset + 1] << 8) | code_view[offset + 2];
+            uint8_t is_mutating = code_view[offset + 3];
             std::cout << std::setw(16) << std::left << "OP_STRUCT_METHOD" << " "
                       << std::setw(4) << str_idx << " ("
                       << (is_mutating ? "mutating" : "non-mutating") << ")\n";
@@ -209,8 +235,8 @@ size_t Assembly::disassemble_instruction(size_t offset) const {
             return string_instruction("OP_ENUM", offset);
         case OpCode::OP_ENUM_CASE:
         {
-            uint16_t str_idx = (code[offset + 1] << 8) | code[offset + 2];
-            uint8_t assoc_count = code[offset + 3];
+            uint16_t str_idx = (code_view[offset + 1] << 8) | code_view[offset + 2];
+            uint8_t assoc_count = code_view[offset + 3];
             std::cout << std::setw(16) << std::left << "OP_ENUM_CASE" << " "
                       << std::setw(4) << str_idx << " (assoc " << static_cast<int>(assoc_count) << ")\n";
             return offset + 4 + assoc_count * 2;
@@ -237,12 +263,14 @@ size_t Assembly::simple_instruction(const char* name, size_t offset) const {
 }
 
 size_t Assembly::constant_instruction(const char* name, size_t offset) const {
-    uint16_t constant = (code[offset + 1] << 8) | code[offset + 2];
+    const auto& code_view = bytecode();
+    const uint16_t constant = static_cast<uint16_t>((code_view[offset + 1] << 8) | code_view[offset + 2]);
     std::cout << std::setw(16) << std::left << name << " " 
               << std::setw(4) << constant << " '";
     
-    if (constant < constants.size()) {
-        const Value& val = constants[constant];
+    const auto& pool = constant_pool();
+    if (constant < pool.size()) {
+        const Value& val = pool[constant];
         if (val.is_int()) {
             std::cout << val.as_int();
         } else if (val.is_float()) {
@@ -261,7 +289,8 @@ size_t Assembly::constant_instruction(const char* name, size_t offset) const {
 }
 
 size_t Assembly::string_instruction(const char* name, size_t offset) const {
-    uint16_t str_idx = (code[offset + 1] << 8) | code[offset + 2];
+    const auto& code_view = bytecode();
+    uint16_t str_idx = (code_view[offset + 1] << 8) | code_view[offset + 2];
     std::cout << std::setw(16) << std::left << name << " " 
               << std::setw(4) << str_idx << " '";
     
@@ -274,13 +303,15 @@ size_t Assembly::string_instruction(const char* name, size_t offset) const {
 }
 
 size_t Assembly::short_instruction(const char* name, size_t offset) const {
-    uint16_t value = (code[offset + 1] << 8) | code[offset + 2];
+    const auto& code_view = bytecode();
+    uint16_t value = (code_view[offset + 1] << 8) | code_view[offset + 2];
     std::cout << std::setw(16) << std::left << name << " " << value << "\n";
     return offset + 3;
 }
 
 size_t Assembly::jump_instruction(const char* name, int sign, size_t offset) const {
-    uint16_t jump = (code[offset + 1] << 8) | code[offset + 2];
+    const auto& code_view = bytecode();
+    uint16_t jump = (code_view[offset + 1] << 8) | code_view[offset + 2];
     std::cout << std::setw(16) << std::left << name << " " 
               << std::setw(4) << offset << " -> " 
               << (offset + 3 + sign * jump) << "\n";
@@ -288,8 +319,9 @@ size_t Assembly::jump_instruction(const char* name, int sign, size_t offset) con
 }
 
 size_t Assembly::property_instruction(const char* name, size_t offset) const {
-    uint16_t str_idx = (code[offset + 1] << 8) | code[offset + 2];
-    uint8_t flags = code[offset + 3];
+    const auto& code_view = bytecode();
+    uint16_t str_idx = (code_view[offset + 1] << 8) | code_view[offset + 2];
+    uint8_t flags = code_view[offset + 3];
     bool is_let = (flags & 0x1) != 0;
     std::cout << std::setw(16) << std::left << name << " "
               << std::setw(4) << str_idx << " ("
@@ -412,6 +444,98 @@ void Assembly::serialize(std::ostream& out) const
             for (auto& ip : pr->inherited_protocols) WriteString(out, ip);
         }
     }
+
+    if (kVerMinor >= 1)
+    {
+        WriteString(out, manifest.name);
+        WritePOD(out, manifest.version_major);
+        WritePOD(out, manifest.version_minor);
+
+        {
+            uint32_t n = (uint32_t)type_definitions.size();
+            WritePOD(out, n);
+            for (const auto& t : type_definitions)
+            {
+                WritePOD(out, t.name);
+                WritePOD(out, t.namespace_name);
+                WritePOD(out, t.flags);
+                WritePOD(out, t.base_type);
+                WritePOD(out, t.method_list.start);
+                WritePOD(out, t.method_list.count);
+                WritePOD(out, t.field_list.start);
+                WritePOD(out, t.field_list.count);
+                WriteVectorPOD(out, t.interfaces);
+            }
+        }
+
+        {
+            uint32_t n = (uint32_t)method_definitions.size();
+            WritePOD(out, n);
+            for (const auto& m : method_definitions)
+            {
+                WritePOD(out, m.name);
+                WritePOD(out, m.flags);
+                WritePOD(out, m.signature);
+                WritePOD(out, m.body_ptr);
+            }
+        }
+
+        {
+            uint32_t n = (uint32_t)field_definitions.size();
+            WritePOD(out, n);
+            for (const auto& f : field_definitions)
+            {
+                WritePOD(out, f.name);
+                WritePOD(out, f.flags);
+                WritePOD(out, f.type);
+            }
+        }
+
+        {
+            uint32_t n = (uint32_t)property_definitions.size();
+            WritePOD(out, n);
+            for (const auto& p : property_definitions)
+            {
+                WritePOD(out, p.name);
+                WritePOD(out, p.flags);
+                WritePOD(out, p.type);
+                WritePOD(out, p.getter);
+                WritePOD(out, p.setter);
+            }
+        }
+
+        {
+            const auto& constants_for_pool = global_constant_pool.empty() ? constants : global_constant_pool;
+            uint32_t n = (uint32_t)constants_for_pool.size();
+            WritePOD(out, n);
+            for (const Value& v : constants_for_pool)
+            {
+                v.serialize(out);
+            }
+        }
+
+        WriteVectorPOD(out, signature_blob);
+
+        {
+            std::vector<MethodBody> bodies = method_bodies;
+            if (bodies.empty())
+            {
+                MethodBody body{};
+                body.bytecode = code;
+                body.line_info = lines;
+                bodies.push_back(std::move(body));
+            }
+
+            uint32_t n = (uint32_t)bodies.size();
+            WritePOD(out, n);
+            for (const auto& b : bodies)
+            {
+                WriteVectorPOD(out, b.bytecode);
+                WriteVectorPOD(out, b.line_info);
+                WritePOD(out, b.max_stack_depth);
+            }
+        }
+    }
 }
 
 Assembly Assembly::deserialize(std::istream& in)
@@ -422,6 +546,8 @@ Assembly Assembly::deserialize(std::istream& in)
         throw std::runtime_error("Assembly::deserialize bad magic");
     if (h.verMajor != kVerMajor)
         throw std::runtime_error("Assembly::deserialize version mismatch");
+    if (h.verMinor > kVerMinor)
+        throw std::runtime_error("Assembly::deserialize unsupported version");
 
     Assembly c{};
     c.code = ReadVectorPOD<uint8_t>(in);
@@ -543,6 +669,111 @@ Assembly Assembly::deserialize(std::istream& in)
             for (uint32_t k = 0; k < inh; ++k) pr->inherited_protocols.push_back(ReadString(in));
 
             c.protocols.push_back(std::move(pr));
+        }
+    }
+
+    if (h.verMinor >= 1)
+    {
+        c.manifest.name = ReadString(in);
+        c.manifest.version_major = ReadPOD<uint16_t>(in);
+        c.manifest.version_minor = ReadPOD<uint16_t>(in);
+
+        {
+            uint32_t n = ReadPOD<uint32_t>(in);
+            c.type_definitions.reserve(n);
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                TypeDef t{};
+                t.name = ReadPOD<string_idx>(in);
+                t.namespace_name = ReadPOD<string_idx>(in);
+                t.flags = ReadPOD<uint32_t>(in);
+                t.base_type = ReadPOD<type_idx>(in);
+                t.method_list.start = ReadPOD<uint32_t>(in);
+                t.method_list.count = ReadPOD<uint32_t>(in);
+                t.field_list.start = ReadPOD<uint32_t>(in);
+                t.field_list.count = ReadPOD<uint32_t>(in);
+                t.interfaces = ReadVectorPOD<type_idx>(in);
+                c.type_definitions.push_back(std::move(t));
+            }
+        }
+
+        {
+            uint32_t n = ReadPOD<uint32_t>(in);
+            c.method_definitions.reserve(n);
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                MethodDef m{};
+                m.name = ReadPOD<string_idx>(in);
+                m.flags = ReadPOD<uint32_t>(in);
+                m.signature = ReadPOD<signature_idx>(in);
+                m.body_ptr = ReadPOD<body_idx>(in);
+                c.method_definitions.push_back(std::move(m));
+            }
+        }
+
+        {
+            uint32_t n = ReadPOD<uint32_t>(in);
+            c.field_definitions.reserve(n);
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                FieldDef f{};
+                f.name = ReadPOD<string_idx>(in);
+                f.flags = ReadPOD<uint32_t>(in);
+                f.type = ReadPOD<type_idx>(in);
+                c.field_definitions.push_back(std::move(f));
+            }
+        }
+
+        {
+            uint32_t n = ReadPOD<uint32_t>(in);
+            c.property_definitions.reserve(n);
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                PropertyDef p{};
+                p.name = ReadPOD<string_idx>(in);
+                p.flags = ReadPOD<uint32_t>(in);
+                p.type = ReadPOD<type_idx>(in);
+                p.getter = ReadPOD<method_idx>(in);
+                p.setter = ReadPOD<method_idx>(in);
+                c.property_definitions.push_back(std::move(p));
+            }
+        }
+
+        {
+            uint32_t n = ReadPOD<uint32_t>(in);
+            c.global_constant_pool.reserve(n);
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                c.global_constant_pool.push_back(Value::deserialize(in));
+            }
+        }
+
+        c.signature_blob = ReadVectorPOD<uint8_t>(in);
+
+        {
+            uint32_t n = ReadPOD<uint32_t>(in);
+            c.method_bodies.reserve(n);
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                MethodBody body{};
+                body.bytecode = ReadVectorPOD<uint8_t>(in);
+                body.line_info = ReadVectorPOD<uint32_t>(in);
+                body.max_stack_depth = ReadPOD<uint32_t>(in);
+                c.method_bodies.push_back(std::move(body));
+            }
+        }
+
+        if (c.global_constant_pool.empty())
+        {
+            c.global_constant_pool = c.constants;
+        }
+
+        if (c.method_bodies.empty())
+        {
+            MethodBody body{};
+            body.bytecode = c.code;
+            body.line_info = c.lines;
+            c.method_bodies.push_back(std::move(body));
         }
     }
 

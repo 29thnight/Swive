@@ -268,7 +268,7 @@ namespace swiftscript {
 
             // Execute deinit bytecode until OP_RETURN
             // NOTE: We use stack_.push_back/pop_back directly to avoid RC on the dying instance
-            while (ip_ < chunk_->code.size()) {
+            while (ip_ < chunk_->bytecode().size()) {
                 OpCode op = static_cast<OpCode>(read_byte());
 
                 if (op == OpCode::OP_RETURN) {
@@ -437,7 +437,7 @@ namespace swiftscript {
     }
 
     uint8_t VM::read_byte() {
-        return chunk_->code[ip_++];
+        return chunk_->bytecode()[ip_++];
     }
 
     uint16_t VM::read_short() {
@@ -448,10 +448,11 @@ namespace swiftscript {
 
     Value VM::read_constant() {
         uint16_t idx = read_short();
-        if (idx >= chunk_->constants.size()) {
+        const auto& pool = chunk_->constant_pool();
+        if (idx >= pool.size()) {
             throw std::runtime_error("Constant index out of range.");
         }
-        return chunk_->constants[idx];
+        return pool[idx];
     }
 
     const std::string& VM::read_string() {
@@ -976,7 +977,7 @@ namespace swiftscript {
         
         try {
             // Execute until OP_RETURN
-            while (ip_ < chunk_->code.size()) {
+            while (ip_ < chunk_->bytecode().size()) {
                 OpCode op = static_cast<OpCode>(read_byte());
                 
                 if (op == OpCode::OP_RETURN) {
@@ -1011,7 +1012,7 @@ namespace swiftscript {
                 ip_--;
                 
                 // Execute this one instruction
-                switch (static_cast<OpCode>(chunk_->code[ip_])) {
+                switch (static_cast<OpCode>(chunk_->bytecode()[ip_])) {
                     case OpCode::OP_READ_LINE: {
                         ip_++;
                         std::string line;

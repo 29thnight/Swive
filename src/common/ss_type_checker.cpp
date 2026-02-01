@@ -58,12 +58,15 @@ generic_param_stack_.clear();
 let_constants_.clear();
 current_type_context_.clear();
 errors_.clear();
+warnings_.clear();
 module_cache_.clear();
 imported_modules_.clear();
 compiling_modules_.clear();
 imported_module_names_.clear();
+known_attributes_.clear();
 
     add_builtin_types();
+    add_builtin_attributes();
     std::vector<const std::vector<StmtPtr>*> imported_programs;
     collect_imported_programs(program, imported_programs);
     collect_type_declarations(program);
@@ -103,6 +106,7 @@ imported_module_names_.clear();
         check_stmt(stmt.get());
     }
     exit_scope();
+    emit_warnings();
     throw_if_errors();
 }
 
@@ -174,6 +178,20 @@ void TypeChecker::add_builtin_types() {
     protocol_conformers_["CustomStringConvertible"].insert("String");
 }
 
+void TypeChecker::add_builtin_attributes() {
+    known_attributes_.emplace("Range");
+    known_attributes_.emplace("Obsolete");
+    known_attributes_.emplace("Deprecated");
+}
+
+void TypeChecker::register_attribute(const std::string& name, uint32_t line) {
+    if (known_attributes_.contains(name)) {
+        error("Duplicate attribute '" + name + "'", line);
+        return;
+    }
+    known_attributes_.insert(name);
+}
+
 void TypeChecker::add_known_type(const std::string& name, TypeKind kind, uint32_t line) {
     if (known_types_.contains(name)) {
         return;
@@ -218,6 +236,11 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
         }
         const Stmt* stmt = stmt_ptr.get();
         switch (stmt->kind) {
+            case StmtKind::AttributeDecl: {
+                auto* decl = static_cast<const AttributeDeclStmt*>(stmt);
+                register_attribute(decl->name, decl->line);
+                break;
+            }
             case StmtKind::ClassDecl: {
                 auto* decl = static_cast<const ClassDeclStmt*>(stmt);
                 add_known_type(decl->name, TypeKind::User, decl->line);
@@ -662,6 +685,8 @@ void TypeChecker::check_stmt(const Stmt* stmt) {
         case StmtKind::FuncDecl:
             check_func_decl(static_cast<const FuncDeclStmt*>(stmt));
             break;
+        case StmtKind::AttributeDecl:
+            break;
         case StmtKind::ClassDecl:
             check_class_decl(static_cast<const ClassDeclStmt*>(stmt));
             break;
@@ -697,6 +722,7 @@ void TypeChecker::check_block(const BlockStmt* stmt) {
 }
 
 void TypeChecker::check_var_decl(const VarDeclStmt* stmt) {
+    check_attributes(stmt->attributes, stmt->line);
     TypeInfo declared = TypeInfo::unknown();
     if (stmt->type_annotation.has_value()) {
         declared = type_from_annotation(stmt->type_annotation.value(), stmt->line);
@@ -904,7 +930,8 @@ void TypeChecker::check_throw_stmt(const ThrowStmt* stmt) {
 }
 
 void TypeChecker::check_func_decl(const FuncDeclStmt* stmt, const std::string& self_type) {
-enter_generic_params(stmt->generic_params);
+    check_attributes(stmt->attributes, stmt->line);
+    enter_generic_params(stmt->generic_params);
     
 // Validate generic constraints
 for (const auto& constraint : stmt->generic_constraints) {
@@ -947,6 +974,7 @@ check_block(stmt->body.get());
 }
 
 void TypeChecker::check_class_decl(const ClassDeclStmt* stmt) {
+    check_attributes(stmt->attributes, stmt->line);
     if (stmt->superclass_name.has_value()) {
         const std::string& superclass = stmt->superclass_name.value();
         auto it = known_types_.find(superclass);
@@ -981,6 +1009,7 @@ void TypeChecker::check_class_decl(const ClassDeclStmt* stmt) {
 }
 
 void TypeChecker::check_struct_decl(const StructDeclStmt* stmt) {
+    check_attributes(stmt->attributes, stmt->line);
     std::string prev_context = current_type_context_;
     current_type_context_ = stmt->name;
     
@@ -996,6 +1025,7 @@ void TypeChecker::check_struct_decl(const StructDeclStmt* stmt) {
         if (!method) {
             continue;
         }
+        check_attributes(method->attributes, method->line);
         enter_generic_params(method->generic_params);
         enter_scope();
         declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
@@ -1027,6 +1057,7 @@ void TypeChecker::check_struct_decl(const StructDeclStmt* stmt) {
 }
 
 void TypeChecker::check_enum_decl(const EnumDeclStmt* stmt) {
+    check_attributes(stmt->attributes, stmt->line);
     enter_generic_params(stmt->generic_params);
     enter_scope();
     declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
@@ -1035,6 +1066,7 @@ void TypeChecker::check_enum_decl(const EnumDeclStmt* stmt) {
         if (!method) {
             continue;
         }
+        check_attributes(method->attributes, method->line);
         enter_generic_params(method->generic_params);
         enter_scope();
         declare_symbol("self", TypeInfo::user(stmt->name), stmt->line);
@@ -1061,8 +1093,10 @@ void TypeChecker::check_enum_decl(const EnumDeclStmt* stmt) {
 }
 
 void TypeChecker::check_protocol_decl(const ProtocolDeclStmt* stmt) {
+    check_attributes(stmt->attributes, stmt->line);
     enter_generic_params(stmt->generic_params);
     for (const auto& requirement : stmt->method_requirements) {
+        check_attributes(requirement.attributes, stmt->line);
         enter_generic_params(requirement.generic_params);
         for (const auto& param : requirement.params) {
             type_from_annotation(param.type, stmt->line);
@@ -1074,12 +1108,14 @@ void TypeChecker::check_protocol_decl(const ProtocolDeclStmt* stmt) {
     }
 
     for (const auto& requirement : stmt->property_requirements) {
+        check_attributes(requirement.attributes, stmt->line);
         type_from_annotation(requirement.type, stmt->line);
     }
     exit_generic_params();
 }
 
 void TypeChecker::check_extension_decl(const ExtensionDeclStmt* stmt) {
+    check_attributes(stmt->attributes, stmt->line);
     if (!known_types_.contains(stmt->extended_type)) {
         error("Unknown extended type '" + stmt->extended_type + "'", stmt->line);
     }
@@ -1094,6 +1130,7 @@ void TypeChecker::check_extension_decl(const ExtensionDeclStmt* stmt) {
         if (!method) {
             continue;
         }
+        check_attributes(method->attributes, method->line);
         enter_generic_params(method->generic_params);
         enter_scope();
         declare_symbol("self", TypeInfo::user(stmt->extended_type), stmt->line);
@@ -1111,9 +1148,24 @@ void TypeChecker::check_extension_decl(const ExtensionDeclStmt* stmt) {
         function_stack_.push_back(FunctionContext{return_type});
         check_block(method->body.get());
         function_stack_.pop_back();
-        exit_scope();
-        exit_generic_params();
+    exit_scope();
+    exit_generic_params();
+}
+
+void TypeChecker::check_attributes(const std::vector<Attribute>& attributes, uint32_t line) {
+    for (const auto& attribute : attributes) {
+        if (!known_attributes_.contains(attribute.name)) {
+            error("Unknown attribute '" + attribute.name + "'", attribute.line ? attribute.line : line);
+            continue;
+        }
+        if (attribute.name == "Obsolete") {
+            error("Obsolete attribute applied", attribute.line ? attribute.line : line);
+        }
+        else if (attribute.name == "Deprecated") {
+            warn("Deprecated attribute applied", attribute.line ? attribute.line : line);
+        }
     }
+}
 
     exit_scope();
     current_type_context_ = prev_context;
@@ -2043,6 +2095,23 @@ for (size_t i = 0; i < template_decl->generic_params.size(); ++i) {
 
 void TypeChecker::error(const std::string& message, uint32_t line) const {
     errors_.emplace_back(message, line);
+}
+
+void TypeChecker::warn(const std::string& message, uint32_t line) const {
+    std::ostringstream oss;
+    if (line > 0) {
+        oss << "Warning (line " << line << "): " << message;
+    } else {
+        oss << "Warning: " << message;
+    }
+    warnings_.push_back(oss.str());
+}
+
+void TypeChecker::emit_warnings() const {
+    for (const auto& warning : warnings_) {
+        std::cerr << warning << '\n';
+    }
+    warnings_.clear();
 }
 
 void TypeChecker::throw_if_errors() {

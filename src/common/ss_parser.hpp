@@ -33,6 +33,7 @@ namespace swiftscript {
         StmtPtr enum_declaration(AccessLevel access_level = AccessLevel::Internal);    // Enum declaration parser
         StmtPtr protocol_declaration(AccessLevel access_level = AccessLevel::Internal); // Protocol declaration parser
         StmtPtr extension_declaration(AccessLevel access_level = AccessLevel::Internal); // Extension declaration parser
+        StmtPtr attribute_declaration();
         StmtPtr import_declaration();  // Import statement parser
         std::unique_ptr<VarDeclStmt> parse_variable_decl(bool is_let);
         StmtPtr parse_tuple_destructuring(bool is_let, uint32_t line);
@@ -79,6 +80,9 @@ namespace swiftscript {
         TypeAnnotation parse_type_annotation();
         std::vector<std::string> parse_generic_params();
         std::vector<GenericConstraint> parse_generic_constraints(const std::vector<std::string>& generic_params);
+        std::vector<Attribute> parse_attributes();
+        bool looks_like_attribute_list() const;
+        bool is_attribute_target_token(TokenType type) const;
 
         // ---- Utilities ----
         const Token& advance();

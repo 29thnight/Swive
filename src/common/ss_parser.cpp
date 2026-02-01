@@ -134,6 +134,95 @@ namespace swiftscript {
         return type == TokenType::Identifier || type == TokenType::LeftParen;
     }
 
+    bool Parser::is_attribute_target_token(TokenType type) const {
+        switch (type) {
+        case TokenType::Public:
+        case TokenType::Private:
+        case TokenType::Internal:
+        case TokenType::Fileprivate:
+        case TokenType::Static:
+        case TokenType::Override:
+        case TokenType::Mutating:
+        case TokenType::Init:
+        case TokenType::Deinit:
+        case TokenType::Import:
+        case TokenType::Var:
+        case TokenType::Let:
+        case TokenType::Func:
+        case TokenType::Class:
+        case TokenType::Struct:
+        case TokenType::Enum:
+        case TokenType::Protocol:
+        case TokenType::Extension:
+        case TokenType::Attribute:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    bool Parser::looks_like_attribute_list() const {
+        if (!check(TokenType::LeftBracket)) {
+            return false;
+        }
+
+        size_t index = current_;
+        int depth = 0;
+        bool saw_identifier = false;
+
+        while (index < tokens_.size()) {
+            const TokenType type = tokens_[index].type;
+            if (type == TokenType::LeftBracket) {
+                ++depth;
+                if (depth == 1 && index + 1 < tokens_.size() && tokens_[index + 1].type == TokenType::Identifier) {
+                    saw_identifier = true;
+                }
+            }
+            else if (type == TokenType::RightBracket) {
+                --depth;
+                if (depth == 0) {
+                    size_t next = index + 1;
+                    while (next < tokens_.size() && tokens_[next].type == TokenType::Comment) {
+                        ++next;
+                    }
+                    if (next >= tokens_.size()) {
+                        return false;
+                    }
+                    return saw_identifier && is_attribute_target_token(tokens_[next].type);
+                }
+            }
+            ++index;
+        }
+        return false;
+    }
+
+    std::vector<Attribute> Parser::parse_attributes() {
+        std::vector<Attribute> attributes;
+        while (looks_like_attribute_list()) {
+            consume(TokenType::LeftBracket, "Expected '[' to start attribute list.");
+            if (!check(TokenType::RightBracket)) {
+                do {
+                    const Token& name_tok = consume(TokenType::Identifier, "Expected attribute name.");
+                    Attribute attr;
+                    attr.name = std::string(name_tok.lexeme);
+                    attr.line = name_tok.line;
+                    if (match(TokenType::LeftParen)) {
+                        if (!check(TokenType::RightParen)) {
+                            do {
+                                attr.arguments.push_back(expression());
+                            } while (match(TokenType::Comma));
+                        }
+                        consume(TokenType::RightParen, "Expected ')' after attribute arguments.");
+                    }
+                    attributes.push_back(std::move(attr));
+                } while (match(TokenType::Comma));
+            }
+            consume(TokenType::RightBracket, "Expected ']' after attribute list.");
+            skip_comments();
+        }
+        return attributes;
+    }
+
     // ============================================================
     //  Type annotation
     // ============================================================
@@ -313,6 +402,10 @@ namespace swiftscript {
 
     StmtPtr Parser::declaration() {
         skip_comments();
+        std::vector<Attribute> attributes;
+        if (looks_like_attribute_list()) {
+            attributes = parse_attributes();
+        }
         AccessLevel access_level = AccessLevel::Internal;
         bool has_access_modifier = false;
         if (match(TokenType::Public)) {
@@ -336,7 +429,18 @@ namespace swiftscript {
             if (has_access_modifier) {
                 error(peek(), "Access control modifiers cannot be applied to import statements.");
             }
+            if (!attributes.empty()) {
+                error(peek(), "Attributes cannot be applied to import statements.");
+            }
             return import_declaration();
+        }
+        if (check(TokenType::Attribute)) {
+            if (has_access_modifier) {
+                error(peek(), "Access control modifiers cannot be applied to attribute declarations.");
+            }
+            auto stmt = attribute_declaration();
+            stmt->attributes = std::move(attributes);
+            return stmt;
         }
         if (check(TokenType::Var) || check(TokenType::Let)) {
             auto stmt = var_declaration();
@@ -346,36 +450,42 @@ namespace swiftscript {
             else if (has_access_modifier) {
                 error(previous(), "Access control modifier must precede a declaration.");
             }
+            stmt->attributes = std::move(attributes);
             return stmt;
         }
         if (check(TokenType::Class)) {
             auto stmt = class_declaration(access_level);
             if (auto* decl = dynamic_cast<ClassDeclStmt*>(stmt.get())) {
             }
+            stmt->attributes = std::move(attributes);
             return stmt;
         }
         if (check(TokenType::Struct)) {
             auto stmt = struct_declaration(access_level);
             if (auto* decl = dynamic_cast<StructDeclStmt*>(stmt.get())) {
             }
+            stmt->attributes = std::move(attributes);
             return stmt;
         }
         if (check(TokenType::Enum)) {
             auto stmt = enum_declaration(access_level);
             if (auto* decl = dynamic_cast<EnumDeclStmt*>(stmt.get())) {
             }
+            stmt->attributes = std::move(attributes);
             return stmt;
         }
         if (check(TokenType::Protocol)) {
             auto stmt = protocol_declaration(access_level);
             if (auto* decl = dynamic_cast<ProtocolDeclStmt*>(stmt.get())) {
             }
+            stmt->attributes = std::move(attributes);
             return stmt;
         }
         if (check(TokenType::Extension)) {
             auto stmt = extension_declaration(access_level);
             if (auto* decl = dynamic_cast<ExtensionDeclStmt*>(stmt.get())) {
             }
+            stmt->attributes = std::move(attributes);
             return stmt;
         }
         if (check(TokenType::Func)) {
@@ -383,10 +493,14 @@ namespace swiftscript {
             if (auto* func = dynamic_cast<FuncDeclStmt*>(stmt.get())) {
                 func->access_level = access_level;
             }
+            stmt->attributes = std::move(attributes);
             return stmt;
         }
         if (has_access_modifier) {
             error(peek(), "Access control modifier must precede a declaration.");
+        }
+        if (!attributes.empty()) {
+            error(peek(), "Attributes must precede a declaration.");
         }
         return statement();
     }
@@ -572,6 +686,21 @@ namespace swiftscript {
         return stmt;
     }
 
+    StmtPtr Parser::attribute_declaration() {
+        advance(); // consume 'attribute'
+        const Token& name_tok = consume(TokenType::Identifier, "Expected attribute name.");
+        auto stmt = std::make_unique<AttributeDeclStmt>();
+        stmt->line = name_tok.line;
+        stmt->name = std::string(name_tok.lexeme);
+
+        if (match(TokenType::LeftParen)) {
+            stmt->params = parse_param_list(false);
+        }
+
+        match(TokenType::Semicolon);
+        return stmt;
+    }
+
     StmtPtr Parser::func_declaration() {
         advance();  // consume 'func'
         auto is_operator_name = [](TokenType type) {
@@ -655,6 +784,10 @@ namespace swiftscript {
 
         consume(TokenType::LeftBrace, "Expected '{' after class name.");
         while (!check(TokenType::RightBrace) && !is_at_end()) {
+            std::vector<Attribute> attributes;
+            if (looks_like_attribute_list()) {
+                attributes = parse_attributes();
+            }
             // Check for access control modifiers
             AccessLevel access_level = AccessLevel::Internal;  // Default
             if (match(TokenType::Public)) {
@@ -711,6 +844,7 @@ namespace swiftscript {
                 method->is_override = is_override;
                 method->is_static = false;
                 method->access_level = access_level;
+                method->attributes = std::move(attributes);
 
 
                 // Optional parameter list: allow both `init { ... }` and `init(...) { ... }`
@@ -728,6 +862,7 @@ namespace swiftscript {
                 method->is_override = is_override;
                 method->is_static = is_static;
                 method->access_level = access_level;
+                method->attributes = std::move(attributes);
                 stmt->methods.push_back(std::move(method));
                 continue;
             }
@@ -754,6 +889,7 @@ namespace swiftscript {
                 property->access_level = access_level;
                 property->is_lazy = is_lazy;
                 property->is_static = is_static;
+                property->attributes = std::move(attributes);
                 match(TokenType::Semicolon);
                 stmt->properties.push_back(std::move(property));
                 continue;
@@ -765,6 +901,10 @@ namespace swiftscript {
 
             if (is_static) {
                 error(previous(), "'static' must precede a method or property declaration.");
+            }
+
+            if (!attributes.empty()) {
+                error(previous(), "Attributes must precede a declaration.");
             }
 
             error(peek(), "Expected method or property declaration inside class.");
@@ -797,6 +937,10 @@ namespace swiftscript {
         consume(TokenType::LeftBrace, "Expected '{' after struct name.");
 
         while (!check(TokenType::RightBrace) && !is_at_end()) {
+            std::vector<Attribute> attributes;
+            if (looks_like_attribute_list()) {
+                attributes = parse_attributes();
+            }
             // Check for access control modifiers
             AccessLevel access_level = AccessLevel::Internal;  // Default
             if (match(TokenType::Public)) {
@@ -844,9 +988,11 @@ namespace swiftscript {
 
                 auto method = std::make_unique<StructMethodDecl>();
                 method->name = std::string(method_name.lexeme);
+                method->line = method_name.line;
                 method->is_mutating = is_mutating;
                 method->is_static = is_static;
                 method->access_level = access_level;
+                method->attributes = std::move(attributes);
                 method->generic_params = parse_generic_params();
 
                 // Parameter list
@@ -874,6 +1020,7 @@ namespace swiftscript {
                 auto init_method = std::make_unique<FuncDeclStmt>();
                 init_method->line = previous().line;
                 init_method->name = "init";
+                init_method->attributes = std::move(attributes);
 
                 // Parameter list
                 consume(TokenType::LeftParen, "Expected '(' after 'init'.");
@@ -895,6 +1042,7 @@ namespace swiftscript {
                 auto property = parse_variable_decl(is_let);
                 property->is_static = is_static;  // Mark as static if modifier was present
                 property->access_level = access_level;  // Set access level
+                property->attributes = std::move(attributes);
                 match(TokenType::Semicolon);
                 stmt->properties.push_back(std::move(property));
                 continue;
@@ -910,6 +1058,10 @@ namespace swiftscript {
 
             if (is_mutating) {
                 error(previous(), "'mutating' must precede a method declaration.");
+            }
+
+            if (!attributes.empty()) {
+                error(previous(), "Attributes must precede a declaration.");
             }
 
             error(peek(), "Expected method or property declaration inside struct.");
@@ -937,6 +1089,10 @@ namespace swiftscript {
         consume(TokenType::LeftBrace, "Expected '{' after enum name.");
 
         while (!check(TokenType::RightBrace) && !is_at_end()) {
+            std::vector<Attribute> attributes;
+            if (looks_like_attribute_list()) {
+                attributes = parse_attributes();
+            }
             // case declaration: case north, case south = 1
             if (match(TokenType::Case)) {
                 do {
@@ -993,6 +1149,8 @@ namespace swiftscript {
 
                 auto method = std::make_unique<StructMethodDecl>();
                 method->name = std::string(method_name.lexeme);
+                method->line = method_name.line;
+                method->attributes = std::move(attributes);
                 method->generic_params = parse_generic_params();
 
                 // Parameter list
@@ -1019,8 +1177,10 @@ namespace swiftscript {
 
                 auto method = std::make_unique<StructMethodDecl>();
                 method->name = std::string(prop_name.lexeme);
+                method->line = prop_name.line;
                 method->return_type = prop_type;
                 method->is_computed_property = true;  // Mark as computed property
+                method->attributes = std::move(attributes);
 
                 // Parse the getter body
                 // Enum computed properties use read-only shorthand: var name: Type { body }
@@ -1039,6 +1199,10 @@ namespace swiftscript {
                 method->body = std::move(getter_block);
                 stmt->methods.push_back(std::move(method));
                 continue;
+            }
+
+            if (!attributes.empty()) {
+                error(previous(), "Attributes must precede a declaration.");
             }
 
             error(peek(), "Expected 'case', 'func', or 'var' inside enum.");
@@ -1096,6 +1260,10 @@ namespace swiftscript {
         consume(TokenType::LeftBrace, "Expected '{' after protocol name.");
 
         while (!check(TokenType::RightBrace) && !is_at_end()) {
+            std::vector<Attribute> attributes;
+            if (looks_like_attribute_list()) {
+                attributes = parse_attributes();
+            }
             // Method requirement: func methodName(param: Type) -> ReturnType
             if (match(TokenType::Func)) {
                 auto is_operator_name = [](TokenType type) {
@@ -1113,6 +1281,7 @@ namespace swiftscript {
                 ProtocolMethodRequirement method_req;
                 method_req.name = std::string(method_name.lexeme);
                 method_req.generic_params = parse_generic_params();
+                method_req.attributes = std::move(attributes);
 
                 // Parameter list
                 consume(TokenType::LeftParen, "Expected '(' after method name.");
@@ -1144,6 +1313,7 @@ namespace swiftscript {
                 prop_req.name = std::string(prop_name.lexeme);
                 prop_req.type = prop_type;
                 prop_req.has_getter = true;
+                prop_req.attributes = std::move(attributes);
 
                 // Parse { get } or { get set }
                 consume(TokenType::LeftBrace, "Expected '{' for property accessor specification.");
@@ -1185,6 +1355,7 @@ namespace swiftscript {
                 method_req.name = std::string(method_name.lexeme);
                 method_req.is_mutating = true;
                 method_req.generic_params = parse_generic_params();
+                method_req.attributes = std::move(attributes);
 
                 // Parameter list
                 consume(TokenType::LeftParen, "Expected '(' after method name.");
@@ -1198,6 +1369,10 @@ namespace swiftscript {
                 stmt->method_requirements.push_back(std::move(method_req));
                 match(TokenType::Semicolon); // Optional semicolon
                 continue;
+            }
+
+            if (!attributes.empty()) {
+                error(previous(), "Attributes must precede a declaration.");
             }
 
             error(peek(), "Expected method or property requirement inside protocol.");
@@ -1227,6 +1402,10 @@ namespace swiftscript {
         consume(TokenType::LeftBrace, "Expected '{' after extension declaration.");
 
         while (!check(TokenType::RightBrace) && !is_at_end()) {
+            std::vector<Attribute> attributes;
+            if (looks_like_attribute_list()) {
+                attributes = parse_attributes();
+            }
             // Check for access control modifiers
             AccessLevel access_level = AccessLevel::Internal;  // Default
             if (match(TokenType::Public)) {
@@ -1274,9 +1453,11 @@ namespace swiftscript {
 
                 auto method = std::make_unique<StructMethodDecl>();
                 method->name = std::string(method_name.lexeme);
+                method->line = method_name.line;
                 method->is_mutating = is_mutating;
                 method->is_static = is_static;
                 method->access_level = access_level;
+                method->attributes = std::move(attributes);
                 method->generic_params = parse_generic_params();
 
                 // Parameter list
@@ -1305,8 +1486,10 @@ namespace swiftscript {
 
                 auto computed_prop = std::make_unique<StructMethodDecl>();
                 computed_prop->name = std::string(prop_name.lexeme);
+                computed_prop->line = prop_name.line;
                 computed_prop->is_computed_property = true;
                 computed_prop->is_static = is_static;
+                computed_prop->attributes = std::move(attributes);
 
                 // Type annotation
                 if (match(TokenType::Colon)) {
@@ -1326,6 +1509,10 @@ namespace swiftscript {
 
             if (is_static) {
                 error(previous(), "'static' must precede a method or property declaration.");
+            }
+
+            if (!attributes.empty()) {
+                error(previous(), "Attributes must precede a declaration.");
             }
 
             error(peek(), "Expected method or computed property declaration inside extension.");

@@ -81,12 +81,14 @@ private:
     std::unordered_set<std::string> let_constants_;  // Track let constants
     std::string current_type_context_;  // Track which type we're currently inside (for access control)
     mutable std::vector<TypeCheckError> errors_;
+    mutable std::vector<std::string> warnings_;
     std::string base_directory_;
     IModuleResolver* module_resolver_{nullptr};
     std::unordered_map<std::string, std::vector<StmtPtr>> module_cache_;
     std::unordered_set<std::string> imported_modules_;
     std::unordered_set<std::string> compiling_modules_;
     std::vector<std::string> imported_module_names_;
+    std::unordered_set<std::string> known_attributes_;
     
     // Generic templates storage
     std::unordered_map<std::string, const StructDeclStmt*> generic_struct_templates_;
@@ -98,6 +100,8 @@ private:
     void declare_functions(const std::vector<StmtPtr>& program);
     static std::string module_symbol_name(const std::string& module_key);
     void add_builtin_types();
+    void add_builtin_attributes();
+    void register_attribute(const std::string& name, uint32_t line);
     void add_known_type(const std::string& name, TypeKind kind, uint32_t line);
     void add_protocol_inheritance(const std::string& protocol, const std::vector<std::string>& parents);
     void add_protocol_conformance(const std::string& type_name, const std::vector<std::string>& protocols, uint32_t line);
@@ -132,6 +136,7 @@ private:
     void check_protocol_decl(const ProtocolDeclStmt* stmt);
     void check_extension_decl(const ExtensionDeclStmt* stmt);
     void check_do_catch_stmt(const DoCatchStmt* stmt);
+    void check_attributes(const std::vector<Attribute>& attributes, uint32_t line);
 
     TypeInfo check_expr(const Expr* expr);
     TypeInfo check_literal_expr(const LiteralExpr* expr);
@@ -174,6 +179,8 @@ private:
     void specialize_generic_struct(const std::string& base_name, const std::vector<TypeAnnotation>& type_args, uint32_t line);
 
     void error(const std::string& message, uint32_t line) const;
+    void warn(const std::string& message, uint32_t line) const;
+    void emit_warnings() const;
     void throw_if_errors();
 };
 

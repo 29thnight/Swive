@@ -76,6 +76,23 @@ namespace swiftscript {
         }
     }
 
+    std::vector<Attribute> clone_attributes(const std::vector<Attribute>& attributes) {
+        std::vector<Attribute> copy;
+        copy.reserve(attributes.size());
+        for (const auto& attribute : attributes) {
+            Attribute attr_copy;
+            attr_copy.name = attribute.name;
+            attr_copy.line = attribute.line;
+            for (const auto& arg : attribute.arguments) {
+                if (arg) {
+                    attr_copy.arguments.push_back(clone_expr(arg.get()));
+                }
+            }
+            copy.push_back(std::move(attr_copy));
+        }
+        return copy;
+    }
+
     // ============================================================================
     // Statement Cloning
     // ============================================================================
@@ -126,6 +143,7 @@ namespace swiftscript {
             copy->is_static = var->is_static;
             copy->is_lazy = var->is_lazy;
             copy->access_level = var->access_level;
+            copy->attributes = clone_attributes(var->attributes);
             copy->type_annotation = var->type_annotation;
             if (var->initializer) {
                 copy->initializer = clone_expr(var->initializer.get());

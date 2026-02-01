@@ -106,6 +106,8 @@ void Compiler::compile_stmt(Stmt* stmt) {
         case StmtKind::FuncDecl:
             visit(static_cast<FuncDeclStmt*>(stmt));
             break;
+        case StmtKind::AttributeDecl:
+            break;
         case StmtKind::Expression:
             visit(static_cast<ExprStmt*>(stmt));
             break;

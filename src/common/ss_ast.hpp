@@ -45,6 +45,7 @@ struct StructDeclStmt;
 struct StructMethodDecl;
 struct EnumDeclStmt;
 struct Attribute;
+struct AttributeDeclStmt;
 
 using ExprPtr = std::unique_ptr<Expr>;
 using StmtPtr = std::unique_ptr<Stmt>;
@@ -89,6 +90,12 @@ struct Expr {
     
 protected:
     explicit Expr(ExprKind k) : kind(k) {}
+};
+
+struct Attribute {
+    std::string name;
+    std::vector<ExprPtr> arguments;
+    uint32_t line{0};
 };
 
 struct LiteralExpr : Expr {
@@ -360,6 +367,7 @@ enum class StmtKind {
 struct Stmt {
     StmtKind kind;
     uint32_t line{0};
+    std::vector<Attribute> attributes;
     virtual ~Stmt() = default;
 protected:
     explicit Stmt(StmtKind k) : kind(k) {}
@@ -577,6 +585,7 @@ struct ClassDeclStmt : Stmt {
 struct StructMethodDecl {
     std::string name;
     uint32_t line{0};
+    std::vector<Attribute> attributes;
     std::vector<std::string> generic_params;
     std::vector<GenericConstraint> generic_constraints;  // where T: Protocol
     std::vector<ParamDecl> params;
@@ -639,6 +648,7 @@ struct ProtocolMethodRequirement {
     std::vector<ParamDecl> params;
     std::optional<TypeAnnotation> return_type;
     bool is_mutating{false};
+    std::vector<Attribute> attributes;
 };
 
 // Protocol property requirement
@@ -647,6 +657,7 @@ struct ProtocolPropertyRequirement {
     TypeAnnotation type;
     bool has_getter{true};
     bool has_setter{false};  // true for { get set }, false for { get }
+    std::vector<Attribute> attributes;
 };
 
 // Protocol declaration: protocol Drawable { func draw(); var size: Int { get set } }
@@ -669,6 +680,13 @@ struct ExtensionDeclStmt : Stmt {
     AccessLevel access_level{AccessLevel::Internal};  // Default is internal
     
     ExtensionDeclStmt() : Stmt(StmtKind::ExtensionDecl) {}
+};
+
+struct AttributeDeclStmt : Stmt {
+    std::string name;
+    std::vector<ParamDecl> params;
+
+    AttributeDeclStmt() : Stmt(StmtKind::AttributeDecl) {}
 };
 
 } // namespace swiftscript

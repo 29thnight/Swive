@@ -159,6 +159,7 @@
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\Chunk_Evolution_Proposal.md" />
     <None Include="..\..\src\common\ss_opcodes.def" />
     <None Include="..\..\src\common\ss_vm_opcodes.inl" />
     <None Include="..\..\src\common\ss_vm_opcodes_arithmetic.inl" />

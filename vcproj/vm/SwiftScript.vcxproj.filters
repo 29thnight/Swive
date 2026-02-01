@@ -13,26 +13,8 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Test%28Obsolute%29">
-      <UniqueIdentifier>{1d76f115-c85d-41e4-bd5c-c8f6571cf22b}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Test%28Obsolute%29\internal">
-      <UniqueIdentifier>{9da6512e-741d-4b62-b74f-f9ad1b01dcb0}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Test%28Obsolute%29\internal\include">
-      <UniqueIdentifier>{8f3b8668-d74b-4294-8b76-d7334bf6119e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Test%28Obsolute%29\internal\src">
-      <UniqueIdentifier>{9c7eb6c4-aeff-4a1d-817a-56bbc055c3af}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Test%28Obsolute%29\docs">
-      <UniqueIdentifier>{a52414c9-81e7-47c1-a383-e3452d0c0b6c}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="test\QUICK_REFERENCE.hpp">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\vm\pch_.h">
       <Filter>소스 파일</Filter>
     </ClInclude>
@@ -41,40 +23,5 @@
     <ClCompile Include="..\..\src\vm\pch_.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="vm_main.cpp">
-      <Filter>Test%28Obsolute%29\internal\src</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="test\DEBUGHELPER_SUMMARY_KR.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="test\TEST_FRAMEWORK_README.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="docs\enum-implementation-status.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="docs\protocol-implementation.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="test\MIGRATION_GUIDE.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="test\QUICKSTART.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="test\README_TESTS.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="test\SUMMARY.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="test\CHECKLIST.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
-    <None Include="GRAMMAR_TODO.md">
-      <Filter>Test%28Obsolute%29\docs</Filter>
-    </None>
   </ItemGroup>
 </Project>

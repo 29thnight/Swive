@@ -136,23 +136,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\vm\pch_.h" />
-    <ClInclude Include="test\QUICK_REFERENCE.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\vm\pch_.cpp" />
-    <ClCompile Include="vm_main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="docs\enum-implementation-status.md" />
-    <None Include="docs\protocol-implementation.md" />
-    <None Include="GRAMMAR_TODO.md" />
-    <None Include="test\CHECKLIST.md" />
-    <None Include="test\DEBUGHELPER_SUMMARY_KR.md" />
-    <None Include="test\MIGRATION_GUIDE.md" />
-    <None Include="test\QUICKSTART.md" />
-    <None Include="test\README_TESTS.md" />
-    <None Include="test\SUMMARY.md" />
-    <None Include="test\TEST_FRAMEWORK_README.md" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\common\SwiftScriptLib.vcxproj">

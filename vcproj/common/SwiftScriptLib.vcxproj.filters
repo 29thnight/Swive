@@ -80,6 +80,9 @@
     <None Include="..\..\src\common\ss_vm_opcodes_basic.inl">
       <Filter>vm_opcodes</Filter>
     </None>
+    <None Include="..\..\Chunk_Evolution_Proposal.md">
+      <Filter>리소스 파일</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\common\ss_core.cpp">

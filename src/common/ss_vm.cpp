@@ -151,6 +151,10 @@ namespace swiftscript {
         return globals_.find(name) != globals_.end();
     }
 
+    bool VM::is_builtin_type_name(const std::string& name) const {
+        return name == "Int" || name == "Float" || name == "Bool" || name == "String";
+    }
+
     void VM::add_deferred_release(Object* obj) {
         deferred_releases_.push_back(obj);
     }
@@ -364,6 +368,28 @@ namespace swiftscript {
         ip_ = 0;
         stack_.clear();
         call_frames_.clear();
+        auto ensure_builtin = [&](const std::string& name) {
+            if (has_global(name)) {
+                return;
+            }
+            std::vector<std::string> params = { "value" };
+            std::vector<std::string> labels = { "" };
+            std::vector<Value> defaults = { Value::null() };
+            std::vector<bool> has_defaults = { false };
+            auto* func = allocate_object<FunctionObject>(
+                name,
+                std::move(params),
+                std::move(labels),
+                std::move(defaults),
+                std::move(has_defaults),
+                nullptr,
+                false);
+            set_global(name, Value::from_object(func));
+        };
+        ensure_builtin("Int");
+        ensure_builtin("Float");
+        ensure_builtin("Bool");
+        ensure_builtin("String");
         Value result = run();
         run_cleanup();
         while (!deferred_releases_.empty()) {

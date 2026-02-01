@@ -97,6 +97,8 @@ namespace swiftscript {
         Value get_global(const std::string& name) const;
         bool has_global(const std::string& name) const;
 
+        bool is_builtin_type_name(const std::string& name) const;
+
         // Execution control
         void run_cleanup();
         void collect_if_needed();

@@ -85,6 +85,10 @@ known_attributes_.clear();
         declare_symbol(module_name, TypeInfo::unknown(), 0);
     }
     declare_symbol("readLine", TypeInfo::function({}, TypeInfo::builtin("String", true)), 0);
+    declare_symbol("Int", TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("Int")), 0);
+    declare_symbol("Float", TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("Float")), 0);
+    declare_symbol("Bool", TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("Bool")), 0);
+    declare_symbol("String", TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("String")), 0);
     for (const auto* module_program : imported_programs) {
         declare_functions(*module_program);
     }

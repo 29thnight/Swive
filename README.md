@@ -23,6 +23,11 @@ let s: String = "hello"
 let ok: Bool = true
 let nums: Array<Int> = [1, 2, 3]
 let dict: Dictionary<String, Int> = ["a": 1]
+
+let parsed: Int = Int("123")
+let ratio: Float = Float("3.5")
+let flag: Bool = Bool("true")
+let text: String = String(10)
 ```
 
 ### 2) 변수/상수 선언

@@ -4,6 +4,12 @@
 #define OP_HANDLER_IMP(T) tbl[static_cast<uint8_t>(T)] = &OpCodeHandler<T>::execute
 #define OPCODE_DEFAULT(T) template<> struct OpCodeHandler<T> { OP_BODY { return; } }; 
 
+#include <cerrno>
+#include <charconv>
+#include <cctype>
+#include <cstdlib>
+#include <system_error>
+#include <string_view>
 #include "ss_opcodes.hpp"
 #include "ss_vm.hpp"
 
@@ -14,6 +20,132 @@ namespace swiftscript {
     // only. Do not redeclare the primary template or pull the namespace into
     // global scope.
     // Build the handler table by taking pointers to each OpCodeHandler::execute
+
+    namespace {
+        std::string_view trim_view(std::string_view text) {
+            while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front()))) {
+                text.remove_prefix(1);
+            }
+            while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back()))) {
+                text.remove_suffix(1);
+            }
+            return text;
+        }
+
+        std::string to_lower_copy(std::string_view text) {
+            std::string out;
+            out.reserve(text.size());
+            for (unsigned char ch : text) {
+                out.push_back(static_cast<char>(std::tolower(ch)));
+            }
+            return out;
+        }
+
+        Int parse_int(std::string_view text) {
+            std::string_view trimmed = trim_view(text);
+            if (trimmed.empty()) {
+                throw std::runtime_error("Int() failed: empty string.");
+            }
+            Int result = 0;
+            const char* start = trimmed.data();
+            const char* end = trimmed.data() + trimmed.size();
+            auto [ptr, ec] = std::from_chars(start, end, result);
+            if (ec != std::errc() || ptr != end) {
+                throw std::runtime_error("Int() failed: invalid integer string.");
+            }
+            return result;
+        }
+
+        Float parse_float(std::string_view text) {
+            std::string_view trimmed = trim_view(text);
+            if (trimmed.empty()) {
+                throw std::runtime_error("Float() failed: empty string.");
+            }
+            std::string temp(trimmed);
+            char* end = nullptr;
+            errno = 0;
+            double value = std::strtod(temp.c_str(), &end);
+            if (end != temp.c_str() + temp.size() || errno == ERANGE) {
+                throw std::runtime_error("Float() failed: invalid float string.");
+            }
+            return static_cast<Float>(value);
+        }
+
+        Bool parse_bool(std::string_view text) {
+            std::string_view trimmed = trim_view(text);
+            if (trimmed.empty()) {
+                throw std::runtime_error("Bool() failed: empty string.");
+            }
+            std::string lowered = to_lower_copy(trimmed);
+            if (lowered == "true" || lowered == "1") {
+                return true;
+            }
+            if (lowered == "false" || lowered == "0") {
+                return false;
+            }
+            throw std::runtime_error("Bool() failed: invalid boolean string.");
+        }
+
+        Value convert_builtin(VM& vm, const std::string& name, const Value& input) {
+            if (name == "String") {
+                std::string text = input.to_string();
+                Object* obj = vm.allocate_object<StringObject>(std::move(text));
+                return Value::from_object(obj);
+            }
+            if (name == "Int") {
+                if (input.is_int()) {
+                    return input;
+                }
+                if (input.is_float()) {
+                    return Value::from_int(static_cast<Int>(input.as_float()));
+                }
+                if (input.is_bool()) {
+                    return Value::from_int(input.as_bool() ? 1 : 0);
+                }
+                if (input.is_object() && input.as_object() &&
+                    input.as_object()->type == ObjectType::String) {
+                    const auto& text = static_cast<StringObject*>(input.as_object())->data;
+                    return Value::from_int(parse_int(text));
+                }
+                throw std::runtime_error("Int() failed: unsupported input type.");
+            }
+            if (name == "Float") {
+                if (input.is_float()) {
+                    return input;
+                }
+                if (input.is_int()) {
+                    return Value::from_float(static_cast<Float>(input.as_int()));
+                }
+                if (input.is_bool()) {
+                    return Value::from_float(input.as_bool() ? static_cast<Float>(1.0) : static_cast<Float>(0.0));
+                }
+                if (input.is_object() && input.as_object() &&
+                    input.as_object()->type == ObjectType::String) {
+                    const auto& text = static_cast<StringObject*>(input.as_object())->data;
+                    return Value::from_float(parse_float(text));
+                }
+                throw std::runtime_error("Float() failed: unsupported input type.");
+            }
+            if (name == "Bool") {
+                if (input.is_bool()) {
+                    return input;
+                }
+                if (input.is_int()) {
+                    return Value::from_bool(input.as_int() != 0);
+                }
+                if (input.is_float()) {
+                    return Value::from_bool(input.as_float() != static_cast<Float>(0.0));
+                }
+                if (input.is_object() && input.as_object() &&
+                    input.as_object()->type == ObjectType::String) {
+                    const auto& text = static_cast<StringObject*>(input.as_object())->data;
+                    return Value::from_bool(parse_bool(text));
+                }
+                throw std::runtime_error("Bool() failed: unsupported input type.");
+            }
+            throw std::runtime_error("Unknown builtin conversion: " + name);
+        }
+    } // namespace
 
     template<>
     struct OpCodeHandler<OpCode::OP_CONSTANT> {
@@ -256,6 +388,22 @@ namespace swiftscript {
                 }
 
                 throw std::runtime_error("Unknown built-in method: " + method->method_name);
+            }
+
+            if (obj->type == ObjectType::Function) {
+                auto* func = static_cast<FunctionObject*>(obj);
+                if (!func->chunk && vm.is_builtin_type_name(func->name)) {
+                    if (arg_count != 1) {
+                        throw std::runtime_error(func->name + "() requires exactly 1 argument.");
+                    }
+                    Value input = vm.stack_[callee_index + 1];
+                    Value result = convert_builtin(vm, func->name, input);
+                    while (vm.stack_.size() > callee_index) {
+                        vm.pop();
+                    }
+                    vm.push(result);
+                    return;
+                }
             }
 
             // Bound method: inject receiver
@@ -647,6 +795,22 @@ namespace swiftscript {
                 }
 
                 throw std::runtime_error("Unknown built-in method: " + method->method_name);
+            }
+
+            if (obj->type == ObjectType::Function) {
+                auto* func = static_cast<FunctionObject*>(obj);
+                if (!func->chunk && vm.is_builtin_type_name(func->name)) {
+                    if (arg_count != 1) {
+                        throw std::runtime_error(func->name + "() requires exactly 1 argument.");
+                    }
+                    Value input = vm.stack_[callee_index + 1];
+                    Value result = convert_builtin(vm, func->name, input);
+                    while (vm.stack_.size() > callee_index) {
+                        vm.pop();
+                    }
+                    vm.push(result);
+                    return;
+                }
             }
 
             // Bound method: inject receiver

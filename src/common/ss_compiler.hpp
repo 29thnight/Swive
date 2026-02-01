@@ -183,6 +183,29 @@ private:
 
     size_t identifier_constant(const std::string& name);
 
+    struct MethodBodyRecord {
+        body_idx body{0};
+    };
+
+    std::unordered_map<std::string, MethodBodyRecord> method_body_lookup_;
+
+    std::string build_method_key(const std::string& type_name,
+                                 const std::string& method_name,
+                                 bool is_static,
+                                 const std::vector<TypeAnnotation>& param_types) const;
+    std::string build_method_key(const std::string& type_name,
+                                 const std::string& method_name,
+                                 bool is_static,
+                                 const std::vector<ParamDecl>& params) const;
+    std::vector<TypeAnnotation> extract_param_types(const std::vector<ParamDecl>& params) const;
+    std::vector<TypeAnnotation> build_accessor_param_types(const std::optional<TypeAnnotation>& type) const;
+    body_idx store_method_body(const Assembly& body_chunk);
+    void record_method_body(const std::string& type_name,
+                            const std::string& method_name,
+                            bool is_static,
+                            const std::vector<TypeAnnotation>& param_types,
+                            const Assembly& body_chunk);
+
     Assembly compile_function_body(const FuncDeclStmt& stmt);
     Assembly compile_struct_method_body(const StructMethodDecl& method, bool is_mutating);
     std::shared_ptr<Assembly> finalize_function_chunk(Assembly&& chunk);

@@ -16,9 +16,8 @@ void Assembly::write_op(OpCode op, uint32_t line) {
 }
 
 size_t Assembly::add_constant(Value value) {
-    constants.push_back(value);
-    global_constant_pool.push_back(constants.back());
-    return constants.size() - 1;
+    global_constant_pool.push_back(value);
+    return global_constant_pool.size() - 1;
 }
 
 size_t Assembly::add_string(const std::string& str) {
@@ -378,9 +377,10 @@ void Assembly::serialize(std::ostream& out) const
 
     // constants
     {
-        uint32_t n = (uint32_t)constants.size();
+        const auto& constants_for_pool = constants.empty() ? global_constant_pool : constants;
+        uint32_t n = (uint32_t)constants_for_pool.size();
         WritePOD(out, n);
-        for (const Value& v : constants)
+        for (const Value& v : constants_for_pool)
         {
             // ===== 반드시 구현 필요 =====
             // Value가 스스로 직렬화/역직렬화를 제공하도록

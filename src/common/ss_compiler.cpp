@@ -30,6 +30,7 @@ chunk_ = Assembly{};
 locals_.clear();
 scope_depth_ = 0;
 recursion_depth_ = 0;
+method_body_lookup_.clear();
 
 // Step 3: Compile statements (skip generic templates, they're handled by type checker)
 for (const auto& stmt : specialized_program) {
@@ -212,6 +213,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
             getter_compiler.emit_op(OpCode::OP_RETURN, property->line);
             
             getter_proto.chunk = finalize_function_chunk(std::move(getter_compiler.chunk_));
+            record_method_body(stmt->name, getter_proto.name, property->is_static, {}, *getter_proto.chunk);
             size_t getter_idx = chunk_.add_function(std::move(getter_proto));
             
             // Compile setter (if present)
@@ -252,6 +254,11 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 setter_compiler.emit_op(OpCode::OP_RETURN, property->line);
                 
                 setter_proto.chunk = finalize_function_chunk(std::move(setter_compiler.chunk_));
+                record_method_body(stmt->name,
+                                   setter_proto.name,
+                                   property->is_static,
+                                   build_accessor_param_types(property->type_annotation),
+                                   *setter_proto.chunk);
                 setter_idx = chunk_.add_function(std::move(setter_proto));
             }
             
@@ -447,6 +454,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         method_compiler.emit_op(OpCode::OP_RETURN, method->line);
 
         proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
+        record_method_body(stmt->name, proto.name, method->is_static, extract_param_types(method->params), *proto.chunk);
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -499,6 +507,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
         deinit_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
         proto.chunk = finalize_function_chunk(std::move(deinit_compiler.chunk_));
+        record_method_body(stmt->name, proto.name, false, {}, *proto.chunk);
         proto.upvalues.reserve(deinit_compiler.upvalues_.size());
         for (const auto& uv : deinit_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -752,6 +761,7 @@ if (scope_depth_ > 0) {
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
             proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
+            record_method_body(stmt->name, proto.name, true, extract_param_types(method->params), *proto.chunk);
             proto.upvalues.reserve(method_compiler.upvalues_.size());
             for (const auto& uv : method_compiler.upvalues_) {
                 proto.upvalues.push_back({uv.index, uv.is_local});
@@ -824,6 +834,7 @@ if (scope_depth_ > 0) {
         method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
         proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
+        record_method_body(stmt->name, proto.name, false, extract_param_types(method->params), *proto.chunk);
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -897,6 +908,7 @@ if (scope_depth_ > 0) {
         init_compiler.emit_op(OpCode::OP_RETURN, init_method->line);
 
         proto.chunk = finalize_function_chunk(std::move(init_compiler.chunk_));
+        record_method_body(stmt->name, proto.name, false, extract_param_types(init_method->params), *proto.chunk);
         proto.upvalues.reserve(init_compiler.upvalues_.size());
         for (const auto& uv : init_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1025,6 +1037,7 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         getter_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
         
         getter_proto.chunk = finalize_function_chunk(std::move(getter_compiler.chunk_));
+        record_method_body(stmt->name, getter_proto.name, method->is_static, {}, *getter_proto.chunk);
         getter_proto.upvalues.reserve(getter_compiler.upvalues_.size());
         for (const auto& uv : getter_compiler.upvalues_) {
             getter_proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1091,6 +1104,7 @@ void Compiler::visit(EnumDeclStmt* stmt) {
         method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
         proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
+        record_method_body(stmt->name, proto.name, method->is_static, extract_param_types(method->params), *proto.chunk);
         proto.upvalues.reserve(method_compiler.upvalues_.size());
         for (const auto& uv : method_compiler.upvalues_) {
             proto.upvalues.push_back({uv.index, uv.is_local});
@@ -1980,6 +1994,7 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
             
             getter_proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
+            record_method_body(stmt->extended_type, getter_proto.name, method->is_static, {}, *getter_proto.chunk);
             size_t func_idx = chunk_.add_function(std::move(getter_proto));
             
             // Emit OP_DEFINE_COMPUTED_PROPERTY with indices
@@ -2034,6 +2049,7 @@ void Compiler::visit(ExtensionDeclStmt* stmt) {
             method_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
             func_proto.chunk = finalize_function_chunk(std::move(method_compiler.chunk_));
+            record_method_body(stmt->extended_type, func_proto.name, method->is_static, extract_param_types(method->params), *func_proto.chunk);
             size_t func_idx = chunk_.add_function(std::move(func_proto));
 
             emit_op(OpCode::OP_FUNCTION, stmt->line);
@@ -2127,6 +2143,7 @@ void Compiler::visit(FuncDeclStmt* stmt) {
     function_compiler.emit_op(OpCode::OP_RETURN, stmt->line);
 
     proto.chunk = finalize_function_chunk(std::move(function_compiler.chunk_));
+    record_method_body("", proto.name, false, extract_param_types(stmt->params), *proto.chunk);
     proto.upvalues.reserve(function_compiler.upvalues_.size());
     for (const auto& uv : function_compiler.upvalues_) {
         proto.upvalues.push_back({uv.index, uv.is_local});
@@ -3064,6 +3081,79 @@ size_t Compiler::identifier_constant(const std::string& name) {
     return chunk_.add_string(name);
 }
 
+std::string Compiler::build_method_key(const std::string& type_name,
+                                       const std::string& method_name,
+                                       bool is_static,
+                                       const std::vector<TypeAnnotation>& param_types) const {
+    std::string key = type_name;
+    key += "::";
+    if (is_static) {
+        key += "static ";
+    }
+    key += method_name;
+    key += "(";
+    key += std::to_string(param_types.size());
+    key += ":";
+    for (size_t i = 0; i < param_types.size(); ++i) {
+        if (i > 0) {
+            key += ",";
+        }
+        std::string type_name_part = param_types[i].name.empty() ? "_" : param_types[i].name;
+        if (param_types[i].is_optional) {
+            type_name_part += "?";
+        }
+        key += type_name_part;
+    }
+    key += ")";
+    return key;
+}
+
+std::string Compiler::build_method_key(const std::string& type_name,
+                                       const std::string& method_name,
+                                       bool is_static,
+                                       const std::vector<ParamDecl>& params) const {
+    return build_method_key(type_name, method_name, is_static, extract_param_types(params));
+}
+
+std::vector<TypeAnnotation> Compiler::extract_param_types(const std::vector<ParamDecl>& params) const {
+    std::vector<TypeAnnotation> param_types;
+    param_types.reserve(params.size());
+    for (const auto& param : params) {
+        param_types.push_back(param.type);
+    }
+    return param_types;
+}
+
+std::vector<TypeAnnotation> Compiler::build_accessor_param_types(const std::optional<TypeAnnotation>& type) const {
+    std::vector<TypeAnnotation> params;
+    if (type.has_value()) {
+        params.push_back(type.value());
+    } else {
+        TypeAnnotation placeholder{};
+        placeholder.name = "_";
+        params.push_back(placeholder);
+    }
+    return params;
+}
+
+body_idx Compiler::store_method_body(const Assembly& body_chunk) {
+    MethodBody body{};
+    body.bytecode = body_chunk.bytecode();
+    body.line_info = body_chunk.line_info();
+    body.max_stack_depth = 0;
+    chunk_.method_bodies.push_back(std::move(body));
+    return static_cast<body_idx>(chunk_.method_bodies.size() - 1);
+}
+
+void Compiler::record_method_body(const std::string& type_name,
+                                  const std::string& method_name,
+                                  bool is_static,
+                                  const std::vector<TypeAnnotation>& param_types,
+                                  const Assembly& body_chunk) {
+    body_idx idx = store_method_body(body_chunk);
+    method_body_lookup_[build_method_key(type_name, method_name, is_static, param_types)] = {idx};
+}
+
 std::shared_ptr<Assembly> Compiler::finalize_function_chunk(Assembly&& chunk) {
     chunk.expand_to_assembly();
     return std::make_shared<Assembly>(std::move(chunk));
@@ -3090,6 +3180,7 @@ Assembly Compiler::compile_function_body(const FuncDeclStmt& stmt) {
     function_compiler.emit_op(OpCode::OP_NIL, stmt.line);
     function_compiler.emit_op(OpCode::OP_RETURN, stmt.line);
     function_compiler.chunk_.expand_to_assembly();
+    record_method_body("", stmt.name, false, extract_param_types(stmt.params), function_compiler.chunk_);
     return std::move(function_compiler.chunk_);
 }
 
@@ -3120,6 +3211,7 @@ Assembly Compiler::compile_struct_method_body(const StructMethodDecl& method, bo
     method_compiler.emit_op(OpCode::OP_NIL, 0);
     method_compiler.emit_op(OpCode::OP_RETURN, 0);
     method_compiler.chunk_.expand_to_assembly();
+    record_method_body("", method.name, method.is_static, extract_param_types(method.params), method_compiler.chunk_);
     return std::move(method_compiler.chunk_);
 }
 
@@ -3127,6 +3219,8 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
     struct PendingMethod {
         std::string name;
         uint32_t flags{0};
+        std::vector<TypeAnnotation> params;
+        std::optional<TypeAnnotation> return_type;
     };
 
     struct PendingField {
@@ -3141,6 +3235,8 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
         std::optional<TypeAnnotation> type;
         bool has_getter{true};
         bool has_setter{false};
+        std::string getter_name;
+        std::string setter_name;
     };
 
     struct PendingType {
@@ -3238,7 +3334,29 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                     }
                     pending.has_getter = true;
                     pending.has_setter = prop->setter_body != nullptr;
+                    pending.getter_name = "get:" + prop->name;
+                    pending.setter_name = "set:" + prop->name;
                     meta.properties.push_back(std::move(pending));
+
+                    PendingMethod getter_method{};
+                    getter_method.name = "get:" + prop->name;
+                    getter_method.flags = access_method_flags(prop->access_level);
+                    if (prop->is_static) {
+                        getter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                    }
+                    getter_method.return_type = prop->type_annotation;
+                    meta.methods.push_back(std::move(getter_method));
+
+                    if (prop->setter_body) {
+                        PendingMethod setter_method{};
+                        setter_method.name = "set:" + prop->name;
+                        setter_method.flags = access_method_flags(prop->access_level);
+                        if (prop->is_static) {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                        }
+                        setter_method.params = build_accessor_param_types(prop->type_annotation);
+                        meta.methods.push_back(std::move(setter_method));
+                    }
                 } else {
                     PendingField pending{};
                     pending.name = prop->name;
@@ -3266,6 +3384,11 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 }
                 if (method->is_override) {
                     pending.flags |= static_cast<uint32_t>(MethodFlags::Override);
+                }
+                pending.return_type = method->return_type;
+                pending.params.reserve(method->params.size());
+                for (const auto& param : method->params) {
+                    pending.params.push_back(param.type);
                 }
                 meta.methods.push_back(std::move(pending));
             }
@@ -3300,7 +3423,31 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                     }
                     pending.has_getter = true;
                     pending.has_setter = prop->setter_body != nullptr;
+                    pending.getter_name = "get:" + prop->name;
+                    pending.setter_name = "set:" + prop->name;
                     meta.properties.push_back(std::move(pending));
+
+                    PendingMethod getter_method{};
+                    getter_method.name = "get:" + prop->name;
+                    getter_method.flags = access_method_flags(prop->access_level);
+                    if (prop->is_static) {
+                        getter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                    }
+                    getter_method.return_type = prop->type_annotation;
+                    meta.methods.push_back(std::move(getter_method));
+
+                    if (prop->setter_body) {
+                        PendingMethod setter_method{};
+                        setter_method.name = "set:" + prop->name;
+                        setter_method.flags = access_method_flags(prop->access_level);
+                        if (prop->is_static) {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                        } else {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                        }
+                        setter_method.params = build_accessor_param_types(prop->type_annotation);
+                        meta.methods.push_back(std::move(setter_method));
+                    }
                 } else {
                     PendingField pending{};
                     pending.name = prop->name;
@@ -3323,13 +3470,38 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 if (method->is_computed_property) {
                     PendingProperty pending{};
                     pending.name = method->name;
+                    pending.type = method->return_type;
                     pending.flags = access_property_flags(method->access_level);
                     if (method->is_static) {
                         pending.flags |= static_cast<uint32_t>(PropertyFlags::Static);
                     }
                     pending.has_getter = true;
                     pending.has_setter = method->is_mutating;
+                    pending.getter_name = "get:" + method->name;
+                    pending.setter_name = "set:" + method->name;
                     meta.properties.push_back(std::move(pending));
+
+                    PendingMethod getter_method{};
+                    getter_method.name = "get:" + method->name;
+                    getter_method.flags = access_method_flags(method->access_level);
+                    if (method->is_static) {
+                        getter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                    }
+                    getter_method.return_type = method->return_type;
+                    meta.methods.push_back(std::move(getter_method));
+
+                    if (method->is_mutating) {
+                        PendingMethod setter_method{};
+                        setter_method.name = "set:" + method->name;
+                        setter_method.flags = access_method_flags(method->access_level);
+                        if (method->is_static) {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                        } else {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                        }
+                        setter_method.params = build_accessor_param_types(method->return_type);
+                        meta.methods.push_back(std::move(setter_method));
+                    }
                     continue;
                 }
                 PendingMethod pending{};
@@ -3341,6 +3513,11 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 if (method->is_mutating) {
                     pending.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
                 }
+                pending.return_type = method->return_type;
+                pending.params.reserve(method->params.size());
+                for (const auto& param : method->params) {
+                    pending.params.push_back(param.type);
+                }
                 meta.methods.push_back(std::move(pending));
             }
 
@@ -3351,6 +3528,13 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 PendingMethod pending{};
                 pending.name = "init";
                 pending.flags = static_cast<uint32_t>(MethodFlags::Mutating);
+                TypeAnnotation return_type{};
+                return_type.name = struct_decl->name;
+                pending.return_type = return_type;
+                pending.params.reserve(init_method->params.size());
+                for (const auto& param : init_method->params) {
+                    pending.params.push_back(param.type);
+                }
                 meta.methods.push_back(std::move(pending));
             }
             break;
@@ -3366,13 +3550,38 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 if (method->is_computed_property) {
                     PendingProperty pending{};
                     pending.name = method->name;
+                    pending.type = method->return_type;
                     pending.flags = access_property_flags(method->access_level);
                     if (method->is_static) {
                         pending.flags |= static_cast<uint32_t>(PropertyFlags::Static);
                     }
                     pending.has_getter = true;
                     pending.has_setter = method->is_mutating;
+                    pending.getter_name = "get:" + method->name;
+                    pending.setter_name = "set:" + method->name;
                     meta.properties.push_back(std::move(pending));
+
+                    PendingMethod getter_method{};
+                    getter_method.name = "get:" + method->name;
+                    getter_method.flags = access_method_flags(method->access_level);
+                    if (method->is_static) {
+                        getter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                    }
+                    getter_method.return_type = method->return_type;
+                    meta.methods.push_back(std::move(getter_method));
+
+                    if (method->is_mutating) {
+                        PendingMethod setter_method{};
+                        setter_method.name = "set:" + method->name;
+                        setter_method.flags = access_method_flags(method->access_level);
+                        if (method->is_static) {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                        } else {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                        }
+                        setter_method.params = build_accessor_param_types(method->return_type);
+                        meta.methods.push_back(std::move(setter_method));
+                    }
                     continue;
                 }
                 PendingMethod pending{};
@@ -3383,6 +3592,11 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 }
                 if (method->is_mutating) {
                     pending.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                }
+                pending.return_type = method->return_type;
+                pending.params.reserve(method->params.size());
+                for (const auto& param : method->params) {
+                    pending.params.push_back(param.type);
                 }
                 meta.methods.push_back(std::move(pending));
             }
@@ -3402,6 +3616,11 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 if (requirement.is_mutating) {
                     pending.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
                 }
+                pending.return_type = requirement.return_type;
+                pending.params.reserve(requirement.params.size());
+                for (const auto& param : requirement.params) {
+                    pending.params.push_back(param.type);
+                }
                 meta.methods.push_back(std::move(pending));
             }
             for (const auto& requirement : proto_decl->property_requirements) {
@@ -3411,7 +3630,25 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 pending.flags = static_cast<uint32_t>(PropertyFlags::Public);
                 pending.has_getter = requirement.has_getter;
                 pending.has_setter = requirement.has_setter;
+                pending.getter_name = "get:" + requirement.name;
+                pending.setter_name = "set:" + requirement.name;
                 meta.properties.push_back(std::move(pending));
+
+                if (requirement.has_getter) {
+                    PendingMethod getter_method{};
+                    getter_method.name = "get:" + requirement.name;
+                    getter_method.flags = static_cast<uint32_t>(MethodFlags::Virtual);
+                    getter_method.return_type = requirement.type;
+                    meta.methods.push_back(std::move(getter_method));
+                }
+
+                if (requirement.has_setter) {
+                    PendingMethod setter_method{};
+                    setter_method.name = "set:" + requirement.name;
+                    setter_method.flags = static_cast<uint32_t>(MethodFlags::Virtual);
+                    setter_method.params = build_accessor_param_types(requirement.type);
+                    meta.methods.push_back(std::move(setter_method));
+                }
             }
             break;
         }
@@ -3428,13 +3665,38 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 if (method->is_computed_property) {
                     PendingProperty pending{};
                     pending.name = method->name;
+                    pending.type = method->return_type;
                     pending.flags = access_property_flags(method->access_level);
                     if (method->is_static) {
                         pending.flags |= static_cast<uint32_t>(PropertyFlags::Static);
                     }
                     pending.has_getter = true;
                     pending.has_setter = method->is_mutating;
+                    pending.getter_name = "$get_" + method->name;
+                    pending.setter_name = "$set_" + method->name;
                     meta.properties.push_back(std::move(pending));
+
+                    PendingMethod getter_method{};
+                    getter_method.name = "$get_" + method->name;
+                    getter_method.flags = access_method_flags(method->access_level);
+                    if (method->is_static) {
+                        getter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                    }
+                    getter_method.return_type = method->return_type;
+                    meta.methods.push_back(std::move(getter_method));
+
+                    if (method->is_mutating) {
+                        PendingMethod setter_method{};
+                        setter_method.name = "$set_" + method->name;
+                        setter_method.flags = access_method_flags(method->access_level);
+                        if (method->is_static) {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Static);
+                        } else {
+                            setter_method.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                        }
+                        setter_method.params = build_accessor_param_types(method->return_type);
+                        meta.methods.push_back(std::move(setter_method));
+                    }
                     continue;
                 }
                 PendingMethod pending{};
@@ -3445,6 +3707,11 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
                 }
                 if (method->is_mutating) {
                     pending.flags |= static_cast<uint32_t>(MethodFlags::Mutating);
+                }
+                pending.return_type = method->return_type;
+                pending.params.reserve(method->params.size());
+                for (const auto& param : method->params) {
+                    pending.params.push_back(param.type);
                 }
                 meta.methods.push_back(std::move(pending));
             }
@@ -3478,6 +3745,30 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
             return 0;
         }
         return ensure_type_def(annotation->name, 0);
+    };
+
+    auto resolve_type_annotation_value = [&](const TypeAnnotation& annotation) -> type_idx {
+        if (annotation.name.empty()) {
+            return 0;
+        }
+        return ensure_type_def(annotation.name, 0);
+    };
+
+    auto append_signature = [&](const std::vector<TypeAnnotation>& params,
+                                const std::optional<TypeAnnotation>& return_type) -> signature_idx {
+        signature_idx offset = static_cast<signature_idx>(chunk_.signature_blob.size());
+        auto append_u32 = [&](uint32_t value) {
+            chunk_.signature_blob.push_back(static_cast<uint8_t>(value & 0xFF));
+            chunk_.signature_blob.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+            chunk_.signature_blob.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
+            chunk_.signature_blob.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+        };
+        append_u32(static_cast<uint32_t>(params.size()));
+        append_u32(static_cast<uint32_t>(resolve_type_annotation(return_type)));
+        for (const auto& param : params) {
+            append_u32(static_cast<uint32_t>(resolve_type_annotation_value(param)));
+        }
+        return offset;
     };
 
     constexpr body_idx kInvalidBody = std::numeric_limits<body_idx>::max();
@@ -3515,13 +3806,18 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
         def.field_list.count = static_cast<uint32_t>(chunk_.field_definitions.size() - field_start);
 
         size_t method_start = chunk_.method_definitions.size();
+        std::unordered_map<std::string, method_idx> method_lookup;
         for (const auto& method : meta.methods) {
             MethodDef def_method{};
             def_method.name = static_cast<string_idx>(chunk_.add_string(method.name));
             def_method.flags = method.flags;
-            def_method.signature = 0;
-            def_method.body_ptr = kInvalidBody;
+            def_method.signature = append_signature(method.params, method.return_type);
+            bool is_static = (method.flags & static_cast<uint32_t>(MethodFlags::Static)) != 0;
+            std::string method_key = build_method_key(type_name, method.name, is_static, method.params);
+            auto body_it = method_body_lookup_.find(method_key);
+            def_method.body_ptr = body_it != method_body_lookup_.end() ? body_it->second.body : kInvalidBody;
             chunk_.method_definitions.push_back(std::move(def_method));
+            method_lookup.emplace(method_key, static_cast<method_idx>(chunk_.method_definitions.size() - 1));
         }
         def.method_list.start = static_cast<uint32_t>(method_start);
         def.method_list.count = static_cast<uint32_t>(chunk_.method_definitions.size() - method_start);
@@ -3531,8 +3827,25 @@ void Compiler::populate_metadata_tables(const std::vector<StmtPtr>& program) {
             def_prop.name = static_cast<string_idx>(chunk_.add_string(prop.name));
             def_prop.flags = prop.flags;
             def_prop.type = resolve_type_annotation(prop.type);
-            def_prop.getter = prop.has_getter ? 0 : kInvalidMethod;
-            def_prop.setter = prop.has_setter ? 0 : kInvalidMethod;
+            def_prop.getter = kInvalidMethod;
+            def_prop.setter = kInvalidMethod;
+            bool is_static = (prop.flags & static_cast<uint32_t>(PropertyFlags::Static)) != 0;
+            if (prop.has_getter && !prop.getter_name.empty()) {
+                std::vector<TypeAnnotation> getter_params;
+                std::string getter_key = build_method_key(type_name, prop.getter_name, is_static, getter_params);
+                auto it = method_lookup.find(getter_key);
+                if (it != method_lookup.end()) {
+                    def_prop.getter = it->second;
+                }
+            }
+            if (prop.has_setter && !prop.setter_name.empty()) {
+                std::vector<TypeAnnotation> setter_params = build_accessor_param_types(prop.type);
+                std::string setter_key = build_method_key(type_name, prop.setter_name, is_static, setter_params);
+                auto it = method_lookup.find(setter_key);
+                if (it != method_lookup.end()) {
+                    def_prop.setter = it->second;
+                }
+            }
             chunk_.property_definitions.push_back(std::move(def_prop));
         }
     }

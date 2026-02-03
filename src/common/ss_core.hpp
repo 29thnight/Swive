@@ -65,7 +65,8 @@ inline const char* object_type_name(ObjectType t) {
 
 // RC Management Structure
 struct RCInfo {
-    std::atomic<int32_t> strong_count{1};  // Objects start with refcount=1 (owned by creator)
+    std::atomic<int32_t> strong_count{1};  // Creator owns the initial reference.
+    std::atomic<bool> has_creator_ref{true};
     std::atomic<int32_t> weak_count{0};
     std::unordered_set<Value*> weak_refs;  // Weak reference slots to nil on dealloc
     bool is_dead{false};  // Marks object as logically deallocated (strong_count == 0)
@@ -101,6 +102,7 @@ public:
     // Strong reference operations
     static void retain(Object* obj);
     static void release(VM* vm, Object* obj);
+    static void adopt(Object* obj);
 
     // Weak reference operations
     static void weak_retain(Object* obj, Value* weak_slot);

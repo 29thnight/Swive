@@ -551,16 +551,34 @@ public:
 
     BoundMethodObject(Object* recv, Value m, bool mutating = false)
         : Object(ObjectType::BoundMethod), receiver(recv), method(m), is_mutating(mutating) {
+        if (receiver) {
+            RC::retain(receiver);
+        }
+        if (method.is_object() && method.ref_type() == RefType::Strong && method.as_object()) {
+            RC::retain(method.as_object());
+        }
     }
 
     // Convenience constructor for InstanceObject
     BoundMethodObject(InstanceObject* recv, Value m, bool mutating = false)
         : Object(ObjectType::BoundMethod), receiver(static_cast<Object*>(recv)), method(m), is_mutating(mutating) {
+        if (receiver) {
+            RC::retain(receiver);
+        }
+        if (method.is_object() && method.ref_type() == RefType::Strong && method.as_object()) {
+            RC::retain(method.as_object());
+        }
     }
 
     // Convenience constructor for StructInstanceObject
     BoundMethodObject(StructInstanceObject* recv, Value m, bool mutating = false)
         : Object(ObjectType::BoundMethod), receiver(static_cast<Object*>(recv)), method(m), is_mutating(mutating) {
+        if (receiver) {
+            RC::retain(receiver);
+        }
+        if (method.is_object() && method.ref_type() == RefType::Strong && method.as_object()) {
+            RC::retain(method.as_object());
+        }
     }
 
     std::string to_string() const override {
@@ -579,6 +597,9 @@ public:
 
     BuiltinMethodObject(Object* t, std::string name)
         : Object(ObjectType::BuiltinMethod), target(t), method_name(std::move(name)) {
+        if (target) {
+            RC::retain(target);
+        }
     }
 
     std::string to_string() const override {

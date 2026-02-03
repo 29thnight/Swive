@@ -270,6 +270,7 @@ namespace swiftscript {
                     RC::release(self, old_callee.as_object());
                 }
                 vm.stack_[callee_index] = Value::from_object(instance);
+                RC::adopt(instance);
 
                 // Check for init method
                 auto it = struct_type->methods.find("init");
@@ -304,7 +305,12 @@ namespace swiftscript {
 
                 // Bind init as bound method for struct
                 auto* bound = vm.allocate_object<BoundMethodObject>(instance, it->second);
+                Value old_instance = vm.stack_[callee_index];
+                if (old_instance.is_object() && old_instance.ref_type() == RefType::Strong && old_instance.as_object()) {
+                    RC::release(self, old_instance.as_object());
+                }
                 vm.stack_[callee_index] = Value::from_object(bound);
+                RC::adopt(bound);
                 callee = vm.stack_[callee_index];
                 obj = callee.as_object();
             }
@@ -330,12 +336,13 @@ namespace swiftscript {
                 }
 
                 // Replace callee with instance: release old callee (class object)
-                // Note: instance starts with refcount=1 from allocate_object, which represents the stack slot
+                // Adopt the creator ref so the stack slot becomes the owner.
                 Value old_callee = vm.stack_[callee_index];
                 if (old_callee.is_object() && old_callee.ref_type() == RefType::Strong && old_callee.as_object()) {
                     RC::release(self, old_callee.as_object());
                 }
                 vm.stack_[callee_index] = Value::from_object(instance);
+                RC::adopt(instance);
 
                 // Initializer?
                 auto it = klass->methods.find("init");
@@ -347,10 +354,14 @@ namespace swiftscript {
                     return;
                 }
                 // Bind init as bound method
-                // BoundMethod takes ownership of instance (no retain/release needed)
-                // bound gets refcount=1 from allocate, instance refcount stays at 1 (now owned by BoundMethod)
+                // BoundMethod retains the instance; release the stack slot when swapping.
                 auto* bound = vm.allocate_object<BoundMethodObject>(instance, it->second);
+                Value old_instance = vm.stack_[callee_index];
+                if (old_instance.is_object() && old_instance.ref_type() == RefType::Strong && old_instance.as_object()) {
+                    RC::release(self, old_instance.as_object());
+                }
                 vm.stack_[callee_index] = Value::from_object(bound);
+                RC::adopt(bound);
                 callee = vm.stack_[callee_index];
                 obj = callee.as_object();
             }
@@ -657,6 +668,7 @@ namespace swiftscript {
                     RC::release(self, old_callee.as_object());
                 }
                 vm.stack_[callee_index] = Value::from_object(instance);
+                RC::adopt(instance);
 
                 auto it = struct_type->methods.find("init");
                 if (it == struct_type->methods.end()) {
@@ -722,7 +734,12 @@ namespace swiftscript {
                 }
 
                 auto* bound = vm.allocate_object<BoundMethodObject>(instance, it->second);
+                Value old_instance = vm.stack_[callee_index];
+                if (old_instance.is_object() && old_instance.ref_type() == RefType::Strong && old_instance.as_object()) {
+                    RC::release(self, old_instance.as_object());
+                }
                 vm.stack_[callee_index] = Value::from_object(bound);
+                RC::adopt(bound);
                 callee = vm.stack_[callee_index];
                 obj = callee.as_object();
             }
@@ -751,6 +768,7 @@ namespace swiftscript {
                     RC::release(self, old_callee.as_object());
                 }
                 vm.stack_[callee_index] = Value::from_object(instance);
+                RC::adopt(instance);
 
                 auto it = klass->methods.find("init");
                 if (it == klass->methods.end()) {
@@ -760,7 +778,12 @@ namespace swiftscript {
                     return;
                 }
                 auto* bound = vm.allocate_object<BoundMethodObject>(instance, it->second);
+                Value old_instance = vm.stack_[callee_index];
+                if (old_instance.is_object() && old_instance.ref_type() == RefType::Strong && old_instance.as_object()) {
+                    RC::release(self, old_instance.as_object());
+                }
                 vm.stack_[callee_index] = Value::from_object(bound);
+                RC::adopt(bound);
                 callee = vm.stack_[callee_index];
                 obj = callee.as_object();
             }

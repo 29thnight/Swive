@@ -15,16 +15,6 @@ void RC::nil_weak_refs(Object* obj) {
     obj->rc.weak_refs.clear();
 }
 
-// ---- Strong retain ----
-void RC::retain(Object* obj) {
-    if (!obj) return;
-
-    int32_t old_count = obj->rc.strong_count.fetch_add(1, std::memory_order_acq_rel);
-
-    SS_DEBUG_RC("RETAIN %p [%s] rc: %d -> %d",
-                obj, object_type_name(obj->type), old_count, old_count + 1);
-}
-
 // ---- Helper: execute deinit if object is an instance ----
 void RC::execute_deinit_if_needed(VM* vm, Object* obj) {
     if (!vm || obj->type != ObjectType::Instance) return;
@@ -107,18 +97,18 @@ void RC::release_children(VM* vm, Object* obj) {
         }
     } else if (obj->type == ObjectType::BoundMethod) {
         auto* bound = static_cast<BoundMethodObject*>(obj);
-        if (bound->receiver && deleted_set.find(bound->receiver) == deleted_set.end()) {
+        if (bound->receiver) {
             RC::release(vm, bound->receiver);
         }
         if (bound->method.is_object() && bound->method.ref_type() == RefType::Strong) {
             Object* child = bound->method.as_object();
-            if (child && deleted_set.find(child) == deleted_set.end()) {
+            if (child) {
                 RC::release(vm, child);
             }
         }
     } else if (obj->type == ObjectType::BuiltinMethod) {
         auto* method = static_cast<BuiltinMethodObject*>(obj);
-        if (method->target && deleted_set.find(method->target) == deleted_set.end()) {
+        if (method->target) {
             RC::release(vm, method->target);
         }
     }
@@ -233,17 +223,6 @@ void RC::weak_release(Object* obj, Value* weak_slot) {
                 obj, object_type_name(obj->type), new_count);
         abort();
     }
-}
-
-} // namespace swiftscript
-
-        vm->remove_from_objects_list(obj);
-        vm->record_deallocation(*obj);
-        delete obj;
-    }
-
-    // If new objects were deferred during processing, they remain in
-    // deferred_releases_ and will be picked up on the next cleanup cycle.
 }
 
 } // namespace swiftscript

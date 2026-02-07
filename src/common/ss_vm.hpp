@@ -173,10 +173,18 @@ namespace swiftscript {
         }
 
         // computed setter: stack에 [setter, self, value]를 push하고 호출 프레임 구성
-        static inline bool TryInvokeComputedSetter(VM& vm, const Value& setter, const Value& self, const Value& value) {
+        // owns_self_and_value: true이면 self와 value의 ownership을 이 함수가 받아서 처리
+        // (호출자가 이미 pop으로 ownership을 가져온 경우 true로 호출)
+        static inline bool TryInvokeComputedSetter(VM& vm, const Value& setter, const Value& self, const Value& value, bool owns_self_and_value = false) {
             vm.push(setter);
-            vm.push(self);
-            vm.push(value);
+            if (owns_self_and_value) {
+                // ownership transfer: retain 없이 스택에 직접 추가
+                vm.stack_.push_back(self);
+                vm.stack_.push_back(value);
+            } else {
+                vm.push(self);
+                vm.push(value);
+            }
             const size_t callee_index = vm.stack_.size() - 3; // [setter, self, value]
             return InvokeCallableWithPreparedStack(
                 vm,

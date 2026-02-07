@@ -27,7 +27,7 @@ namespace swiftscript {
         // ---- Statement parsers ----
         StmtPtr declaration();
         StmtPtr var_declaration();
-        StmtPtr func_declaration();
+        StmtPtr func_declaration(const std::vector<Attribute>& attributes = {});
         StmtPtr class_declaration(AccessLevel access_level = AccessLevel::Internal);
         StmtPtr struct_declaration(AccessLevel access_level = AccessLevel::Internal);  // Struct declaration parser
         StmtPtr enum_declaration(AccessLevel access_level = AccessLevel::Internal);    // Enum declaration parser

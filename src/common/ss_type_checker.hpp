@@ -10,11 +10,15 @@ class TypeCheckError : public std::runtime_error {
 public:
     TypeCheckError(const std::string& msg, uint32_t line = 0)
         : std::runtime_error(line > 0 ? msg + " (line " + std::to_string(line) + ")" : msg)
+        , message_(msg)
         , line_(line) {}
 
     uint32_t line() const { return line_; }
+    // Pure message without "(line N)" suffix — useful for LSP diagnostics
+    const std::string& message() const { return message_; }
 
 private:
+    std::string message_;
     uint32_t line_{};
 };
 
@@ -23,6 +27,19 @@ public:
     void check(const std::vector<StmtPtr>& program);
     void set_base_directory(const std::string& dir) { base_directory_ = dir; }
     void set_module_resolver(IModuleResolver* resolver) { module_resolver_ = resolver; }
+
+    // LSP-friendly: type-check without throwing; errors collected internally
+    void check_no_throw(const std::vector<StmtPtr>& program);
+
+    // Access collected errors/warnings after check_no_throw()
+    const std::vector<TypeCheckError>& errors() const { return errors_; }
+    const std::vector<std::string>& warnings() const { return warnings_; }
+
+    // LSP semantic tokens: query symbol classification after check/check_no_throw
+    bool is_known_type(const std::string& name) const { return known_types_.count(name) > 0; }
+    bool is_known_function(const std::string& name) const;
+    bool is_known_property(const std::string& name) const;
+    bool is_known_enum_case(const std::string& typeName, const std::string& caseName) const;
 
 private:
     enum class TypeKind {
@@ -92,6 +109,10 @@ private:
     
     // Generic templates storage
     std::unordered_map<std::string, const StructDeclStmt*> generic_struct_templates_;
+
+    // Obsolete/Deprecated message per type — for checks at usage site
+    std::unordered_map<std::string, std::string> obsolete_types_;     // type name -> message
+    std::unordered_map<std::string, std::string> deprecated_types_;   // type name -> message
 
     void collect_type_declarations(const std::vector<StmtPtr>& program);
     void collect_imported_programs(const std::vector<StmtPtr>& program,

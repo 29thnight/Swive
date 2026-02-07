@@ -147,6 +147,8 @@
     <ClInclude Include="..\..\src\common\ss_compiler.hpp" />
     <ClInclude Include="..\..\src\common\ss_core.hpp" />
     <ClInclude Include="..\..\src\common\ss_lexer.hpp" />
+    <ClInclude Include="..\..\src\common\ss_native_convert.hpp" />
+    <ClInclude Include="..\..\src\common\ss_native_registry.hpp" />
     <ClInclude Include="..\..\src\common\ss_opcodes.hpp" />
     <ClInclude Include="..\..\src\common\ss_parser.hpp" />
     <ClInclude Include="..\..\src\common\ss_project.hpp" />
@@ -170,6 +172,8 @@
     <ClCompile Include="..\..\src\common\ss_compiler.cpp" />
     <ClCompile Include="..\..\src\common\ss_core.cpp" />
     <ClCompile Include="..\..\src\common\ss_lexer.cpp" />
+    <ClCompile Include="..\..\src\common\ss_native_convert.cpp" />
+    <ClCompile Include="..\..\src\common\ss_native_registry.cpp" />
     <ClCompile Include="..\..\src\common\ss_parser.cpp" />
     <ClCompile Include="..\..\src\common\ss_project.cpp" />
     <ClCompile Include="..\..\src\common\ss_project_resolver.cpp" />

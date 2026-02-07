@@ -2,8 +2,29 @@
 
 #include "ss_ast.hpp"
 #include "ss_chunk.hpp"
+#include <optional>
 
 namespace swiftscript {
+
+// Native function binding info extracted from [Native.InternalCall("name")] attribute
+struct NativeCallInfo {
+    std::string native_name;  // The C++ function name to call
+    bool is_valid{false};     // True if attribute was found and parsed
+};
+
+// Native type binding info extracted from [Native.Class("name")] or [Native.Struct("name")]
+struct NativeTypeBindingInfo {
+    std::string native_type_name;  // The C++ type name
+    bool is_class{false};          // true for [Native.Class], false for [Native.Struct]
+    bool is_valid{false};          // True if attribute was found and parsed
+};
+
+// Native property binding info extracted from [Native.Property("name")] or [Native.Field("name")]
+struct NativePropertyBindingInfo {
+    std::string native_property_name;  // The C++ property/field name
+    bool is_field{false};              // true for [Native.Field], false for [Native.Property]
+    bool is_valid{false};              // True if attribute was found and parsed
+};
 
 class CompilerError : public std::runtime_error {
 public:
@@ -52,14 +73,29 @@ private:
     
     // Generic specialization
     std::unordered_map<std::string, const StructDeclStmt*> generic_struct_templates_;
+    std::unordered_map<std::string, const FuncDeclStmt*> generic_function_templates_;
+    std::unordered_set<std::string> specialized_functions_;  // Track already-specialized functions
+    std::vector<std::vector<StmtPtr>> imported_module_asts_;  // Keep imported ASTs alive
+    std::vector<StmtPtr> pending_specializations_;  // Deferred specializations to compile
+    // Method return type tracking: "ClassName.methodName" -> return type name
+    std::unordered_map<std::string, std::string> method_return_types_;
+    void try_specialize_generic_func(const std::string& name, const std::vector<TypeAnnotation>& type_args);
+    void compile_pending_specializations();
+    const FuncDeclStmt* find_generic_function_template(const std::string& name) const;
     std::vector<StmtPtr> specialize_generics(const std::vector<StmtPtr>& program);
-    StmtPtr create_specialized_struct(const StructDeclStmt* template_decl, 
+    StmtPtr create_specialized_struct(const StructDeclStmt* template_decl,
                                       const std::vector<TypeAnnotation>& type_args);
-    std::string mangle_generic_name(const std::string& base_name, 
+    StmtPtr create_specialized_func(const FuncDeclStmt* template_decl,
+                                    const std::vector<TypeAnnotation>& type_args);
+    std::string mangle_generic_name(const std::string& base_name,
                                      const std::vector<TypeAnnotation>& type_args);
     void collect_generic_templates(const std::vector<StmtPtr>& program);
-    void collect_generic_usages(const std::vector<StmtPtr>& program, 
+    void collect_generic_usages(const std::vector<StmtPtr>& program,
                                 std::unordered_set<std::string>& needed_specializations);
+    void collect_generic_usages_from_expr(const Expr* expr,
+                                          std::unordered_set<std::string>& needed_func_specializations);
+    void collect_generic_usages_from_stmt(const Stmt* stmt,
+                                          std::unordered_set<std::string>& needed_func_specializations);
 
     struct Local {
         std::string name;
@@ -68,6 +104,7 @@ private:
         bool is_captured{false};  // True if captured by closure
         int use_count{0};         // Number of times this local is used
         bool is_moved{false};     // True if ownership was moved
+        std::string type_name;    // Type name for generic inference (e.g. "Int", "Float")
     };
 
     struct Upvalue {
@@ -215,6 +252,13 @@ private:
     Assembly compile_struct_method_body(const StructMethodDecl& method, bool is_mutating);
     std::shared_ptr<Assembly> finalize_function_chunk(Assembly&& chunk);
     void populate_metadata_tables(const std::vector<StmtPtr>& program);
+
+    // Native binding support
+    NativeCallInfo extract_native_call_attribute(const std::vector<Attribute>& attrs);
+    void emit_native_function(const FuncDeclStmt& stmt, const NativeCallInfo& native_info, bool for_method = false);
+    NativeTypeBindingInfo extract_native_type_attribute(const std::vector<Attribute>& attrs);
+    NativePropertyBindingInfo extract_native_property_attribute(const std::vector<Attribute>& attrs);
+    void emit_native_class(const ClassDeclStmt& stmt, const NativeTypeBindingInfo& type_info);
 
     // Helper classes
     class RecursionGuard {

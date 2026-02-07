@@ -278,6 +278,19 @@ size_t Assembly::disassemble_instruction(size_t offset) const {
             return short_instruction("OP_DEFINE_GLOBAL", offset);
         case OpCode::OP_HALT:
             return simple_instruction("OP_HALT", offset);
+        // Native binding opcodes
+        case OpCode::OP_NATIVE_CALL:
+            return string_instruction("OP_NATIVE_CALL", offset);
+        case OpCode::OP_NATIVE_CONSTRUCT:
+            return string_instruction("OP_NATIVE_CONSTRUCT", offset);
+        case OpCode::OP_NATIVE_GET_PROPERTY:
+            return string_instruction("OP_NATIVE_GET_PROPERTY", offset);
+        case OpCode::OP_NATIVE_SET_PROPERTY:
+            return string_instruction("OP_NATIVE_SET_PROPERTY", offset);
+        case OpCode::OP_NATIVE_METHOD_CALL:
+            return string_instruction("OP_NATIVE_METHOD_CALL", offset);
+        case OpCode::OP_SET_NATIVE_TYPE:
+            return string_instruction("OP_SET_NATIVE_TYPE", offset);
         default:
             std::cout << "Unknown opcode " << static_cast<int>(instruction) << "\n";
             return offset + 1;

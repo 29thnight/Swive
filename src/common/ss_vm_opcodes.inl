@@ -180,6 +180,11 @@ namespace swiftscript {
                 if (inst->klass) {
                     for (const auto& cp : inst->klass->computed_properties) {
                         if (cp.name == name) {
+                            // TryInvokeComputedGetter가 obj를 다시 push하므로,
+                            // pop()으로 가져온 obj의 ownership을 먼저 release
+                            if (obj.is_object() && obj.ref_type() == RefType::Strong && obj.as_object()) {
+                                RC::release(&vm, obj.as_object());
+                            }
                             VM::TryInvokeComputedGetter(vm, cp.getter, obj);
                             return;
                         }
@@ -208,6 +213,11 @@ namespace swiftscript {
                 if (ec->enum_type) {
                     for (const auto& cp : ec->enum_type->computed_properties) {
                         if (cp.name == name) {
+                            // TryInvokeComputedGetter가 obj를 다시 push하므로,
+                            // pop()으로 가져온 obj의 ownership을 먼저 release
+                            if (obj.is_object() && obj.ref_type() == RefType::Strong && obj.as_object()) {
+                                RC::release(&vm, obj.as_object());
+                            }
                             VM::TryInvokeComputedGetter(vm, cp.getter, obj);
                             return;
                         }
@@ -236,6 +246,11 @@ namespace swiftscript {
                 if (si->struct_type) {
                     for (const auto& cp : si->struct_type->computed_properties) {
                         if (cp.name == name) {
+                            // TryInvokeComputedGetter가 obj를 다시 push하므로,
+                            // pop()으로 가져온 obj의 ownership을 먼저 release
+                            if (obj.is_object() && obj.ref_type() == RefType::Strong && obj.as_object()) {
+                                RC::release(&vm, obj.as_object());
+                            }
                             VM::TryInvokeComputedGetter(vm, cp.getter, obj);
                             return;
                         }
@@ -290,6 +305,28 @@ namespace swiftscript {
                             vm.invoke_method_def(*getter_def, callee_index, 0, false, false);
                             return;
                         }
+                    }
+                }
+                break;
+            }
+            case ObjectType::Native: {
+                auto* native_obj = static_cast<NativeObject*>(o);
+                // Look up the ClassObject for this native type to check computed properties
+                for (auto& [gname, gval] : vm.globals_) {
+                    if (!gval.is_object() || !gval.as_object()) continue;
+                    if (gval.as_object()->type != ObjectType::Class) continue;
+                    auto* klass = static_cast<ClassObject*>(gval.as_object());
+                    if (klass->native_type_name == native_obj->type_name) {
+                        for (const auto& cp : klass->computed_properties) {
+                            if (cp.name == name) {
+                                if (obj.is_object() && obj.ref_type() == RefType::Strong && obj.as_object()) {
+                                    RC::release(&vm, obj.as_object());
+                                }
+                                VM::TryInvokeComputedGetter(vm, cp.getter, obj);
+                                return;
+                            }
+                        }
+                        break;
                     }
                 }
                 break;
@@ -354,12 +391,13 @@ namespace swiftscript {
                                 throw std::runtime_error("Cannot set read-only computed property: " + name);
                             }
 
-                            // 기존 코드 흐름 유지: obj_val(=self)은 stack에 남아있었고,
-                            // computed setter 호출을 위해 self/value를 push해서 점프.
-                            // (기존은 vm.pop()으로 obj_val 제거 후 재-push했는데, 의미만 맞추면 됨)
-                            vm.pop(); // obj_val 제거 (기존과 동일하게 callee slot 정리)
+                            // obj_val을 스택에서 pop (ownership 이전)
+                            // value는 이미 위에서 pop으로 ownership을 가져옴
+                            vm.pop();
 
-                            VM::TryInvokeComputedSetter(vm, cp.setter, obj_val, value);
+                            // TryInvokeComputedSetter에 ownership transfer로 전달
+                            // (retain 없이 스택에 직접 추가)
+                            VM::TryInvokeComputedSetter(vm, cp.setter, obj_val, value, true);
                             return;
                         }
                     }
@@ -438,7 +476,8 @@ namespace swiftscript {
                                 throw std::runtime_error("Cannot set read-only enum computed property: " + name);
                             }
                             vm.pop();
-                            VM::TryInvokeComputedSetter(vm, cp.setter, obj_val, value);
+                            // TryInvokeComputedSetter에 ownership transfer로 전달
+                            VM::TryInvokeComputedSetter(vm, cp.setter, obj_val, value, true);
                             return;
                         }
                     }
@@ -473,7 +512,8 @@ namespace swiftscript {
                                 throw std::runtime_error("Cannot set read-only computed property: " + name);
                             }
                             vm.pop();
-                            VM::TryInvokeComputedSetter(vm, cp.setter, obj_val, value);
+                            // TryInvokeComputedSetter에 ownership transfer로 전달
+                            VM::TryInvokeComputedSetter(vm, cp.setter, obj_val, value, true);
                             return;
                         }
                     }
@@ -605,6 +645,30 @@ namespace swiftscript {
                 dict->entries[name] = value;
                 vm.push(value);
                 return;
+            }
+
+            case ObjectType::Native: {
+                auto* native_obj = static_cast<NativeObject*>(o);
+                // Look up the ClassObject for this native type to check computed properties
+                for (auto& [gname, gval] : vm.globals_) {
+                    if (!gval.is_object() || !gval.as_object()) continue;
+                    if (gval.as_object()->type != ObjectType::Class) continue;
+                    auto* klass = static_cast<ClassObject*>(gval.as_object());
+                    if (klass->native_type_name == native_obj->type_name) {
+                        for (const auto& cp : klass->computed_properties) {
+                            if (cp.name == name) {
+                                if (cp.setter.is_null()) {
+                                    throw std::runtime_error("Cannot set read-only computed property: " + name);
+                                }
+                                vm.pop();  // pop native object
+                                VM::TryInvokeComputedSetter(vm, cp.setter, obj_val, value, true);
+                                return;
+                            }
+                        }
+                        break;
+                    }
+                }
+                throw std::runtime_error("Native object '" + native_obj->type_name + "' has no settable property named '" + name + "'");
             }
 
             default:
@@ -792,8 +856,9 @@ namespace swiftscript {
                 }
 
                 // Check if static (no 'self' parameter)
+                // Special case: 'init' methods are always instance methods even without 'self' parameter
                 bool is_static = false;
-                if (func && (func->params.empty() || func->params[0] != "self")) {
+                if (name != "init" && func && (func->params.empty() || func->params[0] != "self")) {
                     is_static = true;
                 }
 
@@ -1530,6 +1595,10 @@ namespace swiftscript {
 
             // Create enum case instance
             auto* case_obj = vm.allocate_object<EnumCaseObject>(enum_type, case_name);
+
+            // Retain the enum type for the case's lifetime
+            RC::retain(enum_type);
+
             case_obj->raw_value = raw_value;
             case_obj->associated_labels.reserve(associated_count);
             for (uint8_t i = 0; i < associated_count; ++i) {

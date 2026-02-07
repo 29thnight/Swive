@@ -10,8 +10,11 @@
 #include <cstdlib>
 #include <system_error>
 #include <string_view>
+#include <span>
+#include <algorithm>
 #include "ss_opcodes.hpp"
 #include "ss_vm.hpp"
+#include "ss_native_registry.hpp"
 
 namespace swiftscript {
 
@@ -244,6 +247,10 @@ namespace swiftscript {
                     template_case->enum_type,
                     template_case->case_name
                 );
+
+                // Retain the enum type for the case's lifetime
+                RC::retain(template_case->enum_type);
+
                 new_case->raw_value = template_case->raw_value;
                 new_case->associated_labels = template_case->associated_labels;
 
@@ -274,6 +281,9 @@ namespace swiftscript {
             if (obj->type == ObjectType::Struct) {
                 auto* struct_type = static_cast<StructObject*>(obj);
                 auto* instance = vm.allocate_object<StructInstanceObject>(struct_type);
+
+                // Retain the struct type for the instance's lifetime
+                RC::retain(struct_type);
 
                 // Initialize properties with default values
                 for (const auto& property : struct_type->properties) {
@@ -341,7 +351,64 @@ namespace swiftscript {
             // Class call -> instantiate
             if (obj->type == ObjectType::Class) {
                 auto* klass = static_cast<ClassObject*>(obj);
+
+                // For native classes, call the init method directly and use its return value
+                if (klass->is_native()) {
+                    auto it = klass->methods.find("init");
+                    if (it == klass->methods.end()) {
+                        throw std::runtime_error("Native class must have an init method");
+                    }
+
+                    // Get the init function from the method map
+                    Value init_method = it->second;
+                    if (!init_method.is_object()) {
+                        throw std::runtime_error("Native init is not a function");
+                    }
+
+                    Object* init_obj = init_method.as_object();
+                    FunctionObject* init_func = nullptr;
+                    if (init_obj->type == ObjectType::Function) {
+                        init_func = static_cast<FunctionObject*>(init_obj);
+                    } else if (init_obj->type == ObjectType::Closure) {
+                        init_func = static_cast<ClosureObject*>(init_obj)->function;
+                    }
+
+                    if (!init_func || !init_func->chunk) {
+                        throw std::runtime_error("Native init has no chunk");
+                    }
+
+                    // Replace callee (class) with nil placeholder for return value slot
+                    Value old_callee = vm.stack_[callee_index];
+                    if (old_callee.is_object() && old_callee.ref_type() == RefType::Strong && old_callee.as_object()) {
+                        RC::release(self, old_callee.as_object());
+                    }
+                    vm.stack_[callee_index] = Value::null();
+
+                    // Setup call frame for native init
+                    // Note: is_initializer=false because native init returns the NativeObject directly
+                    vm.call_frames_.emplace_back(
+                        callee_index + 1,  // stack_base (arguments start after callee slot)
+                        vm.ip_,            // return_address
+                        vm.chunk_,         // saved chunk
+                        vm.current_body_idx_, // saved body index
+                        init_func->name,   // function name
+                        nullptr,           // closure (none for native wrapper)
+                        false              // is_initializer - false for native classes
+                    );
+
+                    // Switch to the init function's chunk
+                    vm.chunk_ = init_func->chunk.get();
+                    vm.current_body_idx_ = vm.entry_body_index(*vm.chunk_);
+                    vm.set_active_body(vm.current_body_idx_);
+                    vm.ip_ = 0;
+
+                    return;  // Continue execution in the init wrapper
+                }
+
                 auto* instance = vm.allocate_object<InstanceObject>(klass);
+
+                // Retain the class for the instance's lifetime
+                RC::retain(klass);
 
                 // Initialize properties from the entire inheritance chain (base first)
                 std::vector<ClassObject*> hierarchy;
@@ -654,6 +721,10 @@ namespace swiftscript {
                 auto* new_case = vm.allocate_object<EnumCaseObject>(
                     template_case->enum_type,
                     template_case->case_name);
+
+                // Retain the enum type for the case's lifetime
+                RC::retain(template_case->enum_type);
+
                 new_case->raw_value = template_case->raw_value;
                 new_case->associated_labels = template_case->associated_labels;
 
@@ -675,6 +746,9 @@ namespace swiftscript {
             if (obj->type == ObjectType::Struct) {
                 auto* struct_type = static_cast<StructObject*>(obj);
                 auto* instance = vm.allocate_object<StructInstanceObject>(struct_type);
+
+                // Retain the struct type for the instance's lifetime
+                RC::retain(struct_type);
 
                 // Initialize properties with default values
                 for (const auto& property : struct_type->properties) {
@@ -769,7 +843,64 @@ namespace swiftscript {
             // Class call -> instantiate
             if (obj->type == ObjectType::Class) {
                 auto* klass = static_cast<ClassObject*>(obj);
+
+                // For native classes, call the init method directly and use its return value
+                if (klass->is_native()) {
+                    auto it = klass->methods.find("init");
+                    if (it == klass->methods.end()) {
+                        throw std::runtime_error("Native class must have an init method");
+                    }
+
+                    // Get the init function from the method map
+                    Value init_method = it->second;
+                    if (!init_method.is_object()) {
+                        throw std::runtime_error("Native init is not a function");
+                    }
+
+                    Object* init_obj = init_method.as_object();
+                    FunctionObject* init_func = nullptr;
+                    if (init_obj->type == ObjectType::Function) {
+                        init_func = static_cast<FunctionObject*>(init_obj);
+                    } else if (init_obj->type == ObjectType::Closure) {
+                        init_func = static_cast<ClosureObject*>(init_obj)->function;
+                    }
+
+                    if (!init_func || !init_func->chunk) {
+                        throw std::runtime_error("Native init has no chunk");
+                    }
+
+                    // Replace callee (class) with nil placeholder for return value slot
+                    Value old_callee = vm.stack_[callee_index];
+                    if (old_callee.is_object() && old_callee.ref_type() == RefType::Strong && old_callee.as_object()) {
+                        RC::release(self, old_callee.as_object());
+                    }
+                    vm.stack_[callee_index] = Value::null();
+
+                    // Setup call frame for native init
+                    // Note: is_initializer=false because native init returns the NativeObject directly
+                    vm.call_frames_.emplace_back(
+                        callee_index + 1,  // stack_base (arguments start after callee slot)
+                        vm.ip_,            // return_address
+                        vm.chunk_,         // saved chunk
+                        vm.current_body_idx_, // saved body index
+                        init_func->name,   // function name
+                        nullptr,           // closure (none for native wrapper)
+                        false              // is_initializer - false for native classes
+                    );
+
+                    // Switch to the init function's chunk
+                    vm.chunk_ = init_func->chunk.get();
+                    vm.current_body_idx_ = vm.entry_body_index(*vm.chunk_);
+                    vm.set_active_body(vm.current_body_idx_);
+                    vm.ip_ = 0;
+
+                    return;  // Continue execution in the init wrapper
+                }
+
                 auto* instance = vm.allocate_object<InstanceObject>(klass);
+
+                // Retain the class for the instance's lifetime
+                RC::retain(klass);
 
                 std::vector<ClassObject*> hierarchy;
                 for (ClassObject* c = klass; c != nullptr; c = c->superclass) {
@@ -1005,6 +1136,236 @@ namespace swiftscript {
             else {
                 vm.push(vm.get_property(obj, name));
             }
+        }
+    };
+
+    // ============================================================================
+    // Native Binding
+    // ============================================================================
+
+    OPCODE(OpCode::OP_NATIVE_CALL)
+    {
+        OP_BODY
+        {
+            // Read the native function name from string table
+            const std::string& func_name = vm.read_string();
+            uint8_t arg_count = vm.read_byte();
+
+            // Find the native function in the registry
+            auto* func = NativeRegistry::instance().find_function(func_name);
+            if (!func) {
+                throw std::runtime_error("Native function not found: " + func_name);
+            }
+
+            // Get arguments from current frame's local slots (stack base)
+            // In a native wrapper function, arguments are already at the stack base
+            size_t base = vm.current_stack_base();
+            std::vector<Value> args;
+            args.reserve(arg_count);
+            for (uint8_t i = 0; i < arg_count; ++i) {
+                if (base + i >= vm.stack_.size()) {
+                    throw std::runtime_error("Native call: argument slot out of range");
+                }
+                args.push_back(vm.stack_[base + i]);
+            }
+
+            // Call the native function
+            Value result = (*func)(vm, std::span<Value>(args));
+
+            // Push result onto stack
+            vm.push(result);
+        }
+    };
+
+    OPCODE(OpCode::OP_NATIVE_CONSTRUCT)
+    {
+        OP_BODY
+        {
+            // Read the native type name from string table
+            const std::string& type_name = vm.read_string();
+            uint8_t arg_count = vm.read_byte();
+
+            // Find the native type in the registry
+            auto* type_info = NativeRegistry::instance().find_type(type_name);
+            if (!type_info) {
+                throw std::runtime_error("Native type not found: " + type_name);
+            }
+
+            // Collect constructor arguments from stack
+            std::vector<Value> args;
+            args.reserve(arg_count);
+            for (int i = arg_count - 1; i >= 0; --i) {
+                args.insert(args.begin(), vm.peek(i));
+            }
+            for (uint8_t i = 0; i < arg_count; ++i) {
+                vm.pop();
+            }
+
+            // Create native object
+            void* native_ptr = nullptr;
+            if (type_info->constructor) {
+                native_ptr = type_info->constructor();
+            } else {
+                throw std::runtime_error("Native type has no constructor: " + type_name);
+            }
+
+            // Wrap in NativeObject
+            auto* native_obj = vm.allocate_object<NativeObject>(native_ptr, type_name, type_info);
+            vm.push(Value::from_object(native_obj));
+        }
+    };
+
+    OPCODE(OpCode::OP_NATIVE_GET_PROPERTY)
+    {
+        OP_BODY
+        {
+            // Read property name
+            const std::string& prop_name = vm.read_string();
+
+            // Get native object from stack
+            Value obj_val = vm.pop();
+            if (!obj_val.is_object()) {
+                throw std::runtime_error("Cannot get property of non-object");
+            }
+
+            Object* obj = obj_val.as_object();
+            if (obj->type != ObjectType::Native) {
+                throw std::runtime_error("Cannot get native property of non-native object");
+            }
+
+            auto* native_obj = static_cast<NativeObject*>(obj);
+            if (!native_obj->type_info) {
+                throw std::runtime_error("Native object has no type info");
+            }
+
+            // Find property
+            const auto* prop = native_obj->type_info->get_property(prop_name);
+            if (!prop) {
+                throw std::runtime_error("Native property not found: " + prop_name);
+            }
+
+            // Get property value
+            if (!prop->getter) {
+                throw std::runtime_error("Native property has no getter: " + prop_name);
+            }
+
+            Value result = prop->getter(vm, native_obj->native_ptr);
+            vm.push(result);
+        }
+    };
+
+    OPCODE(OpCode::OP_NATIVE_SET_PROPERTY)
+    {
+        OP_BODY
+        {
+            // Read property name
+            const std::string& prop_name = vm.read_string();
+
+            // Get value and native object from stack
+            Value value = vm.pop();
+            Value obj_val = vm.pop();
+
+            if (!obj_val.is_object()) {
+                throw std::runtime_error("Cannot set property of non-object");
+            }
+
+            Object* obj = obj_val.as_object();
+            if (obj->type != ObjectType::Native) {
+                throw std::runtime_error("Cannot set native property of non-native object");
+            }
+
+            auto* native_obj = static_cast<NativeObject*>(obj);
+            if (!native_obj->type_info) {
+                throw std::runtime_error("Native object has no type info");
+            }
+
+            // Find property
+            const auto* prop = native_obj->type_info->get_property(prop_name);
+            if (!prop) {
+                throw std::runtime_error("Native property not found: " + prop_name);
+            }
+
+            // Set property value
+            if (!prop->setter) {
+                throw std::runtime_error("Native property is read-only: " + prop_name);
+            }
+
+            prop->setter(vm, native_obj->native_ptr, value);
+            vm.push(value);  // Push value back for chained assignments
+        }
+    };
+
+    OPCODE(OpCode::OP_NATIVE_METHOD_CALL)
+    {
+        OP_BODY
+        {
+            // Read method name and argument count
+            const std::string& method_name = vm.read_string();
+            uint8_t arg_count = vm.read_byte();
+
+            // Get receiver (native object) and arguments from stack
+            // Stack: [receiver, arg0, arg1, ...]
+            size_t receiver_idx = vm.stack_.size() - arg_count - 1;
+            Value receiver_val = vm.stack_[receiver_idx];
+
+            if (!receiver_val.is_object()) {
+                throw std::runtime_error("Cannot call method on non-object");
+            }
+
+            Object* obj = receiver_val.as_object();
+            if (obj->type != ObjectType::Native) {
+                throw std::runtime_error("Cannot call native method on non-native object");
+            }
+
+            auto* native_obj = static_cast<NativeObject*>(obj);
+            if (!native_obj->type_info) {
+                throw std::runtime_error("Native object has no type info");
+            }
+
+            // Find method
+            const auto* method = native_obj->type_info->get_method(method_name);
+            if (!method) {
+                throw std::runtime_error("Native method not found: " + method_name);
+            }
+
+            // Collect arguments
+            std::vector<Value> args;
+            args.reserve(arg_count);
+            for (int i = arg_count - 1; i >= 0; --i) {
+                args.insert(args.begin(), vm.peek(i));
+            }
+
+            // Pop arguments and receiver
+            for (uint8_t i = 0; i < arg_count; ++i) {
+                vm.pop();
+            }
+            vm.pop();  // pop receiver
+
+            // Call method
+            Value result = method->func(vm, native_obj->native_ptr, std::span<Value>(args));
+            vm.push(result);
+        }
+    };
+
+    // OP_SET_NATIVE_TYPE: Set native_type_name on ClassObject
+    // Stack: [ClassObject]
+    // Operand: uint16_t native_type_name_idx
+    OPCODE(OpCode::OP_SET_NATIVE_TYPE)
+    {
+        OP_BODY
+        {
+            // Read native type name from string table
+            const std::string& native_type_name = vm.read_string();
+
+            // Get the class object from stack top (don't pop)
+            Value class_val = vm.peek(0);
+            if (!class_val.is_object() || !class_val.as_object() ||
+                class_val.as_object()->type != ObjectType::Class) {
+                throw std::runtime_error("OP_SET_NATIVE_TYPE expects class on stack.");
+            }
+
+            auto* klass = static_cast<ClassObject*>(class_val.as_object());
+            klass->native_type_name = native_type_name;
         }
     };
 }

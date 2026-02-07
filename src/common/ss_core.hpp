@@ -34,7 +34,8 @@ enum class ObjectType : uint8_t {
     Upvalue,
     BuiltinMethod,
     BoundMethod,
-    Tuple            // Tuple object
+    Tuple,           // Tuple object
+    Native           // Native C++ object wrapper
 };
 
 // Utility: ObjectType to string
@@ -58,7 +59,8 @@ inline const char* object_type_name(ObjectType t) {
         case ObjectType::Range:    return "Range";
         case ObjectType::Upvalue:  return "Upvalue";
         case ObjectType::BuiltinMethod: return "BuiltinMethod";
-        case ObjectType::Tuple: return "Tuple";
+        case ObjectType::Tuple:    return "Tuple";
+        case ObjectType::Native:   return "Native";
     }
     return "Unknown";
 }
@@ -130,9 +132,13 @@ struct MemoryStats {
     size_t release_count{0};
 };
 
-// Debug utilities - ALWAYS ENABLED for debugging
+// Debug utilities - define SS_ENABLE_RC_LOG to enable RC logging
+#ifdef SS_ENABLE_RC_LOG
 #define SS_DEBUG_RC(fmt, ...) \
     printf("[RC] " fmt "\n", ##__VA_ARGS__)
+#else
+#define SS_DEBUG_RC(fmt, ...) ((void)0)
+#endif
 
 #define SS_ASSERT(cond, msg) assert((cond) && (msg))
 

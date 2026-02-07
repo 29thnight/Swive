@@ -49,6 +49,7 @@ private:
     // handlers
     json OnInitialize(const json& req);
     json OnShutdown(const json& req);
+    json OnSemanticTokensFull(const json& req);
 
     void OnDidOpen(const json& params);
     void OnDidChange(const json& params);

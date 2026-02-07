@@ -27,33 +27,47 @@ checker.set_module_resolver(module_resolver_);
 checker.check(specialized_program);
 
 chunk_ = Assembly{};
+chunk_.ensure_primary_body();  // Reserve index 0 for root bytecode (before any store_method_body calls)
 locals_.clear();
 scope_depth_ = 0;
 recursion_depth_ = 0;
 method_body_lookup_.clear();
+specialized_functions_.clear();
+imported_module_asts_.clear();
 
 // Step 3: Compile statements (skip generic templates, they're handled by type checker)
 for (const auto& stmt : specialized_program) {
     if (!stmt) {
         throw CompilerError("Null statement in program");
     }
-        
+
     // Skip generic struct templates - they are abstract and not compiled
     if (stmt->kind == StmtKind::StructDecl) {
         auto* struct_decl = static_cast<StructDeclStmt*>(stmt.get());
         if (!struct_decl->generic_params.empty()) {
-            // Generic template - skip compilation
             continue;
         }
     }
-        
+
+    // Skip generic function templates - they are abstract and not compiled
+    if (stmt->kind == StmtKind::FuncDecl) {
+        auto* func_decl = static_cast<FuncDeclStmt*>(stmt.get());
+        if (!func_decl->generic_params.empty()) {
+            continue;
+        }
+    }
+
     compile_stmt(stmt.get());
+
+    // Compile any deferred generic specializations queued during this stmt
+    compile_pending_specializations();
 }
 
     emit_auto_entry_main_call();
 
     emit_op(OpCode::OP_NIL, 0);
     emit_op(OpCode::OP_HALT, 0);
+
     chunk_.expand_to_assembly();
     populate_metadata_tables(specialized_program);
     return chunk_;
@@ -144,6 +158,20 @@ void Compiler::compile_stmt(Stmt* stmt) {
 }
 
 void Compiler::visit(ClassDeclStmt* stmt) {
+    // Collect method return types for generic inference
+    for (const auto& method : stmt->methods) {
+        if (method->return_type.has_value()) {
+            method_return_types_[stmt->name + "." + method->name] = method->return_type->name;
+        }
+    }
+
+    // Check for [Native.Class] or [Native.Struct] attribute
+    auto native_type_info = extract_native_type_attribute(stmt->attributes);
+    if (native_type_info.is_valid) {
+        emit_native_class(*stmt, native_type_info);
+        return;
+    }
+
     size_t name_idx = identifier_constant(stmt->name);
 
     bool has_superclass = stmt->superclass_name.has_value();
@@ -1245,6 +1273,42 @@ void Compiler::visit(VarDeclStmt* stmt) {
         emit_op(OpCode::OP_POP, stmt->line);
     } else {
         mark_local_initialized();
+        // Record type info for generic inference
+        if (stmt->type_annotation.has_value() && !stmt->type_annotation->name.empty()) {
+            locals_.back().type_name = stmt->type_annotation->name;
+        } else if (stmt->initializer) {
+            // Infer type from initializer expression
+            if (stmt->initializer->kind == ExprKind::Literal) {
+                auto* lit = static_cast<const LiteralExpr*>(stmt->initializer.get());
+                if (lit->string_value.has_value()) locals_.back().type_name = "String";
+                else if (lit->value.is_int()) locals_.back().type_name = "Int";
+                else if (lit->value.is_float()) locals_.back().type_name = "Float";
+                else if (lit->value.is_bool()) locals_.back().type_name = "Bool";
+            } else if (stmt->initializer->kind == ExprKind::Call) {
+                // Infer from function call return type
+                auto* call = static_cast<const CallExpr*>(stmt->initializer.get());
+                if (call->callee->kind == ExprKind::Identifier) {
+                    auto* cid = static_cast<const IdentifierExpr*>(call->callee.get());
+                    const FuncDeclStmt* ft = find_generic_function_template(cid->name);
+                    if (ft && ft->return_type.has_value() && !cid->generic_args.empty()) {
+                        const std::string& rt = ft->return_type->name;
+                        for (size_t gi = 0; gi < ft->generic_params.size(); ++gi) {
+                            if (ft->generic_params[gi] == rt && gi < cid->generic_args.size()) {
+                                locals_.back().type_name = cid->generic_args[gi].name;
+                                break;
+                            }
+                        }
+                    } else if (!ft) {
+                        // Not a generic template — could be a class constructor call
+                        // e.g., Vector3(1.0, 0.0, 0.0) → type is "Vector3"
+                        // Check if first char is uppercase (convention for class/struct names)
+                        if (!cid->name.empty() && std::isupper(cid->name[0])) {
+                            locals_.back().type_name = cid->name;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1882,15 +1946,44 @@ void Compiler::visit(ImportStmt* stmt) {
         // Compile the imported module statements into current chunk
         for (const auto& imported_stmt : imported_program) {
             if (imported_stmt) {
+                // Skip generic struct templates but save them
+                if (imported_stmt->kind == StmtKind::StructDecl) {
+                    auto* struct_decl = static_cast<StructDeclStmt*>(imported_stmt.get());
+                    if (!struct_decl->generic_params.empty()) {
+                        generic_struct_templates_[struct_decl->name] = struct_decl;
+                        continue;
+                    }
+                }
+
+                // Skip generic function templates but save them for later specialization
                 if (imported_stmt->kind == StmtKind::FuncDecl) {
-                    const auto* func_decl = static_cast<const FuncDeclStmt*>(imported_stmt.get());
+                    auto* func_decl = static_cast<FuncDeclStmt*>(imported_stmt.get());
+                    if (!func_decl->generic_params.empty()) {
+                        generic_function_templates_[func_decl->name] = func_decl;
+                        continue;
+                    }
                     if (seen_exports.insert(func_decl->name).second) {
                         module_exports.push_back(func_decl->name);
                     }
                 }
+
+                // Collect method return types from class declarations
+                if (imported_stmt->kind == StmtKind::ClassDecl) {
+                    auto* class_decl = static_cast<ClassDeclStmt*>(imported_stmt.get());
+                    for (const auto& method : class_decl->methods) {
+                        if (method->return_type.has_value()) {
+                            std::string key = class_decl->name + "." + method->name;
+                            method_return_types_[key] = method->return_type->name;
+                        }
+                    }
+                }
+
                 compile_stmt(imported_stmt.get());
             }
         }
+
+        // Keep imported AST alive for deferred generic specialization
+        imported_module_asts_.push_back(std::move(imported_program));
 
         emit_module_namespace(module_key, module_exports, stmt->line);
         
@@ -2113,6 +2206,15 @@ void Compiler::visit(ThrowStmt* stmt) {
 }
 
 void Compiler::visit(FuncDeclStmt* stmt) {
+    // Check for [Native.InternalCall] attribute
+    auto native_info = extract_native_call_attribute(stmt->attributes);
+    if (native_info.is_valid) {
+        // This is a native function - emit native call wrapper
+        emit_native_function(*stmt, native_info);
+        return;
+    }
+
+    // Regular function compilation
     FunctionPrototype proto;
     proto.name = stmt->name;
     proto.params.reserve(stmt->params.size());
@@ -2134,7 +2236,15 @@ void Compiler::visit(FuncDeclStmt* stmt) {
     for (const auto& param : stmt->params) {
         function_compiler.declare_local(param.internal_name, param.type.is_optional);
         function_compiler.mark_local_initialized();
+        // Record type info for generic inference
+        if (!param.type.name.empty()) {
+            function_compiler.locals_.back().type_name = param.type.name;
+        }
     }
+
+    // Propagate generic templates and method return types to function_compiler
+    function_compiler.generic_function_templates_ = generic_function_templates_;
+    function_compiler.method_return_types_ = method_return_types_;
 
     if (stmt->body) {
         for (const auto& statement : stmt->body->statements) {
@@ -2168,7 +2278,7 @@ void Compiler::visit(FuncDeclStmt* stmt) {
         }
         emit_op(OpCode::OP_SET_GLOBAL, stmt->line);
         emit_short(static_cast<uint16_t>(name_idx), stmt->line);
-        
+
         if (stmt->name == "main" && stmt->params.empty()) {
             record_entry_main_global(stmt);
         }
@@ -2228,12 +2338,57 @@ void Compiler::visit(InterpolatedStringExpr* expr) {
     }
 }
 
+const FuncDeclStmt* Compiler::find_generic_function_template(const std::string& name) const {
+    auto it = generic_function_templates_.find(name);
+    if (it != generic_function_templates_.end()) return it->second;
+    if (enclosing_) return enclosing_->find_generic_function_template(name);
+    return nullptr;
+}
+
+void Compiler::try_specialize_generic_func(const std::string& name, const std::vector<TypeAnnotation>& type_args) {
+    std::string mangled = mangle_generic_name(name, type_args);
+
+    // Check if already specialized anywhere in the enclosing chain
+    for (const Compiler* c = this; c; c = c->enclosing_) {
+        if (c->specialized_functions_.count(mangled)) return;
+    }
+
+    const FuncDeclStmt* tmpl = find_generic_function_template(name);
+    if (!tmpl) return;
+
+    // Queue on the root compiler for deferred compilation
+    Compiler* root = this;
+    while (root->enclosing_) root = root->enclosing_;
+
+    try {
+        StmtPtr specialized = root->create_specialized_func(tmpl, type_args);
+        root->specialized_functions_.insert(mangled);
+        root->pending_specializations_.push_back(std::move(specialized));
+    } catch (...) {
+        // Specialization failed — will be caught at call site
+    }
+}
+
+void Compiler::compile_pending_specializations() {
+    while (!pending_specializations_.empty()) {
+        // Move out to avoid iterator invalidation (compiling may queue more)
+        std::vector<StmtPtr> batch = std::move(pending_specializations_);
+        pending_specializations_.clear();
+        for (auto& stmt : batch) {
+            compile_stmt(stmt.get());
+        }
+    }
+}
+
 void Compiler::visit(IdentifierExpr* expr) {
 // Check if this is a generic type instantiation
 std::string actual_name = expr->name;
 if (!expr->generic_args.empty()) {
     // Mangle the name: Box<Int> -> Box_Int
     actual_name = mangle_generic_name(expr->name, expr->generic_args);
+
+    // On-demand specialize generic function if not yet done
+    try_specialize_generic_func(expr->name, expr->generic_args);
 }
     
 int local = resolve_local(actual_name);
@@ -2578,6 +2733,163 @@ void Compiler::visit(CallExpr* expr) {
         if (identifier->name == "readLine" && expr->arguments.empty()) {
             emit_op(OpCode::OP_READ_LINE, expr->line);
             return;
+        }
+
+        // Generic function type inference: add(a: 5, b: 10) -> add<Int>(a: 5, b: 10)
+        const FuncDeclStmt* tmpl = find_generic_function_template(identifier->name);
+        if (identifier->generic_args.empty() && tmpl) {
+            // Try to infer generic type args from literal arguments
+            if (!tmpl->generic_params.empty() && !expr->arguments.empty()) {
+                // Build a map: generic param name -> param positions
+                std::unordered_map<std::string, size_t> param_to_first_arg;
+                for (size_t i = 0; i < tmpl->params.size() && i < expr->arguments.size(); ++i) {
+                    const std::string& ptype = tmpl->params[i].type.name;
+                    if (!param_to_first_arg.count(ptype)) {
+                        param_to_first_arg[ptype] = i;
+                    }
+                }
+
+                std::vector<TypeAnnotation> inferred_args;
+                bool inference_ok = true;
+                for (const auto& gp : tmpl->generic_params) {
+                    auto pit = param_to_first_arg.find(gp);
+                    if (pit == param_to_first_arg.end()) {
+                        inference_ok = false;
+                        break;
+                    }
+                    size_t arg_idx = pit->second;
+                    const Expr* arg_expr = expr->arguments[arg_idx].get();
+                    TypeAnnotation inferred;
+                    inferred.is_optional = false;
+                    inferred.is_function_type = false;
+                    if (arg_expr->kind == ExprKind::Literal) {
+                        auto* lit = static_cast<const LiteralExpr*>(arg_expr);
+                        if (lit->string_value.has_value()) {
+                            inferred.name = "String";
+                        } else if (lit->value.is_int()) {
+                            inferred.name = "Int";
+                        } else if (lit->value.is_float()) {
+                            inferred.name = "Float";
+                        } else if (lit->value.is_bool()) {
+                            inferred.name = "Bool";
+                        } else {
+                            inference_ok = false;
+                            break;
+                        }
+                    } else if (arg_expr->kind == ExprKind::Identifier) {
+                        // Try to infer type from local variable's type annotation
+                        auto* id_expr = static_cast<const IdentifierExpr*>(arg_expr);
+                        int local_idx = resolve_local(id_expr->name);
+                        if (local_idx != -1 && !locals_[local_idx].type_name.empty()) {
+                            inferred.name = locals_[local_idx].type_name;
+                        } else {
+                            inference_ok = false;
+                            break;
+                        }
+                    } else if (arg_expr->kind == ExprKind::Call) {
+                        // Try to infer type from called function's return type
+                        auto* call_arg = static_cast<const CallExpr*>(arg_expr);
+                        if (call_arg->callee->kind == ExprKind::Identifier) {
+                            auto* callee_id = static_cast<IdentifierExpr*>(call_arg->callee.get());
+                            const FuncDeclStmt* callee_tmpl = find_generic_function_template(callee_id->name);
+
+                            // If inner call is also generic with empty generic_args, infer them first
+                            if (callee_tmpl && callee_id->generic_args.empty() &&
+                                !callee_tmpl->generic_params.empty() && !call_arg->arguments.empty()) {
+                                // Recursively infer inner call's generic args from its literal arguments
+                                std::unordered_map<std::string, size_t> inner_param_map;
+                                for (size_t ip = 0; ip < callee_tmpl->params.size() && ip < call_arg->arguments.size(); ++ip) {
+                                    const std::string& pt = callee_tmpl->params[ip].type.name;
+                                    if (!inner_param_map.count(pt)) inner_param_map[pt] = ip;
+                                }
+                                std::vector<TypeAnnotation> inner_inferred;
+                                bool inner_ok = true;
+                                for (const auto& igp : callee_tmpl->generic_params) {
+                                    auto ipit = inner_param_map.find(igp);
+                                    if (ipit == inner_param_map.end()) { inner_ok = false; break; }
+                                    const Expr* inner_arg = call_arg->arguments[ipit->second].get();
+                                    TypeAnnotation ita;
+                                    ita.is_optional = false;
+                                    ita.is_function_type = false;
+                                    if (inner_arg->kind == ExprKind::Literal) {
+                                        auto* il = static_cast<const LiteralExpr*>(inner_arg);
+                                        if (il->string_value.has_value()) ita.name = "String";
+                                        else if (il->value.is_int()) ita.name = "Int";
+                                        else if (il->value.is_float()) ita.name = "Float";
+                                        else if (il->value.is_bool()) ita.name = "Bool";
+                                        else { inner_ok = false; break; }
+                                    } else if (inner_arg->kind == ExprKind::Identifier) {
+                                        auto* iid = static_cast<const IdentifierExpr*>(inner_arg);
+                                        int li = resolve_local(iid->name);
+                                        if (li != -1 && !locals_[li].type_name.empty()) ita.name = locals_[li].type_name;
+                                        else { inner_ok = false; break; }
+                                    } else { inner_ok = false; break; }
+                                    inner_inferred.push_back(std::move(ita));
+                                }
+                                if (inner_ok && inner_inferred.size() == callee_tmpl->generic_params.size()) {
+                                    callee_id->generic_args = std::move(inner_inferred);
+                                }
+                            }
+
+                            if (callee_tmpl && callee_tmpl->return_type.has_value() && !callee_id->generic_args.empty()) {
+                                // Resolve return type using the call's generic_args
+                                const std::string& ret_type = callee_tmpl->return_type->name;
+                                bool found_ret = false;
+                                for (size_t gi = 0; gi < callee_tmpl->generic_params.size(); ++gi) {
+                                    if (callee_tmpl->generic_params[gi] == ret_type && gi < callee_id->generic_args.size()) {
+                                        inferred.name = callee_id->generic_args[gi].name;
+                                        found_ret = true;
+                                        break;
+                                    }
+                                }
+                                if (!found_ret) {
+                                    // Return type is concrete (not a generic param)
+                                    inferred.name = ret_type;
+                                }
+                            } else if (callee_tmpl && callee_tmpl->return_type.has_value()) {
+                                // Non-generic function with concrete return type
+                                inferred.name = callee_tmpl->return_type->name;
+                            } else {
+                                inference_ok = false;
+                                break;
+                            }
+                        } else if (call_arg->callee->kind == ExprKind::Member) {
+                            // Member method call: e.g., v1.magnitude()
+                            auto* member = static_cast<const MemberExpr*>(call_arg->callee.get());
+                            if (member->object->kind == ExprKind::Identifier) {
+                                auto* obj_id = static_cast<const IdentifierExpr*>(member->object.get());
+                                int obj_local = resolve_local(obj_id->name);
+                                if (obj_local != -1 && !locals_[obj_local].type_name.empty()) {
+                                    std::string method_key = locals_[obj_local].type_name + "." + member->member;
+                                    // Look up in enclosing chain for method_return_types_
+                                    for (const Compiler* c = this; c; c = c->enclosing_) {
+                                        auto it = c->method_return_types_.find(method_key);
+                                        if (it != c->method_return_types_.end()) {
+                                            inferred.name = it->second;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (inferred.name.empty()) {
+                                inference_ok = false;
+                                break;
+                            }
+                        } else {
+                            inference_ok = false;
+                            break;
+                        }
+                    } else {
+                        inference_ok = false;
+                        break;
+                    }
+                    inferred_args.push_back(std::move(inferred));
+                }
+
+                if (inference_ok && inferred_args.size() == tmpl->generic_params.size()) {
+                    identifier->generic_args = std::move(inferred_args);
+                }
+            }
         }
     }
 
@@ -3941,20 +4253,122 @@ std::string Compiler::mangle_generic_name(const std::string& base_name,
 
 void Compiler::collect_generic_templates(const std::vector<StmtPtr>& program) {
     generic_struct_templates_.clear();
-    
+    generic_function_templates_.clear();
+
     for (const auto& stmt : program) {
         if (!stmt) continue;
-        
+
         if (stmt->kind == StmtKind::StructDecl) {
             auto* struct_decl = static_cast<StructDeclStmt*>(stmt.get());
             if (!struct_decl->generic_params.empty()) {
                 generic_struct_templates_[struct_decl->name] = struct_decl;
             }
         }
+
+        if (stmt->kind == StmtKind::FuncDecl) {
+            auto* func_decl = static_cast<FuncDeclStmt*>(stmt.get());
+            if (!func_decl->generic_params.empty()) {
+                generic_function_templates_[func_decl->name] = func_decl;
+            }
+        }
     }
 }
 
-void Compiler::collect_generic_usages(const std::vector<StmtPtr>& program, 
+void Compiler::collect_generic_usages_from_expr(const Expr* expr,
+                                                std::unordered_set<std::string>& needed_func_specializations) {
+    if (!expr) return;
+
+    switch (expr->kind) {
+    case ExprKind::Call: {
+        auto* call = static_cast<const CallExpr*>(expr);
+        if (call->callee && call->callee->kind == ExprKind::Identifier) {
+            auto* id = static_cast<const IdentifierExpr*>(call->callee.get());
+            if (!id->generic_args.empty() &&
+                generic_function_templates_.count(id->name)) {
+                std::string mangled = mangle_generic_name(id->name, id->generic_args);
+                needed_func_specializations.insert(mangled);
+            }
+        }
+        // Recurse into callee and arguments
+        collect_generic_usages_from_expr(call->callee.get(), needed_func_specializations);
+        for (const auto& arg : call->arguments) {
+            collect_generic_usages_from_expr(arg.get(), needed_func_specializations);
+        }
+        break;
+    }
+    case ExprKind::Binary: {
+        auto* bin = static_cast<const BinaryExpr*>(expr);
+        collect_generic_usages_from_expr(bin->left.get(), needed_func_specializations);
+        collect_generic_usages_from_expr(bin->right.get(), needed_func_specializations);
+        break;
+    }
+    case ExprKind::Unary: {
+        auto* un = static_cast<const UnaryExpr*>(expr);
+        collect_generic_usages_from_expr(un->operand.get(), needed_func_specializations);
+        break;
+    }
+    case ExprKind::Member: {
+        auto* mem = static_cast<const MemberExpr*>(expr);
+        collect_generic_usages_from_expr(mem->object.get(), needed_func_specializations);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void Compiler::collect_generic_usages_from_stmt(const Stmt* stmt,
+                                                std::unordered_set<std::string>& needed_func_specializations) {
+    if (!stmt) return;
+
+    switch (stmt->kind) {
+    case StmtKind::Expression: {
+        auto* expr_stmt = static_cast<const ExprStmt*>(stmt);
+        collect_generic_usages_from_expr(expr_stmt->expression.get(), needed_func_specializations);
+        break;
+    }
+    case StmtKind::VarDecl: {
+        auto* var_decl = static_cast<const VarDeclStmt*>(stmt);
+        collect_generic_usages_from_expr(var_decl->initializer.get(), needed_func_specializations);
+        break;
+    }
+    case StmtKind::Return: {
+        auto* ret = static_cast<const ReturnStmt*>(stmt);
+        collect_generic_usages_from_expr(ret->value.get(), needed_func_specializations);
+        break;
+    }
+    case StmtKind::Print: {
+        auto* print = static_cast<const PrintStmt*>(stmt);
+        collect_generic_usages_from_expr(print->expression.get(), needed_func_specializations);
+        break;
+    }
+    case StmtKind::If: {
+        auto* if_stmt = static_cast<const IfStmt*>(stmt);
+        collect_generic_usages_from_expr(if_stmt->condition.get(), needed_func_specializations);
+        collect_generic_usages_from_stmt(if_stmt->then_branch.get(), needed_func_specializations);
+        collect_generic_usages_from_stmt(if_stmt->else_branch.get(), needed_func_specializations);
+        break;
+    }
+    case StmtKind::Block: {
+        auto* block = static_cast<const BlockStmt*>(stmt);
+        for (const auto& s : block->statements) {
+            collect_generic_usages_from_stmt(s.get(), needed_func_specializations);
+        }
+        break;
+    }
+    case StmtKind::FuncDecl: {
+        auto* func = static_cast<const FuncDeclStmt*>(stmt);
+        if (func->body) {
+            collect_generic_usages_from_stmt(func->body.get(), needed_func_specializations);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void Compiler::collect_generic_usages(const std::vector<StmtPtr>& program,
                                       std::unordered_set<std::string>& needed_specializations) {
     // Helper to recursively collect generic types from TypeAnnotation
     std::function<void(const TypeAnnotation&)> collect_from_type = [&](const TypeAnnotation& type) {
@@ -3962,35 +4376,36 @@ void Compiler::collect_generic_usages(const std::vector<StmtPtr>& program,
             // This type has generic arguments, so it needs specialization
             std::string mangled = mangle_generic_name(type.name, type.generic_args);
             needed_specializations.insert(mangled);
-            
+
             // Recursively collect from nested generic args
             for (const auto& arg : type.generic_args) {
                 collect_from_type(arg);
             }
         }
     };
-    
-    // Scan variable declarations
+
+    // Scan all statements for struct type usages and function call usages
     for (const auto& stmt : program) {
         if (!stmt) continue;
-        
+
         if (stmt->kind == StmtKind::VarDecl) {
             auto* var_decl = static_cast<VarDeclStmt*>(stmt.get());
-            
-            // Check type annotation
+
+            // Check type annotation for generic struct usages
             if (var_decl->type_annotation.has_value()) {
                 collect_from_type(var_decl->type_annotation.value());
             }
-            
-            // Check initializer
+
+            // Check initializer for generic struct constructor calls
             if (var_decl->initializer && var_decl->initializer->kind == ExprKind::Call) {
                 auto* call = static_cast<CallExpr*>(var_decl->initializer.get());
                 if (call->callee && call->callee->kind == ExprKind::Identifier) {
                     auto* id = static_cast<IdentifierExpr*>(call->callee.get());
-                    if (!id->generic_args.empty()) {
+                    if (!id->generic_args.empty() &&
+                        generic_struct_templates_.count(id->name)) {
                         std::string mangled = mangle_generic_name(id->name, id->generic_args);
                         needed_specializations.insert(mangled);
-                        
+
                         // Collect nested generics
                         for (const auto& arg : id->generic_args) {
                             collect_from_type(arg);
@@ -3999,6 +4414,9 @@ void Compiler::collect_generic_usages(const std::vector<StmtPtr>& program,
                 }
             }
         }
+
+        // Collect generic function usages from all statements
+        collect_generic_usages_from_stmt(stmt.get(), needed_specializations);
     }
 }
 
@@ -4133,24 +4551,75 @@ auto substitute_type = [&](const TypeAnnotation& original) -> TypeAnnotation {
     return specialized;
 }
 
+StmtPtr Compiler::create_specialized_func(const FuncDeclStmt* template_decl,
+                                          const std::vector<TypeAnnotation>& type_args) {
+    if (template_decl->generic_params.size() != type_args.size()) {
+        throw CompilerError("Generic function parameter count mismatch", template_decl->line);
+    }
+
+    // Create type substitution map: T -> Int, U -> Float, etc.
+    std::unordered_map<std::string, TypeAnnotation> type_substitution;
+    for (size_t i = 0; i < template_decl->generic_params.size(); ++i) {
+        type_substitution[template_decl->generic_params[i]] = type_args[i];
+    }
+
+    auto substitute_type = [&](const TypeAnnotation& original) -> TypeAnnotation {
+        TypeAnnotation result = original;
+        auto it = type_substitution.find(original.name);
+        if (it != type_substitution.end()) {
+            result = it->second;
+            if (!result.generic_args.empty()) {
+                result.name = mangle_generic_name(result.name, result.generic_args);
+                result.generic_args.clear();
+            }
+        } else if (!original.generic_args.empty()) {
+            result.name = mangle_generic_name(original.name, original.generic_args);
+            result.generic_args.clear();
+        }
+        return result;
+    };
+
+    auto specialized = std::make_unique<FuncDeclStmt>();
+    specialized->line = template_decl->line;
+    specialized->name = mangle_generic_name(template_decl->name, type_args);
+    specialized->generic_params.clear();  // No longer generic
+    specialized->generic_constraints.clear();
+    specialized->is_override = template_decl->is_override;
+    specialized->is_static = template_decl->is_static;
+    specialized->can_throw = template_decl->can_throw;
+    specialized->access_level = template_decl->access_level;
+
+    // Copy parameters with type substitution
+    for (const auto& param : template_decl->params) {
+        ParamDecl new_param;
+        new_param.external_name = param.external_name;
+        new_param.internal_name = param.internal_name;
+        new_param.type = substitute_type(param.type);
+        specialized->params.push_back(std::move(new_param));
+    }
+
+    // Copy return type with substitution
+    if (template_decl->return_type.has_value()) {
+        specialized->return_type = substitute_type(template_decl->return_type.value());
+    }
+
+    // Deep copy body
+    if (template_decl->body) {
+        specialized->body = std::unique_ptr<BlockStmt>(
+            static_cast<BlockStmt*>(clone_stmt(template_decl->body.get()).release()));
+    }
+
+    return specialized;
+}
+
 std::vector<StmtPtr> Compiler::specialize_generics(const std::vector<StmtPtr>& program) {
 // Step 1: Collect generic templates
 collect_generic_templates(program);
-    
-std::cout << "[DEBUG] Templates collected: " << generic_struct_templates_.size() << std::endl;
-for (const auto& [name, _] : generic_struct_templates_) {
-    std::cout << "  - " << name << std::endl;
-}
-    
+
 // Step 2: Collect generic usages
 std::unordered_set<std::string> needed_specializations;
 collect_generic_usages(program, needed_specializations);
-    
-std::cout << "[DEBUG] Specializations needed: " << needed_specializations.size() << std::endl;
-for (const auto& name : needed_specializations) {
-    std::cout << "  - " << name << std::endl;
-}
-    
+
 // Step 3: Create result vector
 std::vector<StmtPtr> result;
 result.reserve(program.size() + needed_specializations.size());
@@ -4266,17 +4735,89 @@ result.reserve(program.size() + needed_specializations.size());
                     // Create specialized struct
                     try {
                         StmtPtr specialized = create_specialized_struct(template_it->second, type_args);
-                        auto* s = static_cast<StructDeclStmt*>(specialized.get());
-                        std::cout << "[DEBUG] Created specialized struct: " << s->name << std::endl;
                         result.push_back(std::move(specialized));
-                    } catch (const std::exception& e) {
-                        std::cout << "[DEBUG] Failed to specialize " << mangled_name << ": " << e.what() << std::endl;
+                    } catch (...) {
+                        // Specialization failed
+                    }
+                }
+            }
+        }
+
+        // If this is a generic function template, add specializations
+        if (stmt_ptr && stmt_ptr->kind == StmtKind::FuncDecl) {
+            auto* func_decl = static_cast<const FuncDeclStmt*>(stmt_ptr);
+            if (!func_decl->generic_params.empty()) {
+                std::string base_name = func_decl->name;
+
+                for (const auto& mangled_name : needed_specializations) {
+                    size_t first_underscore = mangled_name.find('_');
+                    if (first_underscore == std::string::npos) continue;
+
+                    std::string spec_base_name = mangled_name.substr(0, first_underscore);
+                    if (spec_base_name != base_name) continue;
+
+                    // Find template
+                    auto template_it = generic_function_templates_.find(base_name);
+                    if (template_it == generic_function_templates_.end()) continue;
+
+                    std::string remaining = mangled_name.substr(first_underscore + 1);
+                    size_t num_params = template_it->second->generic_params.size();
+
+                    // Parse type arguments from remaining mangled name
+                    std::vector<TypeAnnotation> type_args;
+                    std::function<TypeAnnotation(std::string&)> consume_one_type_arg;
+                    consume_one_type_arg = [&](std::string& str) -> TypeAnnotation {
+                        TypeAnnotation ta;
+                        ta.is_optional = false;
+                        ta.is_function_type = false;
+
+                        // Check if starts with a known generic template
+                        for (const auto& [tname, tdecl] : generic_struct_templates_) {
+                            if (str.rfind(tname + "_", 0) == 0) {
+                                size_t np = tdecl->generic_params.size();
+                                std::string nested = tname;
+                                str = str.substr(tname.length() + 1);
+                                for (size_t j = 0; j < np; ++j) {
+                                    TypeAnnotation na = consume_one_type_arg(str);
+                                    nested += "_" + na.name;
+                                }
+                                ta.name = nested;
+                                return ta;
+                            }
+                        }
+
+                        // Simple type
+                        size_t next_us = str.find('_');
+                        if (next_us == std::string::npos) {
+                            ta.name = str;
+                            str = "";
+                        } else {
+                            ta.name = str.substr(0, next_us);
+                            str = str.substr(next_us + 1);
+                        }
+                        return ta;
+                    };
+
+                    std::string remaining_copy = remaining;
+                    while (!remaining_copy.empty() && type_args.size() < num_params) {
+                        type_args.push_back(consume_one_type_arg(remaining_copy));
+                    }
+
+                    if (type_args.size() != num_params) continue;
+
+                    try {
+                        StmtPtr specialized = create_specialized_func(template_it->second, type_args);
+                        auto* f = static_cast<FuncDeclStmt*>(specialized.get());
+                        specialized_functions_.insert(f->name);
+                        result.push_back(std::move(specialized));
+                    } catch (...) {
+                        // Specialization failed
                     }
                 }
             }
         }
     }
-    
+
     return result;
 }
 
@@ -4351,7 +4892,7 @@ void Compiler::emit_variable_get_move(const std::string& name, uint32_t line) {
     // TODO: Fix by tracking moved variables in end_scope()
     emit_variable_get(name, line);
     return;
-    
+
     /*
     int local = resolve_local(name);
     if (local != -1) {
@@ -4359,10 +4900,353 @@ void Compiler::emit_variable_get_move(const std::string& name, uint32_t line) {
         emit_short(static_cast<uint16_t>(local), line);
         return;
     }
-    
+
     // Fall back to regular get for non-locals (globals, upvalues)
     emit_variable_get(name, line);
     */
+}
+
+// ============================================================================
+// Native Binding Support
+// ============================================================================
+
+NativeCallInfo Compiler::extract_native_call_attribute(const std::vector<Attribute>& attrs) {
+    NativeCallInfo result;
+    result.is_valid = false;
+
+    for (const auto& attr : attrs) {
+        // Check for "Native.InternalCall" or just "InternalCall"
+        if (attr.name == "Native.InternalCall" || attr.name == "InternalCall") {
+            // Must have exactly one string argument
+            if (attr.arguments.size() != 1) {
+                continue;
+            }
+
+            const auto* arg = attr.arguments[0].get();
+            if (arg->kind != ExprKind::Literal) {
+                continue;
+            }
+
+            const auto* literal = static_cast<const LiteralExpr*>(arg);
+            if (!literal->string_value.has_value()) {
+                continue;
+            }
+
+            result.native_name = literal->string_value.value();
+            result.is_valid = true;
+            return result;
+        }
+    }
+
+    return result;
+}
+
+void Compiler::emit_native_function(const FuncDeclStmt& stmt, const NativeCallInfo& native_info, bool for_method) {
+    // Create a wrapper function that:
+    // 1. Takes the same parameters as declared (plus 'self' for instance methods, but not for init)
+    // 2. Emits OP_NATIVE_CALL with the native function name
+    // 3. Returns the result
+
+    FunctionPrototype proto;
+    proto.name = stmt.name;
+
+    // For instance methods (not init), add 'self' as the first parameter
+    // Init methods don't take 'self' because they create and return the new object
+    bool needs_self = for_method && stmt.name != "init";
+    size_t total_params = stmt.params.size();
+    if (needs_self) {
+        proto.params.push_back("self");
+        proto.param_labels.push_back("self");
+        proto.param_defaults.push_back(std::nullopt);
+        total_params++;
+    }
+
+    proto.params.reserve(total_params);
+    proto.param_labels.reserve(total_params);
+    proto.param_defaults.reserve(total_params);
+
+    for (const auto& param : stmt.params) {
+        proto.params.push_back(param.internal_name);
+        proto.param_labels.push_back(param.external_name);
+        proto.param_defaults.push_back(build_param_default(param));
+    }
+
+    // Compile the wrapper function body
+    Compiler function_compiler;
+    function_compiler.enclosing_ = this;
+    function_compiler.chunk_ = Assembly{};
+    function_compiler.locals_.clear();
+    function_compiler.scope_depth_ = 1;
+    function_compiler.recursion_depth_ = 0;
+
+    // Declare local variables for parameters so the compiler's local table is consistent
+    // Even though OP_NATIVE_CALL reads arguments directly from stack, we need locals declared
+    // for the compiler's internal bookkeeping
+    if (needs_self) {
+        function_compiler.declare_local("self", false);
+        function_compiler.mark_local_initialized();
+    }
+    for (const auto& param : stmt.params) {
+        function_compiler.declare_local(param.internal_name, param.type.is_optional);
+        function_compiler.mark_local_initialized();
+    }
+
+    // Add the native function name to the function's chunk string table.
+    // When func->chunk is executed directly (for global functions),
+    // VM::read_string() reads from func->chunk's string_table.
+    size_t name_idx = function_compiler.chunk_.add_string(native_info.native_name);
+    if (name_idx > std::numeric_limits<uint16_t>::max()) {
+        throw CompilerError("Too many string constants", stmt.line);
+    }
+
+    // Emit OP_NATIVE_CALL with name index and argument count
+    // For methods, include 'self' in the count
+    function_compiler.emit_op(OpCode::OP_NATIVE_CALL, stmt.line);
+    function_compiler.emit_short(static_cast<uint16_t>(name_idx), stmt.line);
+    function_compiler.emit_byte(static_cast<uint8_t>(total_params), stmt.line);
+
+    // Return the result (native call leaves result on stack)
+    function_compiler.emit_op(OpCode::OP_RETURN, stmt.line);
+
+    // Finalize the function
+    proto.chunk = finalize_function_chunk(std::move(function_compiler.chunk_));
+    // NOTE: Do NOT call record_method_body for native functions.
+    // We want OP_CALL to use func->chunk directly, not invoke_method_def.
+    // This ensures read_string() uses the function's own string_table.
+
+    size_t function_index = chunk_.add_function(std::move(proto));
+    if (function_index > std::numeric_limits<uint16_t>::max()) {
+        throw CompilerError("Too many functions in chunk", stmt.line);
+    }
+
+    // Emit function creation (no captures for native wrappers)
+    emit_op(OpCode::OP_FUNCTION, stmt.line);
+    emit_short(static_cast<uint16_t>(function_index), stmt.line);
+
+    // For method definitions, leave function on stack for OP_METHOD
+    if (for_method) {
+        return;
+    }
+
+    // Register as global or local
+    if (scope_depth_ == 0) {
+        size_t name_idx = identifier_constant(stmt.name);
+        if (name_idx > std::numeric_limits<uint16_t>::max()) {
+            throw CompilerError("Too many global variables", stmt.line);
+        }
+        emit_op(OpCode::OP_SET_GLOBAL, stmt.line);
+        emit_short(static_cast<uint16_t>(name_idx), stmt.line);
+        emit_op(OpCode::OP_POP, stmt.line);
+    } else {
+        declare_local(stmt.name, false);
+        mark_local_initialized();
+    }
+}
+
+NativeTypeBindingInfo Compiler::extract_native_type_attribute(const std::vector<Attribute>& attrs) {
+    NativeTypeBindingInfo result;
+    result.is_valid = false;
+
+    for (const auto& attr : attrs) {
+        if (attr.name == "Native.Class" || attr.name == "Native.Struct") {
+            // Must have exactly one string argument
+            if (attr.arguments.size() != 1) {
+                continue;
+            }
+
+            const auto* arg = attr.arguments[0].get();
+            if (arg->kind != ExprKind::Literal) {
+                continue;
+            }
+
+            const auto* literal = static_cast<const LiteralExpr*>(arg);
+            if (!literal->string_value.has_value()) {
+                continue;
+            }
+
+            result.native_type_name = literal->string_value.value();
+            result.is_class = (attr.name == "Native.Class");
+            result.is_valid = true;
+            return result;
+        }
+    }
+
+    return result;
+}
+
+NativePropertyBindingInfo Compiler::extract_native_property_attribute(const std::vector<Attribute>& attrs) {
+    NativePropertyBindingInfo result;
+    result.is_valid = false;
+
+    for (const auto& attr : attrs) {
+        if (attr.name == "Native.Property" || attr.name == "Native.Field") {
+            // Must have exactly one string argument
+            if (attr.arguments.size() != 1) {
+                continue;
+            }
+
+            const auto* arg = attr.arguments[0].get();
+            if (arg->kind != ExprKind::Literal) {
+                continue;
+            }
+
+            const auto* literal = static_cast<const LiteralExpr*>(arg);
+            if (!literal->string_value.has_value()) {
+                continue;
+            }
+
+            result.native_property_name = literal->string_value.value();
+            result.is_field = (attr.name == "Native.Field");
+            result.is_valid = true;
+            return result;
+        }
+    }
+
+    return result;
+}
+
+void Compiler::emit_native_class(const ClassDeclStmt& stmt, const NativeTypeBindingInfo& type_info) {
+    // For native classes, we emit a special class definition that:
+    // 1. Stores the native type name on ClassObject
+    // 2. Creates NativeObject instances instead of regular InstanceObject
+    // 3. Routes property access to native getters/setters
+    // 4. Routes method calls to native methods
+
+    size_t class_name_idx = identifier_constant(stmt.name);
+
+    // Emit OP_CLASS to create the ClassObject
+    emit_op(OpCode::OP_CLASS, stmt.line);
+    emit_short(static_cast<uint16_t>(class_name_idx), stmt.line);
+
+    // Set the native type name on the ClassObject using OP_SET_NATIVE_TYPE
+    size_t native_type_name_idx = chunk_.add_string(type_info.native_type_name);
+    emit_op(OpCode::OP_SET_NATIVE_TYPE, stmt.line);
+    emit_short(static_cast<uint16_t>(native_type_name_idx), stmt.line);
+
+    // For local scope, declare the class variable
+    if (scope_depth_ > 0) {
+        declare_local(stmt.name, false);
+        mark_local_initialized();
+    }
+
+    // Build property lookup set for implicit self access in computed property bodies
+    std::unordered_set<std::string> property_lookup;
+    for (const auto& property : stmt.properties) {
+        property_lookup.insert(property->name);
+    }
+
+    // Compile computed properties
+    for (const auto& property : stmt.properties) {
+        if (!property->is_computed) continue;
+
+        size_t property_name_idx = identifier_constant(property->name);
+        if (property_name_idx > std::numeric_limits<uint16_t>::max()) {
+            throw CompilerError("Too many property identifiers", property->line);
+        }
+
+        // Compile getter
+        FunctionPrototype getter_proto;
+        getter_proto.name = "get:" + property->name;
+        getter_proto.params.push_back("self");
+        getter_proto.param_labels.push_back("");
+        getter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
+        getter_proto.chunk = std::make_shared<Assembly>();
+
+        Compiler getter_compiler;
+        getter_compiler.chunk_ = Assembly{};
+        getter_compiler.locals_.clear();
+        getter_compiler.scope_depth_ = 1;
+        getter_compiler.recursion_depth_ = 0;
+        getter_compiler.current_class_properties_ = &property_lookup;
+        getter_compiler.allow_implicit_self_property_ = true;
+
+        getter_compiler.declare_local("self", false);
+        getter_compiler.mark_local_initialized();
+
+        for (const auto& stmt_in_getter : property->getter_body->statements) {
+            getter_compiler.compile_stmt(stmt_in_getter.get());
+        }
+
+        getter_compiler.emit_op(OpCode::OP_NIL, property->line);
+        getter_compiler.emit_op(OpCode::OP_RETURN, property->line);
+
+        getter_proto.chunk = finalize_function_chunk(std::move(getter_compiler.chunk_));
+        record_method_body(stmt.name, getter_proto.name, property->is_static, {}, *getter_proto.chunk);
+        size_t getter_idx = chunk_.add_function(std::move(getter_proto));
+
+        // Compile setter (if present)
+        size_t setter_idx = 0xFFFF;
+        if (property->setter_body) {
+            FunctionPrototype setter_proto;
+            setter_proto.name = "set:" + property->name;
+            setter_proto.params.push_back("self");
+            setter_proto.params.push_back("newValue");
+            setter_proto.param_labels.push_back("");
+            setter_proto.param_labels.push_back("");
+            setter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
+            setter_proto.param_defaults.push_back(FunctionPrototype::ParamDefaultValue{});
+            setter_proto.chunk = std::make_shared<Assembly>();
+
+            Compiler setter_compiler;
+            setter_compiler.chunk_ = Assembly{};
+            setter_compiler.locals_.clear();
+            setter_compiler.scope_depth_ = 1;
+            setter_compiler.recursion_depth_ = 0;
+            setter_compiler.current_class_properties_ = &property_lookup;
+            setter_compiler.allow_implicit_self_property_ = true;
+
+            setter_compiler.declare_local("self", false);
+            setter_compiler.mark_local_initialized();
+            setter_compiler.declare_local("newValue", false);
+            setter_compiler.mark_local_initialized();
+
+            for (const auto& stmt_in_setter : property->setter_body->statements) {
+                setter_compiler.compile_stmt(stmt_in_setter.get());
+            }
+
+            setter_compiler.emit_op(OpCode::OP_GET_LOCAL, property->line);
+            setter_compiler.emit_short(1, property->line);  // newValue is at local index 1
+            setter_compiler.emit_op(OpCode::OP_RETURN, property->line);
+
+            setter_proto.chunk = finalize_function_chunk(std::move(setter_compiler.chunk_));
+            record_method_body(stmt.name,
+                               setter_proto.name,
+                               property->is_static,
+                               build_accessor_param_types(property->type_annotation),
+                               *setter_proto.chunk);
+            setter_idx = chunk_.add_function(std::move(setter_proto));
+        }
+
+        emit_op(OpCode::OP_DEFINE_COMPUTED_PROPERTY, property->line);
+        emit_short(static_cast<uint16_t>(property_name_idx), property->line);
+        emit_short(static_cast<uint16_t>(getter_idx), property->line);
+        emit_short(static_cast<uint16_t>(setter_idx), property->line);
+    }
+
+    // Compile native methods (methods with [Native.InternalCall])
+    // Note: init methods are also stored in methods vector with name "init"
+    for (const auto& method : stmt.methods) {
+        if (!method) continue;
+
+        auto native_method_info = extract_native_call_attribute(method->attributes);
+        if (native_method_info.is_valid) {
+            // This method is bound to a native function
+            // Pass for_method=true to leave function on stack for OP_METHOD
+            emit_native_function(*method, native_method_info, true);
+
+            // Attach the method to the class
+            size_t method_name_idx = identifier_constant(method->name);
+            emit_op(OpCode::OP_METHOD, method->line);
+            emit_short(static_cast<uint16_t>(method_name_idx), method->line);
+        }
+    }
+
+    // Register as global
+    if (scope_depth_ == 0) {
+        emit_op(OpCode::OP_SET_GLOBAL, stmt.line);
+        emit_short(static_cast<uint16_t>(class_name_idx), stmt.line);
+        emit_op(OpCode::OP_POP, stmt.line);
+    }
 }
 
 } // namespace swiftscript

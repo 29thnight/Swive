@@ -619,7 +619,18 @@ namespace swiftscript {
         uint16_t idx = read_short();
         const auto& pool = chunk_->global_constant_pool;
         if (idx >= pool.size()) {
-            throw std::runtime_error("Constant index out of range.");
+            std::string func_info = "(top-level)";
+            if (!call_frames_.empty()) {
+                func_info = call_frames_.back().function_name;
+            }
+            std::string msg = "Constant index out of range: idx=" + std::to_string(idx)
+                + " pool_size=" + std::to_string(pool.size())
+                + " ip=" + std::to_string(ip_)
+                + " body_idx=" + std::to_string(current_body_idx_)
+                + " func=" + func_info
+                + " string_table_size=" + std::to_string(chunk_->string_table.size())
+                + " num_functions=" + std::to_string(chunk_->function_prototypes.size());
+            throw std::runtime_error(msg);
         }
         return pool[idx];
     }
@@ -627,7 +638,10 @@ namespace swiftscript {
     const std::string& VM::read_string() {
         uint16_t idx = read_short();
         if (idx >= chunk_->string_table.size()) {
-            throw std::runtime_error("String constant index out of range.");
+            std::string msg = "String constant index out of range: idx=" + std::to_string(idx)
+                + " table_size=" + std::to_string(chunk_->string_table.size())
+                + " chunk_name=" + chunk_->manifest.name;
+            throw std::runtime_error(msg);
         }
         return chunk_->string_table[idx];
     }
@@ -1107,6 +1121,35 @@ namespace swiftscript {
                 return method_it->second;
             }
             throw std::runtime_error("Enum '" + enum_type->name + "' has no case or method named '" + name + "'");
+        }
+
+        // Native object: look up methods from the associated SwiftScript class
+        if (obj->type == ObjectType::Native) {
+            auto* native_obj = static_cast<NativeObject*>(obj);
+
+            // Find the SwiftScript class that wraps this native type
+            // The class name in SwiftScript corresponds to the script-side class (e.g., "Vector3")
+            // We need to find the ClassObject by looking through globals
+            // The native_type_name stored in ClassObject matches native_obj->type_name
+
+            for (auto& [class_name, class_val] : globals_) {
+                if (!class_val.is_object() || !class_val.as_object()) continue;
+                if (class_val.as_object()->type != ObjectType::Class) continue;
+
+                auto* klass = static_cast<ClassObject*>(class_val.as_object());
+                if (klass->native_type_name == native_obj->type_name) {
+                    // Found the matching class, look for the method
+                    Value method_value;
+                    if (find_method_on_class(klass, name, method_value)) {
+                        // Bind the method to this native object
+                        auto* bound = allocate_object<BoundMethodObject>(native_obj, method_value);
+                        return Value::from_object(bound);
+                    }
+                    break;
+                }
+            }
+
+            throw std::runtime_error("Native object '" + native_obj->type_name + "' has no method named '" + name + "'");
         }
 
         // Enum case: access methods and properties (direction.describe())

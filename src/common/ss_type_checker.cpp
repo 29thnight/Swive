@@ -114,6 +114,80 @@ known_attributes_.clear();
     throw_if_errors();
 }
 
+void TypeChecker::check_no_throw(const std::vector<StmtPtr>& program) {
+    // Same as check() but does NOT throw — errors stay in errors_/warnings_
+    known_types_.clear();
+    type_properties_.clear();
+    type_methods_.clear();
+    member_access_levels_.clear();
+    mutating_methods_.clear();
+    enum_cases_.clear();
+    superclass_map_.clear();
+    protocol_conformers_.clear();
+    protocol_inheritance_.clear();
+    protocol_descendants_.clear();
+    scopes_.clear();
+    function_stack_.clear();
+    generic_param_stack_.clear();
+    let_constants_.clear();
+    current_type_context_.clear();
+    errors_.clear();
+    warnings_.clear();
+    module_cache_.clear();
+    imported_modules_.clear();
+    compiling_modules_.clear();
+    imported_module_names_.clear();
+    known_attributes_.clear();
+    generic_struct_templates_.clear();
+
+    add_builtin_types();
+    add_builtin_attributes();
+    std::vector<const std::vector<StmtPtr>*> imported_programs;
+    collect_imported_programs(program, imported_programs);
+    collect_type_declarations(program);
+    for (const auto* module_program : imported_programs) {
+        collect_type_declarations(*module_program);
+    }
+    finalize_protocol_maps();
+
+    enter_scope();
+    for (const auto& [name, kind] : known_types_) {
+        if (kind == TypeKind::User || kind == TypeKind::Protocol) {
+            declare_symbol(name, TypeInfo{name, false, kind, {}, nullptr}, 0);
+        }
+    }
+    for (const auto& module_name : imported_module_names_) {
+        declare_symbol(module_name, TypeInfo::unknown(), 0);
+    }
+    declare_symbol("readLine", TypeInfo::function({}, TypeInfo::builtin("String", true)), 0);
+    declare_symbol("Int", TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("Int")), 0);
+    declare_symbol("Float", TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("Float")), 0);
+    declare_symbol("Bool", TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("Bool")), 0);
+    declare_symbol("String", TypeInfo::function({ TypeInfo::builtin("Any") }, TypeInfo::builtin("String")), 0);
+    for (const auto* module_program : imported_programs) {
+        declare_functions(*module_program);
+    }
+    declare_functions(program);
+    for (const auto* module_program : imported_programs) {
+        for (const auto& stmt : *module_program) {
+            if (!stmt) {
+                error("Null statement in program", 0);
+                continue;
+            }
+            check_stmt(stmt.get());
+        }
+    }
+    for (const auto& stmt : program) {
+        if (!stmt) {
+            error("Null statement in program", 0);
+            continue;
+        }
+        check_stmt(stmt.get());
+    }
+    exit_scope();
+    // Do NOT call throw_if_errors() — caller reads errors() directly
+}
+
 void TypeChecker::add_builtin_types() {
     // Register builtin types
     known_types_.emplace("Int", TypeKind::Builtin);
@@ -186,6 +260,13 @@ void TypeChecker::add_builtin_attributes() {
     known_attributes_.emplace("Range");
     known_attributes_.emplace("Obsolete");
     known_attributes_.emplace("Deprecated");
+
+    // Native binding attributes
+    known_attributes_.emplace("Native.InternalCall");
+    known_attributes_.emplace("Native.Class");
+    known_attributes_.emplace("Native.Struct");
+    known_attributes_.emplace("Native.Property");
+    known_attributes_.emplace("Native.Field");
 }
 
 void TypeChecker::register_attribute(const std::string& name, uint32_t line) {
@@ -248,6 +329,22 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
             case StmtKind::ClassDecl: {
                 auto* decl = static_cast<const ClassDeclStmt*>(stmt);
                 add_known_type(decl->name, TypeKind::User, decl->line);
+                for (const auto& attr : decl->attributes) {
+                    if (attr.name == "Obsolete" || attr.name == "Deprecated") {
+                        std::string msg;
+                        if (!attr.arguments.empty() && attr.arguments[0]->kind == ExprKind::Literal) {
+                            auto* lit = static_cast<const LiteralExpr*>(attr.arguments[0].get());
+                            if (lit->string_value.has_value()) {
+                                msg = lit->string_value.value();
+                            }
+                        }
+                        if (attr.name == "Obsolete") {
+                            obsolete_types_[decl->name] = msg;
+                        } else {
+                            deprecated_types_[decl->name] = msg;
+                        }
+                    }
+                }
                 enter_generic_params(decl->generic_params);
                 if (decl->superclass_name.has_value()) {
                     superclass_map_[decl->name] = decl->superclass_name.value();
@@ -290,6 +387,22 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
             case StmtKind::StructDecl: {
                 auto* decl = static_cast<const StructDeclStmt*>(stmt);
                 add_known_type(decl->name, TypeKind::User, decl->line);
+                for (const auto& attr : decl->attributes) {
+                    if (attr.name == "Obsolete" || attr.name == "Deprecated") {
+                        std::string msg;
+                        if (!attr.arguments.empty() && attr.arguments[0]->kind == ExprKind::Literal) {
+                            auto* lit = static_cast<const LiteralExpr*>(attr.arguments[0].get());
+                            if (lit->string_value.has_value()) {
+                                msg = lit->string_value.value();
+                            }
+                        }
+                        if (attr.name == "Obsolete") {
+                            obsolete_types_[decl->name] = msg;
+                        } else {
+                            deprecated_types_[decl->name] = msg;
+                        }
+                    }
+                }
                 
                 // Store generic struct templates
                 if (!decl->generic_params.empty()) {
@@ -349,6 +462,22 @@ void TypeChecker::collect_type_declarations(const std::vector<StmtPtr>& program)
             case StmtKind::EnumDecl: {
                 auto* decl = static_cast<const EnumDeclStmt*>(stmt);
                 add_known_type(decl->name, TypeKind::User, decl->line);
+                for (const auto& attr : decl->attributes) {
+                    if (attr.name == "Obsolete" || attr.name == "Deprecated") {
+                        std::string msg;
+                        if (!attr.arguments.empty() && attr.arguments[0]->kind == ExprKind::Literal) {
+                            auto* lit = static_cast<const LiteralExpr*>(attr.arguments[0].get());
+                            if (lit->string_value.has_value()) {
+                                msg = lit->string_value.value();
+                            }
+                        }
+                        if (attr.name == "Obsolete") {
+                            obsolete_types_[decl->name] = msg;
+                        } else {
+                            deprecated_types_[decl->name] = msg;
+                        }
+                    }
+                }
                 enter_generic_params(decl->generic_params);
                 
                 // Add rawValue property if enum has raw type
@@ -971,7 +1100,20 @@ for (size_t i = 0; i < stmt->params.size(); ++i) {
     declare_symbol(stmt->params[i].internal_name, params[i], stmt->line);
 }
 function_stack_.push_back(FunctionContext{return_type});
-check_block(stmt->body.get());
+
+// Check if this is a native function (has [Native.InternalCall] attribute)
+bool is_native_function = false;
+for (const auto& attr : stmt->attributes) {
+    if (attr.name == "Native.InternalCall") {
+        is_native_function = true;
+        break;
+    }
+}
+
+// Only check body for non-native functions
+if (!is_native_function && stmt->body) {
+    check_block(stmt->body.get());
+}
     function_stack_.pop_back();
     exit_scope();
     exit_generic_params();
@@ -1165,12 +1307,6 @@ void TypeChecker::check_attributes(const std::vector<Attribute>& attributes, uin
         if (!known_attributes_.contains(attribute.name)) {
             error("Unknown attribute '" + attribute.name + "'", attribute.line ? attribute.line : line);
             continue;
-        }
-        if (attribute.name == "Obsolete") {
-            error("Obsolete attribute applied", attribute.line ? attribute.line : line);
-        }
-        else if (attribute.name == "Deprecated") {
-            warn("Deprecated attribute applied", attribute.line ? attribute.line : line);
         }
     }
 }
@@ -1513,6 +1649,23 @@ TypeChecker::TypeInfo TypeChecker::check_call_expr(const CallExpr* expr) {
     }
     // Constructor call: Type() returns an instance of that type
     if (callee.kind == TypeKind::User || callee.kind == TypeKind::Protocol) {
+        // Check Obsolete/Deprecated attributes at the usage site
+        auto obs_it = obsolete_types_.find(callee.name);
+        if (obs_it != obsolete_types_.end()) {
+            std::string msg = "'" + callee.name + "' is obsolete";
+            if (!obs_it->second.empty()) {
+                msg += ": " + obs_it->second;
+            }
+            error(msg, expr->line);
+        }
+        auto dep_it = deprecated_types_.find(callee.name);
+        if (dep_it != deprecated_types_.end()) {
+            std::string msg = "'" + callee.name + "' is deprecated";
+            if (!dep_it->second.empty()) {
+                msg += ": " + dep_it->second;
+            }
+            warn(msg, expr->line);
+        }
         return callee;  // Return the type itself (e.g., Person() returns Person)
     }
     return TypeInfo::unknown();
@@ -2095,6 +2248,36 @@ for (size_t i = 0; i < template_decl->generic_params.size(); ++i) {
             mutating_methods_[specialized_name].insert(method->name);
         }
     }
+}
+
+bool TypeChecker::is_known_function(const std::string& name) const {
+    // Check if name exists in any scope as a Function type
+    for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
+        auto found = it->find(name);
+        if (found != it->end()) {
+            return found->second.kind == TypeKind::Function;
+        }
+    }
+    return false;
+}
+
+bool TypeChecker::is_known_property(const std::string& name) const {
+    for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
+        auto found = it->find(name);
+        if (found != it->end()) {
+            return found->second.kind != TypeKind::Function
+                && found->second.kind != TypeKind::Unknown;
+        }
+    }
+    return false;
+}
+
+bool TypeChecker::is_known_enum_case(const std::string& typeName, const std::string& caseName) const {
+    auto it = enum_cases_.find(typeName);
+    if (it != enum_cases_.end()) {
+        return it->second.count(caseName) > 0;
+    }
+    return false;
 }
 
 void TypeChecker::error(const std::string& message, uint32_t line) const {

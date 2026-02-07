@@ -144,6 +144,10 @@ void RC::release_children(VM* vm, Object* obj) {
                 }
             }
         }
+        // Release the class reference (retained when instance was created)
+        if (inst->klass && !inst->klass->rc.is_dead) {
+            RC::release(vm, inst->klass);
+        }
     } else if (obj->type == ObjectType::BoundMethod) {
         auto* bound = static_cast<BoundMethodObject*>(obj);
         if (bound->receiver) {
@@ -169,6 +173,10 @@ void RC::release_children(VM* vm, Object* obj) {
                     RC::release(vm, child);
                 }
             }
+        }
+        // Release the struct type reference (retained when instance was created)
+        if (inst->struct_type && !inst->struct_type->rc.is_dead) {
+            RC::release(vm, inst->struct_type);
         }
     } else if (obj->type == ObjectType::Struct) {
         auto* st = static_cast<StructObject*>(obj);
@@ -240,6 +248,10 @@ void RC::release_children(VM* vm, Object* obj) {
                     RC::release(vm, child);
                 }
             }
+        }
+        // Release the enum type reference (retained when case was created)
+        if (ec->enum_type && !ec->enum_type->rc.is_dead) {
+            RC::release(vm, ec->enum_type);
         }
     } else if (obj->type == ObjectType::Enum) {
         auto* en = static_cast<EnumObject*>(obj);

@@ -98,6 +98,14 @@ X(OP_TYPE_CAST_FORCED)
 
 X(OP_THROW)
 
+// Native binding opcodes
+X(OP_NATIVE_CALL)          // Call a native C++ function by name
+X(OP_NATIVE_CONSTRUCT)     // Create a native object instance
+X(OP_NATIVE_GET_PROPERTY)  // Get a property from native object
+X(OP_NATIVE_SET_PROPERTY)  // Set a property on native object
+X(OP_NATIVE_METHOD_CALL)   // Call a method on native object
+X(OP_SET_NATIVE_TYPE)      // Set native_type_name on ClassObject (for native class binding)
+
 X(OP_READ_LINE)
 X(OP_PRINT)
 X(OP_HALT)

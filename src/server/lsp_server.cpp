@@ -34,6 +34,8 @@ void LspServer::EnsureProjectLoaded(const json& initParams) {
         if (LoadSSProjectInfo(projPath, info, err)) {
             project_ = info;
             resolver_.SetRoots(info.import_roots);
+            // Set base directory for TypeChecker module resolution
+            analyzer_.SetBaseDirectory(projPath.parent_path().string());
         }
     }
 }
@@ -87,7 +89,39 @@ nlohmann::json LspServer::OnInitialize(const json& req) {
     // We request Full sync so didChange sends full text
     caps["textDocumentSync"] = 1; // TextDocumentSyncKind::Full
 
-    // You can advertise more later: completionProvider, definitionProvider, etc.
+    // Semantic tokens provider (full document)
+    {
+        json legend;
+        // Token types — must match SemanticTokenType enum order exactly
+        legend["tokenTypes"] = json::array({
+            "type",        // 0  Type
+            "function",    // 1  Function
+            "variable",    // 2  Variable
+            "parameter",   // 3  Parameter
+            "property",    // 4  Property
+            "method",      // 5  Method
+            "keyword",     // 6  Keyword
+            "string",      // 7  String
+            "number",      // 8  Number
+            "enum",        // 9  Enum
+            "enumMember",  // 10 EnumMember
+            "namespace",   // 11 Namespace
+            "comment",     // 12 Comment
+            "unresolve",   // 13 Unresolve (undefined symbols)
+        });
+        legend["tokenModifiers"] = json::array({
+            "declaration",
+            "definition",
+            "readonly",
+            "static",
+        });
+
+        json semTok;
+        semTok["legend"] = legend;
+        semTok["full"] = true;
+        // range is not supported yet
+        caps["semanticTokensProvider"] = semTok;
+    }
 
     json result;
     result["capabilities"] = caps;
@@ -156,6 +190,47 @@ void LspServer::OnDidClose(const json& params) {
     outbox_.push_back(MakeNotification("textDocument/publishDiagnostics", p).dump());
 }
 
+nlohmann::json LspServer::OnSemanticTokensFull(const json& req) {
+    const json& params = req.value("params", json::object());
+    std::string uri = params["textDocument"]["uri"].get<std::string>();
+
+    auto it = docs_.find(uri);
+    if (it == docs_.end()) {
+        // Document not open — return empty data
+        json result;
+        result["data"] = json::array();
+        return result;
+    }
+
+    std::vector<SemanticToken> tokens;
+    analyzer_.ComputeSemanticTokens(it->second.text, tokens);
+
+    // Encode as LSP delta format:
+    // Each token is encoded as 5 integers:
+    //   deltaLine, deltaStartChar, length, tokenType, tokenModifiers
+    json data = json::array();
+    int prevLine = 0;
+    int prevCol = 0;
+
+    for (const auto& tok : tokens) {
+        int deltaLine = tok.line - prevLine;
+        int deltaStart = (deltaLine == 0) ? (tok.col - prevCol) : tok.col;
+
+        data.push_back(deltaLine);
+        data.push_back(deltaStart);
+        data.push_back(tok.length);
+        data.push_back(static_cast<int>(tok.type));
+        data.push_back(tok.modifiers);
+
+        prevLine = tok.line;
+        prevCol = tok.col;
+    }
+
+    json result;
+    result["data"] = data;
+    return result;
+}
+
 void LspServer::AnalyzeAndPublish(const std::string& uri) {
     auto it = docs_.find(uri);
     if (it == docs_.end()) return;
@@ -220,6 +295,11 @@ std::string LspServer::Handle(const std::string& rawJson, bool& outHasResponse) 
         if (method == "shutdown") {
             outHasResponse = true;
             json result = OnShutdown(msg);
+            return MakeResponse(msg, result).dump();
+        }
+        if (method == "textDocument/semanticTokens/full") {
+            outHasResponse = true;
+            json result = OnSemanticTokensFull(msg);
             return MakeResponse(msg, result).dump();
         }
 

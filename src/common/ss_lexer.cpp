@@ -139,7 +139,7 @@ Token Lexer::scan_string() {
     uint32_t segment_column = column_;
 
     while (!is_at_end() && peek() != '"') {
-        if (allow_interpolation && peek() == '\\' && peek_next() == '(') {
+        if (allow_interpolation && peek() == '$' && peek_next() == '{') {
             const uint32_t interp_start = current_;
             const uint32_t interp_line = line_;
             const uint32_t interp_column = column_;
@@ -148,8 +148,8 @@ Token Lexer::scan_string() {
             if (segment_start < current_) {
                 tokens.push_back(make_token_at(TokenType::StringSegment, segment_start, current_, segment_line, segment_column));
             }
-            advance(); // consume '\'
-            advance(); // consume '('
+            advance(); // consume '$'
+            advance(); // consume '{'
             tokens.push_back(make_token_at(TokenType::InterpolationStart, interp_start, interp_start + 2, interp_line, interp_column));
             in_interpolated_string_ = true;
             in_interpolation_ = true;
@@ -182,12 +182,12 @@ Token Lexer::scan_interpolated_string_segment() {
     uint32_t segment_column = column_;
 
     while (!is_at_end() && peek() != '"') {
-        if (peek() == '\\' && peek_next() == '(') {
+        if (peek() == '$' && peek_next() == '{') {
             const uint32_t interp_start = current_;
             const uint32_t interp_line = line_;
             const uint32_t interp_column = column_;
-            advance(); // consume '\'
-            advance(); // consume '('
+            advance(); // consume '$'
+            advance(); // consume '{'
             in_interpolation_ = true;
             interpolation_depth_ = 1;
             if (segment_start < interp_start) {
@@ -266,11 +266,15 @@ Token Lexer::next_token() {
     // Operators and delimiters
     switch (c) {
         case '(':
+            return make_token(TokenType::LeftParen);
+        case ')':
+            return make_token(TokenType::RightParen);
+        case '{':
             if (in_interpolation_) {
                 interpolation_depth_++;
             }
-            return make_token(TokenType::LeftParen);
-        case ')':
+            return make_token(TokenType::LeftBrace);
+        case '}':
             if (in_interpolation_ && interpolation_depth_ > 0) {
                 interpolation_depth_--;
                 if (interpolation_depth_ == 0) {
@@ -278,9 +282,7 @@ Token Lexer::next_token() {
                     return make_token(TokenType::InterpolationEnd);
                 }
             }
-            return make_token(TokenType::RightParen);
-        case '{': return make_token(TokenType::LeftBrace);
-        case '}': return make_token(TokenType::RightBrace);
+            return make_token(TokenType::RightBrace);
         case '[': return make_token(TokenType::LeftBracket);
         case ']': return make_token(TokenType::RightBracket);
         case ',': return make_token(TokenType::Comma);

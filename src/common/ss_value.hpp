@@ -239,6 +239,7 @@ public:
 class ClassObject : public Object {
 public:
     std::string name;
+    std::string native_type_name;  // Non-empty if this is a native class binding
     std::unordered_map<std::string, Value> methods; // closures
     std::unordered_map<std::string, Value> static_methods;  // static methods
     std::unordered_map<std::string, Value> static_properties;  // static properties
@@ -262,6 +263,9 @@ public:
 
     explicit ClassObject(std::string n)
         : Object(ObjectType::Class), name(std::move(n)) {}
+
+    // Check if this class is bound to a native C++ type
+    bool is_native() const { return !native_type_name.empty(); }
 
     std::string to_string() const override {
         return "<class " + name + ">";
@@ -682,6 +686,42 @@ public:
             }
         }
         return false;
+    }
+};
+
+// Forward declaration for native type info
+struct NativeTypeInfo;
+
+// Native object wrapper - wraps C++ objects for use in SwiftScript
+class NativeObject : public Object {
+public:
+    void* native_ptr;              // Pointer to the actual C++ object
+    std::string type_name;         // Registered native type name (e.g., "UnityEngine.Transform")
+    bool prevent_release{false};   // If true, destructor won't delete native_ptr (external ownership)
+    NativeTypeInfo* type_info{nullptr};  // Cached pointer to type info for fast access
+
+    NativeObject(void* ptr, const std::string& type_name);
+    NativeObject(void* ptr, const std::string& type_name, NativeTypeInfo* info);
+    ~NativeObject();
+
+    std::string to_string() const override {
+        return "<native " + type_name + " at " +
+               std::to_string(reinterpret_cast<uintptr_t>(native_ptr)) + ">";
+    }
+
+    size_t memory_size() const override {
+        return sizeof(NativeObject) + type_name.capacity();
+    }
+
+    // Get the native pointer cast to a specific type
+    template<typename T>
+    T* as() const {
+        return static_cast<T*>(native_ptr);
+    }
+
+    // Check if this native object is of a specific type
+    bool is_type(const std::string& name) const {
+        return type_name == name;
     }
 };
 

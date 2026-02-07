@@ -206,6 +206,14 @@ namespace swiftscript {
                     Attribute attr;
                     attr.name = std::string(name_tok.lexeme);
                     attr.line = name_tok.line;
+
+                    // Support dotted attribute names like "Native.InternalCall"
+                    while (match(TokenType::Dot)) {
+                        const Token& next_tok = consume(TokenType::Identifier, "Expected identifier after '.' in attribute name.");
+                        attr.name += ".";
+                        attr.name += std::string(next_tok.lexeme);
+                    }
+
                     if (match(TokenType::LeftParen)) {
                         if (!check(TokenType::RightParen)) {
                             do {
@@ -489,7 +497,7 @@ namespace swiftscript {
             return stmt;
         }
         if (check(TokenType::Func)) {
-            auto stmt = func_declaration();
+            auto stmt = func_declaration(attributes);
             if (auto* func = dynamic_cast<FuncDeclStmt*>(stmt.get())) {
                 func->access_level = access_level;
             }
@@ -701,7 +709,7 @@ namespace swiftscript {
         return stmt;
     }
 
-    StmtPtr Parser::func_declaration() {
+    StmtPtr Parser::func_declaration(const std::vector<Attribute>& attributes) {
         advance();  // consume 'func'
         auto is_operator_name = [](TokenType type) {
             return TokenUtils::is_binary_operator(type) ||
@@ -733,8 +741,23 @@ namespace swiftscript {
         // Parse generic constraints: where T: Comparable
         stmt->generic_constraints = parse_generic_constraints(stmt->generic_params);
 
-        // Body
-        stmt->body = block();
+        // Check if this is a native function (has [Native.InternalCall] attribute)
+        bool is_native_function = false;
+        for (const auto& attr : attributes) {
+            if (attr.name == "Native.InternalCall") {
+                is_native_function = true;
+                break;
+            }
+        }
+
+        // Body - optional for native functions
+        if (is_native_function) {
+            // Native functions have no body - just optional semicolon
+            match(TokenType::Semicolon);
+            stmt->body = nullptr;
+        } else {
+            stmt->body = block();
+        }
         return stmt;
     }
 
@@ -852,16 +875,29 @@ namespace swiftscript {
                     method->params = parse_param_list(true);
                 }
 
-                method->body = block();
+                // Check if this is a native init (has [Native.InternalCall] attribute)
+                bool is_native_init = false;
+                for (const auto& attr : method->attributes) {
+                    if (attr.name == "Native.InternalCall") {
+                        is_native_init = true;
+                        break;
+                    }
+                }
+
+                // Native init methods have no body, regular init methods require a body
+                if (!is_native_init) {
+                    method->body = block();
+                }
                 stmt->methods.push_back(std::move(method));
                 continue;
             }
 
             if (check(TokenType::Func)) {
-                auto method = std::unique_ptr<FuncDeclStmt>(static_cast<FuncDeclStmt*>(func_declaration().release()));
+                auto method = std::unique_ptr<FuncDeclStmt>(static_cast<FuncDeclStmt*>(func_declaration(attributes).release()));
                 method->is_override = is_override;
                 method->is_static = is_static;
                 method->access_level = access_level;
+                // attributes already passed to func_declaration, just copy them to method
                 method->attributes = std::move(attributes);
                 stmt->methods.push_back(std::move(method));
                 continue;
@@ -1004,8 +1040,19 @@ namespace swiftscript {
                     method->return_type = parse_type_annotation();
                 }
 
-                // Body
-                method->body = block();
+                // Check if this is a native method (has [Native.InternalCall] attribute)
+                bool is_native_method = false;
+                for (const auto& attr : method->attributes) {
+                    if (attr.name == "Native.InternalCall") {
+                        is_native_method = true;
+                        break;
+                    }
+                }
+
+                // Native methods have no body, regular methods require a body
+                if (!is_native_method) {
+                    method->body = block();
+                }
                 stmt->methods.push_back(std::move(method));
                 continue;
             }
@@ -1026,8 +1073,19 @@ namespace swiftscript {
                 consume(TokenType::LeftParen, "Expected '(' after 'init'.");
                 init_method->params = parse_param_list(true);
 
-                // Body
-                init_method->body = block();
+                // Check if this is a native init (has [Native.InternalCall] attribute)
+                bool is_native_init = false;
+                for (const auto& attr : init_method->attributes) {
+                    if (attr.name == "Native.InternalCall") {
+                        is_native_init = true;
+                        break;
+                    }
+                }
+
+                // Native init methods have no body, regular init methods require a body
+                if (!is_native_init) {
+                    init_method->body = block();
+                }
                 stmt->initializers.push_back(std::move(init_method));
                 continue;
             }
@@ -2239,7 +2297,7 @@ namespace swiftscript {
                 }
                 if (match(TokenType::InterpolationStart)) {
                     ExprPtr expr = expression();
-                    consume(TokenType::InterpolationEnd, "Expected ')' after interpolated expression.");
+                    consume(TokenType::InterpolationEnd, "Expected '}' after interpolated expression.");
                     interp->parts.emplace_back(std::move(expr));
                     continue;
                 }

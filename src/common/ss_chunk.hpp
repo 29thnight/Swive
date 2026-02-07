@@ -21,6 +21,9 @@ struct FunctionPrototype {
         bool has_default{false};
         Value value;
         std::optional<std::string> string_value;
+
+		ParamDefaultValue() = default;
+		ParamDefaultValue(std::nullopt_t) : has_default(false), value(Value::null()) {}
     };
     std::vector<ParamDefaultValue> param_defaults;
     std::shared_ptr<Assembly> chunk;
@@ -175,8 +178,9 @@ struct Assembly {
 	static Assembly deserialize(std::istream& in);
     void expand_to_assembly();
 
-private:
     MethodBody& ensure_primary_body();
+
+private:
     size_t simple_instruction(const char* name, size_t offset) const;
     size_t constant_instruction(const char* name, size_t offset) const;
     size_t string_instruction(const char* name, size_t offset) const;

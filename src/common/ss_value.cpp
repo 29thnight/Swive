@@ -269,6 +269,9 @@ size_t FunctionObject::memory_size() const {
 StructInstanceObject* StructInstanceObject::deep_copy(VM& vm) const {
     auto* copy = vm.allocate_object<StructInstanceObject>(struct_type);
 
+    // Retain the struct type for the copy's lifetime
+    RC::retain(struct_type);
+
     // Copy all fields
     for (const auto& [name, value] : fields) {
         // If field is also a struct instance, deep copy it too

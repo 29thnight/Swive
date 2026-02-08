@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #define OPCODE(T) template<> struct OpCodeHandler<T>
 #define OP_BODY static void execute(VM& vm)
 #define OP_HANDLER_IMP(T) tbl[static_cast<uint8_t>(T)] = &OpCodeHandler<T>::execute

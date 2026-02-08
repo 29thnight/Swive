@@ -27,12 +27,17 @@ NativeObject::NativeObject(void* ptr, const std::string& type, NativeTypeInfo* i
 
 NativeObject::~NativeObject() {
     if (native_ptr && !prevent_release) {
-        // Use type info destructor if available
+        // VM-owned: use type info destructor if available
         if (type_info && type_info->destructor) {
             type_info->destructor(native_ptr);
         }
         // If no destructor registered, we cannot safely delete the pointer
         // The caller is responsible for ensuring proper cleanup
+    }
+    else if (native_ptr && prevent_release && release_notify) {
+        // Engine-owned: notify the engine that VM no longer references this object
+        release_notify(release_notify_context, native_ptr,
+                       type_name.c_str(), release_notify_user_data);
     }
     native_ptr = nullptr;
 }

@@ -37,6 +37,7 @@ swive는 Swift에서 영감을 받은 정적 타입 스크립트 언어입니다
 22. [네이티브 바인딩](#22-네이티브-바인딩)
 23. [빌트인 함수](#23-빌트인-함수)
 24. [키워드 목록](#24-키워드-목록)
+25. [게임엔진 임베딩](#25-게임엔진-임베딩)
 
 ---
 
@@ -1658,3 +1659,316 @@ func main() {
     }
 }
 ```
+
+---
+
+## 25. 게임엔진 임베딩
+
+Swive VM은 C API를 통해 다양한 게임엔진 및 호스트 애플리케이션에 임베드할 수 있습니다.
+
+### 지원 엔진
+
+| 엔진 | 연동 방식 | 설명 |
+|------|---------|------|
+| **Unreal Engine** | C++ 직접 호출 / DLL | `ss_embed.h` 헤더 포함 후 직접 호출 |
+| **Unity** | C# P/Invoke | DLL로 빌드 후 `[DllImport]`로 호출 |
+| **Godot** | GDExtension / C++ | 네이티브 모듈로 등록 |
+| **커스텀 엔진** | C FFI | 어떤 언어든 C 함수 호출이 가능하면 연동 |
+
+### 기본 사용 흐름
+
+```
+1. ss_create_context()           // 컨텍스트 생성
+2. ss_register_function()        // 호스트 함수 등록
+3. ss_set_print_callback()       // 출력 리다이렉션
+4. ss_compile() / ss_load_bytecode()  // 스크립트 로드
+5. ss_execute()                  // 실행
+6. ss_call_function()            // 스크립트 함수 호출
+7. ss_destroy_context()          // 정리
+```
+
+### C/C++ 임베딩 예제
+
+```c
+#include "ss_embed.h"
+
+// 호스트 함수: 게임 오브젝트 위치 반환
+SSResult get_player_pos(SSContext ctx, const SSValue* args,
+                        int argc, SSValue* result) {
+    float x = get_player_x();  // 엔진 API
+    *result = SS_FLOAT(x);
+    return SS_OK;
+}
+
+// 출력 리다이렉션
+void engine_log(SSContext ctx, const char* msg, void* ud) {
+    EngineConsole_Print(msg);  // 엔진 콘솔로 출력
+}
+
+int main() {
+    SSContext ctx = ss_create_context();
+
+    // 출력 리다이렉션
+    ss_set_print_callback(ctx, engine_log, NULL);
+
+    // 호스트 함수 등록
+    ss_register_function(ctx, "getPlayerX", get_player_pos);
+
+    // 글로벌 변수 주입
+    ss_set_global(ctx, "SCREEN_WIDTH", SS_INT(1920));
+
+    // 스크립트 컴파일 & 실행
+    SSScript script = NULL;
+    const char* code = "let x = getPlayerX()\nprint(\"Player X: ${x}\")";
+    if (ss_compile(ctx, code, "game.ss", &script) == SS_OK) {
+        SSValue result;
+        ss_execute(ctx, script, &result);
+        ss_destroy_script(script);
+    } else {
+        printf("Compile error: %s\n", ss_get_last_error(ctx));
+    }
+
+    ss_destroy_context(ctx);
+    return 0;
+}
+```
+
+### Unity (C#) P/Invoke 예제
+
+```csharp
+using System;
+using System.Runtime.InteropServices;
+
+public static class SwiveScript {
+    const string DLL = "swive_embed";
+
+    [DllImport(DLL)] public static extern IntPtr ss_create_context();
+    [DllImport(DLL)] public static extern void ss_destroy_context(IntPtr ctx);
+    [DllImport(DLL)] public static extern int ss_run(IntPtr ctx,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string source, IntPtr result);
+    [DllImport(DLL)] public static extern int ss_register_function(IntPtr ctx,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name, NativeFunc func);
+    [DllImport(DLL)] public static extern IntPtr ss_get_last_error(IntPtr ctx);
+
+    public delegate int NativeFunc(IntPtr ctx, IntPtr args, int argc, IntPtr result);
+}
+
+// 사용 예시
+public class ScriptManager : MonoBehaviour {
+    IntPtr ctx;
+
+    void Awake() {
+        ctx = SwiveScript.ss_create_context();
+        SwiveScript.ss_register_function(ctx, "log", LogCallback);
+    }
+
+    void OnDestroy() {
+        SwiveScript.ss_destroy_context(ctx);
+    }
+
+    public void RunScript(string code) {
+        int result = SwiveScript.ss_run(ctx, code, IntPtr.Zero);
+        if (result != 0) {
+            Debug.LogError(Marshal.PtrToStringUTF8(
+                SwiveScript.ss_get_last_error(ctx)));
+        }
+    }
+
+    static int LogCallback(IntPtr ctx, IntPtr args, int argc, IntPtr result) {
+        Debug.Log("[Swive] script log");
+        return 0;
+    }
+}
+```
+
+### Unreal Engine 예제
+
+```cpp
+#include "ss_embed.h"
+
+UCLASS()
+class USwiveComponent : public UActorComponent {
+    GENERATED_BODY()
+    SSContext ScriptContext = nullptr;
+
+    virtual void BeginPlay() override {
+        ScriptContext = ss_create_context();
+
+        // UE 로그로 리다이렉션
+        ss_set_print_callback(ScriptContext,
+            [](SSContext, const char* msg, void*) {
+                UE_LOG(LogTemp, Log, TEXT("Swive: %s"),
+                       UTF8_TO_TCHAR(msg));
+            }, nullptr);
+
+        // 네이티브 함수 등록
+        ss_register_function(ScriptContext, "getActorName",
+            [](SSContext ctx, const SSValue* args, int argc,
+               SSValue* result) -> SSResult {
+                auto* comp = (USwiveComponent*)ss_get_user_data(ctx);
+                FString name = comp->GetOwner()->GetName();
+                *result = SS_STRING(TCHAR_TO_UTF8(*name));
+                return SS_OK;
+            });
+
+        ss_set_user_data(ScriptContext, this);
+    }
+
+    virtual void EndPlay(const EEndPlayReason::Type Reason) override {
+        ss_destroy_context(ScriptContext);
+        ScriptContext = nullptr;
+    }
+
+    UFUNCTION(BlueprintCallable)
+    void RunScript(const FString& Code) {
+        SSValue result;
+        SSResult res = ss_run(ScriptContext,
+                              TCHAR_TO_UTF8(*Code), &result);
+        if (res != SS_OK) {
+            UE_LOG(LogTemp, Error, TEXT("Script error: %s"),
+                   UTF8_TO_TCHAR(ss_get_last_error(ScriptContext)));
+        }
+    }
+};
+```
+
+### 프리컴파일 바이트코드
+
+빌드 타임에 스크립트를 미리 컴파일하여 `.ssasm` 파일로 배포할 수 있습니다.
+
+```c
+// 컴파일 타임 (빌드 툴)
+void* bytecode = NULL;
+size_t bytecode_size = 0;
+ss_compile_to_bytecode(ctx, source, "main.ss", &bytecode, &bytecode_size);
+// bytecode를 파일로 저장...
+ss_free_buffer(bytecode);
+
+// 런타임 (게임 실행 시)
+SSScript script = NULL;
+ss_load_bytecode_file(ctx, "scripts/main.ssasm", &script);
+ss_execute(ctx, script, NULL);
+ss_destroy_script(script);
+```
+
+### API 요약
+
+| 함수 | 설명 |
+|------|------|
+| `ss_create_context()` | VM 컨텍스트 생성 |
+| `ss_create_context_ex(stack, debug)` | 커스텀 설정으로 생성 |
+| `ss_destroy_context(ctx)` | 컨텍스트 해제 |
+| `ss_compile(ctx, src, name, out)` | 소스 코드 컴파일 |
+| `ss_compile_checked(ctx, src, name, out)` | 타입 체크 포함 컴파일 |
+| `ss_load_bytecode(ctx, data, size, out)` | 바이트코드 로드 (메모리) |
+| `ss_load_bytecode_file(ctx, path, out)` | 바이트코드 로드 (파일) |
+| `ss_compile_to_bytecode(ctx, src, name, out, size)` | 바이트코드로 직렬화 |
+| `ss_destroy_script(script)` | 스크립트 핸들 해제 |
+| `ss_execute(ctx, script, result)` | 스크립트 실행 |
+| `ss_run(ctx, src, result)` | 컴파일+실행 원스텝 |
+| `ss_call_function(ctx, name, args, argc, result)` | 글로벌 함수 호출 |
+| `ss_register_function(ctx, name, func)` | 네이티브 함수 등록 |
+| `ss_unregister_function(ctx, name)` | 네이티브 함수 해제 |
+| `ss_set_global(ctx, name, val)` | 글로벌 변수 설정 |
+| `ss_get_global(ctx, name, out)` | 글로벌 변수 읽기 |
+| `ss_set_print_callback(ctx, func, ud)` | 출력 리다이렉션 |
+| `ss_set_error_callback(ctx, func, ud)` | 에러 콜백 설정 |
+| `ss_get_last_error(ctx)` | 마지막 에러 메시지 |
+| `ss_set_base_directory(ctx, dir)` | 모듈 기본 경로 설정 |
+| `ss_add_import_path(ctx, path)` | 모듈 검색 경로 추가 |
+| `ss_set_user_data(ctx, ptr)` | 사용자 데이터 저장 |
+| `ss_get_user_data(ctx)` | 사용자 데이터 조회 |
+| `ss_get_memory_stats(ctx, ...)` | 메모리 통계 조회 |
+| `ss_version()` | 버전 문자열 반환 |
+
+### 값 타입 (SSValue)
+
+| 타입 | 매크로 | 설명 |
+|------|--------|------|
+| `SS_TYPE_NULL` | `SS_NULL()` | null 값 |
+| `SS_TYPE_BOOL` | `SS_BOOL(b)` | 불리언 |
+| `SS_TYPE_INT` | `SS_INT(i)` | 64비트 정수 |
+| `SS_TYPE_FLOAT` | `SS_FLOAT(f)` | 64비트 실수 |
+| `SS_TYPE_STRING` | `SS_STRING(s)` | 문자열 (콜백 스코프 내 유효) |
+| `SS_TYPE_OBJECT` | `SS_OBJECT(p)` | 네이티브 객체 포인터 |
+
+### 네이티브 객체 수명 관리
+
+게임엔진에서 스크립트에 엔진 객체(Transform, GameObject 등)를 노출할 때, 객체의 소유권이 중요합니다.
+
+#### 소유권 모델
+
+| 모드 | 설명 | 사용 시나리오 |
+|------|------|-------------|
+| `SS_OWNERSHIP_VM` | VM이 native_ptr 소유. RC=0이면 destructor 호출 후 해제 | 스크립트 전용 객체 |
+| `SS_OWNERSHIP_ENGINE` | 엔진이 native_ptr 소유. VM은 래퍼만 해제, native_ptr 안 건드림 | 엔진 오브젝트 노출 |
+
+#### 수명 흐름도
+
+```
+[SS_OWNERSHIP_VM] (기본값)
+  스크립트 참조 → RC++ → ... → RC=0 → ~NativeObject() → destructor(native_ptr) → 메모리 해제
+
+[SS_OWNERSHIP_ENGINE]
+  엔진이 포인터 전달 → ss_wrap_native(ENGINE) → 스크립트 참조
+  ... → RC=0 → ~NativeObject() → release_notify(콜백) → 래퍼만 해제 (native_ptr 유지)
+
+  엔진이 먼저 파괴 → ss_invalidate_native(ptr) → native_ptr = null → 스크립트에서 null 반환
+```
+
+#### 엔진 소유 객체 예제 (C++)
+
+```c
+// 1. 엔진 객체를 스크립트에 노출 (소유권은 엔진에)
+Transform* tr = gameObject->GetTransform();
+SSValue val;
+ss_wrap_native(ctx, tr, "Transform", SS_OWNERSHIP_ENGINE, &val);
+ss_set_global(ctx, "transform", val);
+
+// 2. 스크립트에서 사용 가능:
+//    let pos = transform.x   (정상 동작)
+
+// 3. 엔진에서 오브젝트 파괴 시 - dangling 방지
+ss_invalidate_native(ctx, tr);
+// 이후 스크립트에서 transform 접근 → null 반환 (크래시 없음)
+```
+
+#### Release 콜백 (엔진 GC 연동)
+
+```c
+// VM이 엔진 소유 객체의 마지막 참조를 해제할 때 알림
+void on_script_release(SSContext ctx, void* ptr,
+                       const char* type, void* ud) {
+    // Unreal: GC 대상으로 전환
+    UObject* obj = static_cast<UObject*>(ptr);
+    obj->RemoveFromRoot();
+
+    // Unity: ref count 감소
+    // custom_ref_release(ptr);
+}
+ss_set_release_callback(ctx, on_script_release, NULL);
+```
+
+#### 수명 관리 API
+
+| 함수 | 설명 |
+|------|------|
+| `ss_wrap_native(ctx, ptr, type, ownership, out)` | 엔진 포인터를 스크립트 값으로 래핑 |
+| `ss_set_ownership(ctx, val, mode)` | 소유권 모드 변경 |
+| `ss_get_ownership(ctx, val, out)` | 소유권 모드 조회 |
+| `ss_set_release_callback(ctx, func, ud)` | VM 해제 알림 콜백 설정 |
+| `ss_invalidate_native(ctx, ptr)` | 엔진측에서 객체 무효화 (dangling 방지) |
+| `ss_get_native_ptr(ctx, val)` | SSValue에서 원본 native 포인터 추출 |
+
+### 에러 코드 (SSResult)
+
+| 코드 | 값 | 설명 |
+|------|----|------|
+| `SS_OK` | 0 | 성공 |
+| `SS_ERROR_COMPILE` | 1 | 컴파일 실패 |
+| `SS_ERROR_RUNTIME` | 2 | 런타임 에러 |
+| `SS_ERROR_INVALID_ARG` | 3 | 잘못된 인자 |
+| `SS_ERROR_NOT_FOUND` | 4 | 함수/변수 없음 |
+| `SS_ERROR_OUT_OF_MEMORY` | 5 | 메모리 부족 |
+| `SS_ERROR_IO` | 6 | 파일 I/O 에러 |
+| `SS_ERROR_TYPE_CHECK` | 7 | 타입 체크 실패 |

@@ -350,7 +350,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 will_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
                 will_set_proto.chunk = finalize_function_chunk(std::move(will_set_compiler.chunk_));
-                will_set_idx = chunk_.add_function(std::move(will_set_proto));
+                will_set_idx = static_cast<uint16_t>(chunk_.add_function(std::move(will_set_proto)));
             }
 
             // Compile didSet observer if present
@@ -388,7 +388,7 @@ void Compiler::visit(ClassDeclStmt* stmt) {
                 did_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
                 did_set_proto.chunk = finalize_function_chunk(std::move(did_set_compiler.chunk_));
-                did_set_idx = chunk_.add_function(std::move(did_set_proto));
+                did_set_idx = static_cast<uint16_t>(chunk_.add_function(std::move(did_set_proto)));
             }
 
             // Emit property definition with observers
@@ -686,7 +686,7 @@ if (scope_depth_ > 0) {
                 will_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
                 will_set_proto.chunk = finalize_function_chunk(std::move(will_set_compiler.chunk_));
-                will_set_idx = chunk_.add_function(std::move(will_set_proto));
+                will_set_idx = static_cast<uint16_t>(chunk_.add_function(std::move(will_set_proto)));
             }
 
             // Compile didSet observer if present
@@ -724,7 +724,7 @@ if (scope_depth_ > 0) {
                 did_set_compiler.emit_op(OpCode::OP_RETURN, property->line);
 
                 did_set_proto.chunk = finalize_function_chunk(std::move(did_set_compiler.chunk_));
-                did_set_idx = chunk_.add_function(std::move(did_set_proto));
+                did_set_idx = static_cast<uint16_t>(chunk_.add_function(std::move(did_set_proto)));
             }
 
             // Emit property definition with observers

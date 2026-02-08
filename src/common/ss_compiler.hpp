@@ -99,9 +99,9 @@ private:
                                           std::unordered_set<std::string>& needed_func_specializations);
 
     struct Local {
-        std::string name;
-        int depth;
-        bool is_optional;
+        std::string name{};
+        int depth{};
+        bool is_optional{};
         bool is_captured{false};  // True if captured by closure
         int use_count{0};         // Number of times this local is used
         bool is_moved{false};     // True if ownership was moved

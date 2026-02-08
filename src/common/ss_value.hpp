@@ -698,6 +698,11 @@ public:
 // Forward declaration for native type info
 struct NativeTypeInfo;
 
+// Release notification callback type for engine-owned native objects
+// Called when VM drops the last reference to an engine-owned object
+using NativeReleaseNotifyFunc = void(*)(void* context, void* native_ptr,
+                                        const char* type_name, void* user_data);
+
 // Native object wrapper - wraps C++ objects for use in Swive
 class NativeObject : public Object {
 public:
@@ -705,6 +710,11 @@ public:
     std::string type_name;         // Registered native type name (e.g., "UnityEngine.Transform")
     bool prevent_release{false};   // If true, destructor won't delete native_ptr (external ownership)
     NativeTypeInfo* type_info{nullptr};  // Cached pointer to type info for fast access
+
+    // Engine ownership notification (set via embedding API)
+    NativeReleaseNotifyFunc release_notify{nullptr};
+    void* release_notify_context{nullptr};  // SSContext pointer
+    void* release_notify_user_data{nullptr};
 
     NativeObject(void* ptr, const std::string& type_name);
     NativeObject(void* ptr, const std::string& type_name, NativeTypeInfo* info);

@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_compiler.cpp
+ * @brief SwiftScript bytecode compiler implementation.
+ *
+ * Implements the Compiler class which transforms AST nodes into bytecode.
+ * Features: type declarations (class/struct/enum/protocol), control flow,
+ * generic specialization, native C++ bindings, closures, and upvalue capture.
+ */
+
 #include "pch.h"
 #include "ss_compiler.hpp"
 #include "ss_lexer.hpp"

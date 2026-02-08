@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_lexer.hpp
+ * @brief Lexical analyzer (tokenizer).
+ *
+ * Converts source text into a stream of tokens for the parser.
+ * Handles keywords, operators, literals, and string interpolation.
+ */
+
 #pragma once
 
 #include "ss_token.hpp"

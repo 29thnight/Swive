@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_project_resolver.cpp
+ * @brief Module resolver implementation.
+ *
+ * Implements ProjectModuleResolver::ResolveAndLoad() to find
+ * and load imported modules from project import roots.
+ */
+
 #include "pch.h"
 #include "ss_project_resolver.hpp"
 

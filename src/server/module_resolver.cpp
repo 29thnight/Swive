@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file module_resolver.cpp
+ * @brief LSP module resolver implementation.
+ *
+ * Implements module name normalization and path resolution
+ * for import statements in the LSP environment.
+ */
+
 #include "pch.h"
 #include "module_resolver.hpp"
 

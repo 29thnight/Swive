@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_native_convert.cpp
+ * @brief Type conversion implementation.
+ *
+ * Implements string and complex type conversions between
+ * SwiftScript Value types and C++ native types.
+ */
+
 #include "pch.h"
 #include "ss_native_convert.hpp"
 #include "ss_vm.hpp"

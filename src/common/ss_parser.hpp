@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_parser.hpp
+ * @brief Recursive descent parser.
+ *
+ * Parses token stream into AST. Handles declarations, statements,
+ * expressions, generics, and Swift-like syntax constructs.
+ */
+
 #pragma once
 
 #include "ss_token.hpp"

@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_vm.hpp
+ * @brief SwiftScript Virtual Machine.
+ *
+ * Stack-based bytecode interpreter with reference counting memory management.
+ * Executes compiled Assembly bytecode using opcode dispatch table.
+ */
+
 #pragma once
 #include <limits>
 #include <array>

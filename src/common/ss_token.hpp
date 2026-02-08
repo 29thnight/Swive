@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_token.hpp
+ * @brief Token types and Token structure.
+ *
+ * Defines TokenType enumeration for all lexical elements and
+ * Token struct holding token data (type, lexeme, line number).
+ */
+
 #pragma once
 
 namespace swive {

@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_native_registry.hpp
+ * @brief Native C++ binding registry.
+ *
+ * Provides NativeRegistry for registering C++ functions and types,
+ * NativeObject for wrapping C++ objects, and NativeTypeInfo for metadata.
+ */
+
 #pragma once
 
 #include "ss_value.hpp"

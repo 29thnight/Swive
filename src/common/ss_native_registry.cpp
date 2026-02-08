@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_native_registry.cpp
+ * @brief Native C++ binding registry implementation.
+ *
+ * Implements NativeObject lifecycle, NativeRegistry singleton,
+ * and native function/type registration.
+ */
+
 #include "pch.h"
 #include "ss_native_registry.hpp"
 

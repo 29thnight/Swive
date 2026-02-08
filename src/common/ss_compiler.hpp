@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_compiler.hpp
+ * @brief SwiftScript bytecode compiler.
+ *
+ * Compiles AST (Abstract Syntax Tree) into bytecode Assembly.
+ * Handles generic specialization, native bindings, closures, and metadata generation.
+ */
+
 #pragma once
 
 #include "ss_ast.hpp"

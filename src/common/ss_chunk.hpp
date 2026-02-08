@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_chunk.hpp
+ * @brief Bytecode assembly and metadata structures.
+ *
+ * Defines Assembly (bytecode container), function prototypes, method bodies,
+ * type/field/method/property definitions, and serialization support.
+ */
+
 #pragma once
 
 #include "ss_value.hpp"

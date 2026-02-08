@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_ast_clone.cpp
+ * @brief AST deep cloning utilities.
+ *
+ * Implements clone_expr() and clone_stmt() for creating deep copies
+ * of AST nodes, used in generic specialization.
+ */
+
 #include "pch.h"
 #include "ss_ast.hpp"
 

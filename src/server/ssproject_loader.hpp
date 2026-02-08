@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ssproject_loader.hpp
+ * @brief SSProject file loader for LSP.
+ *
+ * Loads .ssproject configuration files and provides
+ * SSProjectInfo structure for the language server.
+ */
+
 #pragma once
 #include <filesystem>
 #include <vector>

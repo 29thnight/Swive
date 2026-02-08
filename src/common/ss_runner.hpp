@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_runner.hpp
+ * @brief High-level script execution utilities.
+ *
+ * Provides SSRunner helper functions to compile and execute
+ * SwiftScript source code or project files in a single call.
+ */
+
 #pragma once
 #include <string>
 #include <fstream>

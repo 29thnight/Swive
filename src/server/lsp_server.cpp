@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file lsp_server.cpp
+ * @brief LSP server implementation.
+ *
+ * Implements LSP request handlers, document synchronization,
+ * and integrates with the analyzer for semantic features.
+ */
+
 #include "pch.h"
 #include "lsp_server.hpp"
 #include "lsp_utils.hpp"

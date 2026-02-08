@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_chunk.cpp
+ * @brief Bytecode assembly implementation.
+ *
+ * Implements Assembly bytecode writing, constant pool management,
+ * jump patching, and binary serialization/deserialization.
+ */
+
 #include "pch.h"
 #include "ss_chunk.hpp"
 

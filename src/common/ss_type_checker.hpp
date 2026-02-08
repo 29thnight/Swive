@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_type_checker.hpp
+ * @brief Static type checker.
+ *
+ * Performs type inference, type validation, generic specialization,
+ * and protocol conformance checking on AST before compilation.
+ */
+
 #pragma once
 
 #include "ss_ast.hpp"

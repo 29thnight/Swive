@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_embed.cpp
+ * @brief SwiftScript Embedding API implementation.
+ *
+ * Implements the C API for embedding SwiftScript in host applications.
+ * Wraps the C++ VM, compiler, and value types for cross-language usage.
+ */
+
 #include "pch.h"
 #include "ss_embed.h"
 

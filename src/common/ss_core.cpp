@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_core.cpp
+ * @brief Reference counting implementation.
+ *
+ * Implements RC::retain, RC::release, RC::make_weak, and weak reference
+ * invalidation for the garbage-free memory management system.
+ */
+
 #include "pch.h"
 #include "ss_core.hpp"
 #include "ss_value.hpp"

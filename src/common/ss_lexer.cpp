@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_lexer.cpp
+ * @brief Lexical analyzer implementation.
+ *
+ * Implements tokenization of SwiftScript source code including
+ * number literals, string literals, identifiers, and operators.
+ */
+
 #include "pch.h"
 #include "ss_lexer.hpp"
 

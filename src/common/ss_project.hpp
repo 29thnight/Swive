@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_project.hpp
+ * @brief Project file (.ssproject) structure.
+ *
+ * Defines SSProject struct containing project metadata:
+ * entry file, import roots, and project directory paths.
+ */
+
 #pragma once
 
 namespace swive {

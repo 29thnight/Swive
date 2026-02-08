@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_native_convert.hpp
+ * @brief Type conversion between SwiftScript and C++.
+ *
+ * Template functions for converting between Value and C++ types,
+ * supporting primitives, strings, vectors, and NativeObject wrappers.
+ */
+
 #pragma once
 
 #include "ss_value.hpp"

@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file module_resolver.hpp
+ * @brief LSP module resolver.
+ *
+ * Resolves import paths for the LSP analyzer, searching
+ * configured import roots to find source files.
+ */
+
 #pragma once
 #include <filesystem>
 #include <string>

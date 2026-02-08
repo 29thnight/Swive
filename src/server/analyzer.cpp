@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file analyzer.cpp
+ * @brief Source code analyzer implementation.
+ *
+ * Implements document analysis, error collection, symbol extraction,
+ * and hover/completion data generation.
+ */
+
 #include "pch.h"
 #include "analyzer.hpp"
 #include "module_resolver.hpp"

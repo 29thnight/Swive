@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file lsp_connection.hpp
+ * @brief JSON-RPC connection handler.
+ *
+ * Manages stdin/stdout communication using LSP's Content-Length
+ * framing protocol for JSON-RPC messages.
+ */
+
 #pragma once
 #include <string>
 #include <functional>

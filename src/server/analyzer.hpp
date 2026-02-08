@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file analyzer.hpp
+ * @brief Source code analyzer for LSP.
+ *
+ * Provides parsing, type checking, and semantic analysis
+ * to generate diagnostics and symbol information for IDE features.
+ */
+
 #pragma once
 #include <string>
 #include <vector>

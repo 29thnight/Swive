@@ -1,4 +1,15 @@
-﻿#include "pch.h"
+﻿// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file main.cpp
+ * @brief LSP server entry point.
+ *
+ * Initializes stdin/stdout for JSON-RPC communication and
+ * runs the Language Server Protocol server loop.
+ */
+
+#include "pch.h"
 #include "lsp_connection.hpp"
 #include "lsp_server.hpp"
 

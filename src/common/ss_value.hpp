@@ -1,5 +1,17 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_value.hpp
+ * @brief Value and Object type definitions.
+ *
+ * Defines Value (tagged union for primitives/objects), Object base class,
+ * and all derived object types (String, List, Dict, Class, Instance, etc.).
+ */
+
 #pragma once
 #include <cassert>
+#include <optional>
 #include "ss_core.hpp"
 
 namespace swive {

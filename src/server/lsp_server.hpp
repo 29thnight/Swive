@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file lsp_server.hpp
+ * @brief Language Server Protocol server.
+ *
+ * Handles LSP requests (initialize, textDocument/*, etc.) and
+ * provides IDE features: diagnostics, completion, hover, go-to-definition.
+ */
+
 #pragma once
 #include <string>
 #include <unordered_map>

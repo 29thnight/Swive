@@ -1,5 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
 /**
- * SwiftScript Embedding API
+ * @file ss_embed.h
+ * @brief SwiftScript Embedding API.
  *
  * C API for embedding the SwiftScript VM into game engines and other host applications.
  *

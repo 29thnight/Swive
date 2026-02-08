@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_token.cpp
+ * @brief Token utility functions.
+ *
+ * Implements helper methods for Token: keyword/operator detection
+ * and token type string conversion for debugging.
+ */
+
 #include "pch.h"
 #include "ss_token.hpp"
 

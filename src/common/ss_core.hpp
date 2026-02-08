@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_core.hpp
+ * @brief Core runtime definitions and reference counting.
+ *
+ * Defines RefType enumeration, RC (reference counting) helper class,
+ * and MemoryStats for tracking allocations.
+ */
+
 #pragma once
 
 namespace swive {

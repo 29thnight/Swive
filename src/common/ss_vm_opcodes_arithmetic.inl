@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_vm_opcodes_arithmetic.inl
+ * @brief Arithmetic opcode handlers for the VM.
+ *
+ * OpCodeHandler specializations for ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO,
+ * NEGATE, and bitwise operations. Handles type coercion and string concatenation.
+ */
+
 #pragma once
 #include "ss_vm_opcodes_basic.inl"
 

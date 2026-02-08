@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file lsp_connection.cpp
+ * @brief JSON-RPC connection implementation.
+ *
+ * Implements message reading/writing with Content-Length headers
+ * for LSP communication over stdin/stdout.
+ */
+
 #include "pch.h"
 #include "lsp_connection.hpp"
 #include <iostream>

@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_value_vm.cpp
+ * @brief VM-dependent object operations.
+ *
+ * Implements object methods requiring VM access: ListObject::append,
+ * DictObject operations, and StructInstanceObject::copy_with_property.
+ */
+
 #include "pch.h"
 #include "ss_value.hpp"
 #include "ss_vm.hpp"

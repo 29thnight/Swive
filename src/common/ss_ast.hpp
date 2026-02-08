@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_ast.hpp
+ * @brief Abstract Syntax Tree (AST) definitions.
+ *
+ * Defines all AST node types for SwiftScript: expressions, statements,
+ * declarations (class/struct/enum/protocol), and type annotations.
+ */
+
 #pragma once
 
 #include "ss_token.hpp"

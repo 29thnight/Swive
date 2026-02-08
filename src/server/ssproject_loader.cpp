@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ssproject_loader.cpp
+ * @brief SSProject loader implementation.
+ *
+ * Parses .ssproject XML files and resolves entry points
+ * and import root paths for the language server.
+ */
+
 #include "pch.h"
 #include "ssproject_loader.hpp"
 #include <fstream>

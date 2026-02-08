@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_type_checker.cpp
+ * @brief Static type checker implementation.
+ *
+ * Implements type inference, expression type resolution, declaration
+ * validation, and generic type specialization.
+ */
+
 #include "pch.h"
 #include "ss_type_checker.hpp"
 #include "ss_compiler.hpp"

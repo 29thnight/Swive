@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_vm.cpp
+ * @brief SwiftScript Virtual Machine implementation.
+ *
+ * Implements bytecode execution, stack management, call frames,
+ * object lifecycle (allocation/deallocation), and global variable storage.
+ */
+
 #include "pch.h"
 #include "ss_vm.hpp"
 

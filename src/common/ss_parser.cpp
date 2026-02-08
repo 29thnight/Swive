@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_parser.cpp
+ * @brief Recursive descent parser implementation.
+ *
+ * Implements parsing for all SwiftScript constructs: functions, classes,
+ * structs, enums, protocols, control flow, and expressions.
+ */
+
 #include "pch.h"
 #include "ss_parser.hpp"
 

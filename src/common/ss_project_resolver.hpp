@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_project_resolver.hpp
+ * @brief Module resolver for project imports.
+ *
+ * Implements IModuleResolver to resolve import statements
+ * by searching configured import root directories.
+ */
+
 #pragma once
 #include "ss_compiler.hpp"
 

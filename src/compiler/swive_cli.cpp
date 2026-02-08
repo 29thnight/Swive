@@ -1,4 +1,14 @@
-﻿// swive - SwiftScript Unified CLI
+﻿// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file swive_cli.cpp
+ * @brief SwiftScript unified command-line interface.
+ *
+ * Provides build, run, and exec commands for compiling and executing
+ * SwiftScript projects. Entry point for the swive executable.
+ */
+
 #include <memory>
 #include <vector>
 #include <string>

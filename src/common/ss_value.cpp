@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file ss_value.cpp
+ * @brief Value and Object implementation.
+ *
+ * Implements Value comparison, to_string conversion, object type names,
+ * and memory size calculation for all object types.
+ */
+
 #include "pch.h"
 #include "ss_value.hpp"
 #include "ss_chunk.hpp"

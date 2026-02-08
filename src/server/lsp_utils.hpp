@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 29thnight
+
+/**
+ * @file lsp_utils.hpp
+ * @brief LSP utility functions.
+ *
+ * URI encoding/decoding, path conversion utilities for
+ * Language Server Protocol file handling.
+ */
+
 #pragma once
 #include <string>
 #include <filesystem>

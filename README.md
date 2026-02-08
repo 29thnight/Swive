@@ -1667,6 +1667,3 @@ func main() {
         print("FizzBuzz: ${i}")
     }
 }
-```
-## 실행/테스트 참고
-- Windows 빌드 출력(`x64\Debug\SwiftScript.exe`)로 테스트 실행 예시가 문서에 정리되어 있습니다.【F:IMPLEMENTATION_STATUS.md†L86-L95】
